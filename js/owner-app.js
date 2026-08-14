@@ -379,14 +379,14 @@
       /* ★止めた本当の理由を言う★（「大きすぎます」だけだと 何が長いのか分からない） */
       el.textContent = Hs.toText(r.read) + '時間（' + r.read + '分）と読みました。'
         + f.label + 'は ' + Hs.toText(f.maxMin) + '時間までです。'
-        + '★分で入れたい時は 右の「分」を押してください★';
+        + '分で入れたい時は 右の「分」を押してください';
       return;
     }
     var extra = '';
     /* ★軽く1つ★ 休憩が1日の所定を超えていたら赤くする */
     if (f.id === 'c-break') {
       var day = readField(HOUR_FIELDS[0]);
-      if (day.min != null && r.min > day.min) extra = '　★1日の所定より長いです★';
+      if (day.min != null && r.min > day.min) extra = '　1日の所定より長いです';
     }
     el.textContent = '＝ ' + r.min + '分（中ではこの分数で数えます）' + extra;
     el.className = extra ? 'tc-alert' : 'tc-note';
@@ -459,33 +459,33 @@
     if (n) {
       n.textContent = '法定休日は「毎週 少なくとも1日」または「4週間を通じて4日以上」です。'
         + '週休2日の会社でも、もう1日は所定休日（法定外）になります。'
-        + '★祝日は法定休日ではありません★（会社が決める所定休日です）。';
+        + '祝日は法定休日ではありません（会社が決める所定休日です）。';
     }
     /* 人ごとに上書きしている人が何人 居るか（★黙って散らからせない★） */
     var ov = q('hol-override');
     if (ov) {
       var n2 = (st.people || []).filter(function (p) { return p.legal_holiday_dow != null; }).length;
       ov.textContent = mode === 'per_person'
-        ? '会社の決まりを ★' + n2 + '人★ が上書きしています（従業員の欄で決めます）'
+        ? '会社の決まりを ' + n2 + '人が上書きしています（従業員の欄で決めます）'
         : (n2 ? '※ ' + n2 + '人に人ごとの指定が残っています（この決め方では使いません）' : '');
     }
     if (!a) return;
     a.hidden = true;
     if (mode === 'none') {
       a.hidden = false;
-      a.textContent = '★法定休日を決めていないので、休日の割増は付けていません★　'
+      a.textContent = '法定休日を決めていないので、休日の割増は付けていません　'
         + '就業規則で決めて、ここで選んでください。'
         + '（決めていない状態でこちらが勝手に曜日を決めると、会社が決めていない事を'
         + 'アプリが決めてしまうため、付けていません）';
     } else if ((mode === 'dow' || mode === 'per_person') && dow < 0) {
       a.hidden = false;
-      a.textContent = '★曜日が未選択です★　選ぶまで 休日の割増は付きません。';
+      a.textContent = '曜日が未選択です　選ぶまで 休日の割増は付きません。';
     } else if (mode === 'w4d4') {
       a.hidden = false;
       a.textContent = holCycleValue()
-        ? '★割増になる日が 働き方で動きます★　4週に4日の休みが確保できなくなった日から先の'
+        ? '割増になる日が 働き方で動きます　4週に4日の休みが確保できなくなった日から先の'
           + '休日労働が 法定休日労働になります。36協定と割増の管理にご注意ください。'
-        : '★4週間の起算日を入れてください★　入れるまで この決め方では保存できません'
+        : '4週間の起算日を入れてください　入れるまで この決め方では保存できません'
           + '（就業規則等で起算日を明らかにする必要があります）。';
     }
   }
@@ -521,11 +521,11 @@
       if (law.ok) { a.hidden = true; a.textContent = ''; } else {
         a.hidden = false;
         a.textContent = law.code === 'day_cut'
-          ? '★これは法律の上ではできない扱いです★　1日ごとに、一定時間に満たない労働時間を'
+          ? 'これは法律の上ではできない扱いです　1日ごとに、一定時間に満たない労働時間を'
             + '一律に切り捨てて その分の賃金を払わないのは 労働基準法違反になります'
             + '（労働時間は1分単位が原則）。選ぶことはできますが、'
             + '切り捨てた時間と金額を 集計の画面に必ず出します。'
-          : '★認められている形とは違います★　1か月の合計に当てる形で認められているのは、'
+          : '認められている形とは違います　1か月の合計に当てる形で認められているのは、'
             + '1時間未満の端数を ' + LAW.MONTH_FRACTION_HALF_MIN + '分で分ける物'
             + '（' + LAW.MONTH_FRACTION_HALF_MIN + '分未満は切り捨て・'
             + LAW.MONTH_FRACTION_HALF_MIN + '分以上は切り上げ）だけです。'
@@ -539,7 +539,7 @@
       var C = global.TcCalc;
       var samples = [29, 30, 31, 59, 60, 61];
       var line = samples.map(function (m) { return m + '→' + C.adjust(m, r.unitMin, r.dir); }).join('分 / ') + '分';
-      ex.textContent = (law.code === 'legal_month' ? '★これは認められている形です★（' : '')
+      ex.textContent = (law.code === 'legal_month' ? 'これは認められている形です（' : '')
         + (r.unitMin <= 1 ? '丸めません（1分単位のまま）'
           : (r.scope === 'day' ? '日ごとの実労働' : '1か月の 時間外・深夜・休日 それぞれの合計')
             + 'に当てます')
@@ -561,7 +561,7 @@
     /* ★4週4日制は 起算日が無いと保存させない★（空のまま使わせない） */
     var mode = q('c-holmode').value;
     if (mode === 'w4d4' && !holCycleValue()) {
-      U.toast('4週4日制は ★4週間の起算日★ が要ります（就業規則で決めた日を入れてください）');
+      U.toast('4週4日制は「4週間の起算日」が要ります（就業規則で決めた日を入れてください）');
       return;
     }
 

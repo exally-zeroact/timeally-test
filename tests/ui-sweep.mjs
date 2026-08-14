@@ -257,6 +257,19 @@ T('★★状態は 色ではなく文字で出る（受付中／締め待ち／�
   console.log('     実測: 状態「' + el.textContent + '」/ 記録の表示 ' + hist.length + '文字');
 });
 
+T('★★画面に出た文に ★ が混じっていない（★はコードの目印で 人に見せる物ではない）★★', () => {
+  /* 2026-08-15 実配信で出た: 社長の画面に「会社が★解除★してください」がそのまま出ていた。
+     ★書いた物ではなく 出た物を見る★（描き終わった後の本文を1枚ずつ数える）。 */
+  const bad = [];
+  for (const r of results) {
+    const t = r.page.w.document.body.textContent || '';
+    const hits = (t.match(/★[^★\n]{0,40}★/g) || []);
+    if (hits.length) bad.push(r.file + ': ' + hits.slice(0, 3).join(' / '));
+  }
+  ok(bad.length === 0, '★が出ている画面: ' + bad.join(' ｜ '));
+  console.log('     実測: ' + results.length + '画面の本文を見て ★ は 0件');
+});
+
 T('★印刷は「紙だけの新しい窓」で開く（中身が0枚なら開かない）', () => {
   const r = results.filter((x) => x.file === 'shukei.html')[0];
   ok(r.page.opened.length === 1, '新しい窓が ' + r.page.opened.length + '個');
