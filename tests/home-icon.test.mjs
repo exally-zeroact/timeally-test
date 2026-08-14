@@ -96,6 +96,12 @@ if (process.argv.includes('--self-test')) {
     ok(s && s.w === 192 && s.h === 192, '実測: ' + JSON.stringify(s));
     ok(pngSize(Buffer.from('not a png')) === null, 'PNGでない物を通している');
   });
+  S('②-a 白の判定が効いている（白を白と言い、絵の色を白と言わない）', () => {
+    ok(isWhitish('#FFFFFF') && isWhitish('#FEFEFE'), '白を白と言えていない');
+    ok(!isWhitish('#FBCD06') && !isWhitish('#E68805') && !isWhitish('#7D3204'), '絵の色を白と言っている');
+    const c = pngCorners(fs.readFileSync(path.join(ROOT, 'icons/icon-512.png')));
+    ok(c && c.length === 4, '★本物の四隅を読めていない＝この検査が空振り★');
+  });
   S('② 従業員の画面に manifest を足した作り物を捕まえる（★?t= が捨てられる★）', () => {
     const bad = '<link rel="manifest" href="manifest.json" />';
     ok(/rel="manifest"/.test(bad), '作り物が判定できない＝この検査が空振り');
@@ -125,22 +131,27 @@ T('★アイコンの絵が実在して、正方形で、大きさが合って�
 });
 
 /* ★司さんの指示（2026-08-14）★「アイコンいっぱいに 白の余白がないように」
-   ⇒ 四隅を ★実際に読んで★ 面の色である事を確かめる（見た目の思い込みで済ませない）。
-   色は ★元の絵から拾った値★（承認済みのUI配色とは別物＝これは司さんが渡した絵）。 */
-export const FACE = '#FBCD06';
+   ⇒ 四隅を ★実際に読んで★ 白でない事を確かめる（見た目の思い込みで済ませない）。
+   ★何色であるべきかは決め打ちしない★（絵を差し替えたら色は変わる）。
+   決まっているのは「白（＝余白）が無い」こと。 */
+export function isWhitish(hex) {
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  return r > 235 && g > 235 && b > 235;
+}
 
-T('★★アイコンの四隅に白い余白が無い（端まで面の色で埋まっている）★★', () => {
-  const bad = [];
+T('★★アイコンの四隅に白い余白が無い（端まで絵で埋まっている）★★', () => {
+  const bad = [], seen = new Set();
   for (const rel of Object.keys(ICONS)) {
     const corners = pngCorners(fs.readFileSync(path.join(ROOT, rel)));
     if (!corners) { bad.push(rel + ' の画素を読めない'); continue; }
     corners.forEach((c, i) => {
-      if (c !== FACE) bad.push(rel + ' の隅' + (i + 1) + ' が ' + c + '（' + FACE + 'のはず）');
+      seen.add(c);
+      if (isWhitish(c)) bad.push('★' + rel + ' の隅' + (i + 1) + ' が白（' + c + '）★');
     });
   }
   ok(bad.length === 0, bad.join(' / '));
   console.log('     実測: ' + Object.keys(ICONS).length + '枚 × 四隅 = '
-    + (Object.keys(ICONS).length * 4) + '点すべて ' + FACE + '（白 0点）');
+    + (Object.keys(ICONS).length * 4) + '点 / 白 0点 / 隅の色: ' + [...seen].join(' '));
 });
 
 T('★全部の画面に apple-touch-icon が入っている（1画面でも抜けたら そこから追加した人が白い四角）', () => {
