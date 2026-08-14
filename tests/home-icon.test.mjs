@@ -19,6 +19,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -40,9 +41,11 @@ export function pngSize(buf) {
   return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
 }
 
-/** ★PNGの四隅の色を実際に読む★（「白の余白が無い」を思い込みで済ませない）
- *  8bit の RGB / RGBA・非インターレースだけ読む（うちが作る物はこれ）。 */
-export function pngCorners(buf) {
+/** ★PNGを実際に展開して画素を読む★（見た目の思い込みで済ませない）
+ *  8bit の RGB / RGBA・非インターレースだけ読む（うちが作る物はこれ）。
+ *  返り値は { w, h, ch, data }（data は展開後の生の並び）。 */
+export function pngPixels(buf) {
+  if (!pngSize(buf)) return null;                 // PNGでない物で落ちない（self-testで踏んだ）
   const w = buf.readUInt32BE(16), h = buf.readUInt32BE(20);
   const depth = buf[24], color = buf[25], interlace = buf[28];
   if (depth !== 8 || (color !== 2 && color !== 6) || interlace !== 0) return null;
@@ -75,11 +78,29 @@ export function pngCorners(buf) {
       cur[i] = r & 0xff;
     }
   }
+  return { w, h, ch, data: out };
+}
+
+/** 四隅の色（#RRGGBB） */
+export function pngCorners(buf) {
+  const p = pngPixels(buf);
+  if (!p) return null;
   const at = (x, y) => {
-    const i = y * stride + x * ch;
-    return '#' + [out[i], out[i + 1], out[i + 2]].map((v) => ('0' + v.toString(16)).slice(-2)).join('').toUpperCase();
+    const i = y * (p.w * p.ch) + x * p.ch;
+    return '#' + [p.data[i], p.data[i + 1], p.data[i + 2]].map((v) => ('0' + v.toString(16)).slice(-2)).join('').toUpperCase();
   };
-  return [at(0, 0), at(w - 1, 0), at(0, h - 1), at(w - 1, h - 1)];
+  return [at(0, 0), at(p.w - 1, 0), at(0, p.h - 1), at(p.w - 1, p.h - 1)];
+}
+
+/* ★司さんの決定（2026-08-14・最終）★「★絵そのものにして★」
+   伸ばさない・切らない・塗り替えない。★元のPNGを そのまま縮めるだけ★。
+   （白の余白も 元の絵の一部。私が消しにいったのは やり過ぎだった） */
+export const SOURCE = 'icons/source.png';
+export const SOURCE_BLOB = '28e36b7328761f4608b3464dd12f57bf1d851251';   // git hash-object
+
+/** git の blob ハッシュ */
+export function blobHash(buf) {
+  return crypto.createHash('sha1').update('blob ' + buf.length + '\0').update(buf).digest('hex');
 }
 
 let pass = 0, fail = 0;
@@ -96,11 +117,17 @@ if (process.argv.includes('--self-test')) {
     ok(s && s.w === 192 && s.h === 192, '実測: ' + JSON.stringify(s));
     ok(pngSize(Buffer.from('not a png')) === null, 'PNGでない物を通している');
   });
-  S('②-a 白の判定が効いている（白を白と言い、絵の色を白と言わない）', () => {
-    ok(isWhitish('#FFFFFF') && isWhitish('#FEFEFE'), '白を白と言えていない');
-    ok(!isWhitish('#FBCD06') && !isWhitish('#E68805') && !isWhitish('#7D3204'), '絵の色を白と言っている');
+  S('②-a PNGを本当に展開できている（読めなければ「白紙でない」の検査が空振り）', () => {
+    const p = pngPixels(fs.readFileSync(path.join(ROOT, 'icons/icon-512.png')));
+    ok(p && p.w === 512 && p.data.length === 512 * 512 * p.ch, '展開できていない');
     const c = pngCorners(fs.readFileSync(path.join(ROOT, 'icons/icon-512.png')));
-    ok(c && c.length === 4, '★本物の四隅を読めていない＝この検査が空振り★');
+    ok(c && c.length === 4, '★本物の四隅を読めていない★');
+    ok(pngPixels(Buffer.from('not a png')) === null || pngSize(Buffer.from('not a png')) === null, 'PNGでない物を通している');
+  });
+  S('②-b 元の絵の印が合っている（差し替えたら気づく）', () => {
+    const got = blobHash(fs.readFileSync(path.join(ROOT, SOURCE)));
+    ok(got === SOURCE_BLOB, '★印が合っていない: ' + got + '★');
+    ok(blobHash(Buffer.from('x')) !== SOURCE_BLOB, '印の計算が壊れている');
   });
   S('② 従業員の画面に manifest を足した作り物を捕まえる（★?t= が捨てられる★）', () => {
     const bad = '<link rel="manifest" href="manifest.json" />';
@@ -130,28 +157,37 @@ T('★アイコンの絵が実在して、正方形で、大きさが合って�
   console.log('     実測: ' + Object.keys(ICONS).length + '枚すべて正方形・寸法どおり');
 });
 
-/* ★司さんの指示（2026-08-14）★「アイコンいっぱいに 白の余白がないように」
-   ⇒ 四隅を ★実際に読んで★ 白でない事を確かめる（見た目の思い込みで済ませない）。
-   ★何色であるべきかは決め打ちしない★（絵を差し替えたら色は変わる）。
-   決まっているのは「白（＝余白）が無い」こと。 */
-export function isWhitish(hex) {
-  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
-  return r > 235 && g > 235 && b > 235;
-}
+/* ★司さんの決定（2026-08-14・最終）★「★絵そのものにして★」
+   ⇒ 伸ばさない・切らない・塗り替えない。★元のPNGを そのまま縮めるだけ★。
+     （白の余白も 元の絵の一部なので そのまま残す。私が消しにいったのは やり過ぎだった）
+   ⇒ 見張るのは ★元の絵が入れ替わっていないか★ と ★絵が本当に入っているか★。 */
+T('★元の絵（司さんが渡した物）がrepoに在って、入れ替わっていない', () => {
+  const p = path.join(ROOT, SOURCE);
+  ok(fs.existsSync(p), SOURCE + ' が無い');
+  const got = blobHash(fs.readFileSync(p));
+  ok(got === SOURCE_BLOB, '元の絵が入れ替わっている: ' + got);
+  const s = pngSize(fs.readFileSync(p));
+  ok(s.w === s.h, '元の絵が正方形でない: ' + s.w + '×' + s.h);
+  console.log('     実測: ' + SOURCE + ' ' + s.w + '×' + s.h + ' / blob ' + got.slice(0, 8));
+});
 
-T('★★アイコンの四隅に白い余白が無い（端まで絵で埋まっている）★★', () => {
-  const bad = [], seen = new Set();
+T('★アイコンが「白紙」になっていない（絵が本当に入っている）', () => {
+  const bad = [];
   for (const rel of Object.keys(ICONS)) {
-    const corners = pngCorners(fs.readFileSync(path.join(ROOT, rel)));
-    if (!corners) { bad.push(rel + ' の画素を読めない'); continue; }
-    corners.forEach((c, i) => {
-      seen.add(c);
-      if (isWhitish(c)) bad.push('★' + rel + ' の隅' + (i + 1) + ' が白（' + c + '）★');
-    });
+    const px = pngPixels(fs.readFileSync(path.join(ROOT, rel)));
+    if (!px) { bad.push(rel + ' の画素を読めない'); continue; }
+    let yellow = 0, ink = 0;
+    for (let i = 0; i < px.data.length; i += 4) {
+      const r = px.data[i], g = px.data[i + 1], b = px.data[i + 2];
+      if (r > 220 && g > 150 && g < 235 && b < 90) yellow++;
+      if (r < 170 && g < 120 && b < 100) ink++;
+    }
+    const total = px.w * px.h;
+    if (yellow / total < 0.20) bad.push(rel + ' に面の黄が少なすぎる（' + Math.round(yellow / total * 100) + '%）');
+    if (ink / total < 0.02) bad.push(rel + ' に図柄の茶が少なすぎる（' + Math.round(ink / total * 100) + '%）');
   }
   ok(bad.length === 0, bad.join(' / '));
-  console.log('     実測: ' + Object.keys(ICONS).length + '枚 × 四隅 = '
-    + (Object.keys(ICONS).length * 4) + '点 / 白 0点 / 隅の色: ' + [...seen].join(' '));
+  console.log('     実測: ' + Object.keys(ICONS).length + '枚すべてに 面の黄と図柄の茶が入っている');
 });
 
 T('★全部の画面に apple-touch-icon が入っている（1画面でも抜けたら そこから追加した人が白い四角）', () => {
