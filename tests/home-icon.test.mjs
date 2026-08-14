@@ -18,6 +18,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -37,6 +38,48 @@ export function pngSize(buf) {
   if (buf.length < 24 || buf.readUInt32BE(0) !== 0x89504e47) return null;
   if (buf.toString('ascii', 12, 16) !== 'IHDR') return null;
   return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+}
+
+/** ★PNGの四隅の色を実際に読む★（「白の余白が無い」を思い込みで済ませない）
+ *  8bit の RGB / RGBA・非インターレースだけ読む（うちが作る物はこれ）。 */
+export function pngCorners(buf) {
+  const w = buf.readUInt32BE(16), h = buf.readUInt32BE(20);
+  const depth = buf[24], color = buf[25], interlace = buf[28];
+  if (depth !== 8 || (color !== 2 && color !== 6) || interlace !== 0) return null;
+  const ch = color === 6 ? 4 : 3;
+  let p = 8, idat = [];
+  while (p + 8 <= buf.length) {
+    const len = buf.readUInt32BE(p), type = buf.toString('ascii', p + 4, p + 8);
+    if (type === 'IDAT') idat.push(buf.subarray(p + 8, p + 8 + len));
+    if (type === 'IEND') break;
+    p += 12 + len;
+  }
+  const raw = zlib.inflateSync(Buffer.concat(idat));
+  const stride = w * ch;
+  const out = Buffer.alloc(h * stride);
+  let q = 0;
+  for (let y = 0; y < h; y++) {
+    const f = raw[q++];
+    const line = raw.subarray(q, q + stride); q += stride;
+    const cur = out.subarray(y * stride, (y + 1) * stride);
+    const prev = y ? out.subarray((y - 1) * stride, y * stride) : Buffer.alloc(stride);
+    for (let i = 0; i < stride; i++) {
+      const a = i >= ch ? cur[i - ch] : 0, b = prev[i], c = i >= ch ? prev[i - ch] : 0, v = line[i];
+      let r;
+      if (f === 0) r = v;
+      else if (f === 1) r = v + a;
+      else if (f === 2) r = v + b;
+      else if (f === 3) r = v + ((a + b) >> 1);
+      else { const pp = a + b - c, pa = Math.abs(pp - a), pb = Math.abs(pp - b), pc = Math.abs(pp - c);
+        r = v + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c); }
+      cur[i] = r & 0xff;
+    }
+  }
+  const at = (x, y) => {
+    const i = y * stride + x * ch;
+    return '#' + [out[i], out[i + 1], out[i + 2]].map((v) => ('0' + v.toString(16)).slice(-2)).join('').toUpperCase();
+  };
+  return [at(0, 0), at(w - 1, 0), at(0, h - 1), at(w - 1, h - 1)];
 }
 
 let pass = 0, fail = 0;
@@ -79,6 +122,25 @@ T('★アイコンの絵が実在して、正方形で、大きさが合って�
   }
   ok(bad.length === 0, bad.join(' / '));
   console.log('     実測: ' + Object.keys(ICONS).length + '枚すべて正方形・寸法どおり');
+});
+
+/* ★司さんの指示（2026-08-14）★「アイコンいっぱいに 白の余白がないように」
+   ⇒ 四隅を ★実際に読んで★ 面の色である事を確かめる（見た目の思い込みで済ませない）。
+   色は ★元の絵から拾った値★（承認済みのUI配色とは別物＝これは司さんが渡した絵）。 */
+export const FACE = '#FBCD06';
+
+T('★★アイコンの四隅に白い余白が無い（端まで面の色で埋まっている）★★', () => {
+  const bad = [];
+  for (const rel of Object.keys(ICONS)) {
+    const corners = pngCorners(fs.readFileSync(path.join(ROOT, rel)));
+    if (!corners) { bad.push(rel + ' の画素を読めない'); continue; }
+    corners.forEach((c, i) => {
+      if (c !== FACE) bad.push(rel + ' の隅' + (i + 1) + ' が ' + c + '（' + FACE + 'のはず）');
+    });
+  }
+  ok(bad.length === 0, bad.join(' / '));
+  console.log('     実測: ' + Object.keys(ICONS).length + '枚 × 四隅 = '
+    + (Object.keys(ICONS).length * 4) + '点すべて ' + FACE + '（白 0点）');
 });
 
 T('★全部の画面に apple-touch-icon が入っている（1画面でも抜けたら そこから追加した人が白い四角）', () => {
