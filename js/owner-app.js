@@ -287,7 +287,7 @@
         + '<div style="word-break:break-all">' + U.esc(url) + '</div>'
         /* ★いつ決めたかを出す★（身に覚えの無い日時なら 社長が気づける）
            秘密を1つに減らした分の埋め合わせ（司さん 2026-08-15） */
-        + '<div class="tc-when">' + U.esc(pinHistoryOf(p.employee_id)) + '</div>'
+        + '<div class="tc-when">' + U.esc(pinHistoryOf(p)) + '</div>'
         + '<div id="qr-' + U.esc(p.token) + '"></div></div>';
     }).join('');
     Array.prototype.forEach.call(box.querySelectorAll('[data-qr]'), function (b) {
@@ -301,10 +301,17 @@
     return global.location.href.replace(/[^/]*$/, '') + 'punch.html?t=' + token;
   }
 
-  /** ★暗証番号を「いつ決めたか／いつ作り直したか」★（帳面から読む・消えない） */
-  function pinHistoryOf(employeeId) {
-    var rows = (st.pinLog || []).filter(function (r) { return r.employee_id === employeeId; });
-    if (!rows.length) return 'まだ暗証番号を決めていません';
+  /** ★暗証番号を「いつ決めたか／いつ作り直したか」★（帳面から読む・消えない）
+      ★札(暗証番号あり/まだ)と同じ物から判定する★
+      ＝ 2026-08-15 に踏んだ: 帳面だけ見ていたら、同じカードの中で
+      「暗証番号あり」と「まだ決めていません」が ★同時に出た★（この仕組みより前に決めた人）。 */
+  function pinHistoryOf(p) {
+    var rows = (st.pinLog || []).filter(function (r) { return r.employee_id === p.employee_id; });
+    if (!rows.length) {
+      return p.pw_hash
+        ? 'いつ決めたかの記録はありません（この仕組みを入れる前に決めた人です）'
+        : 'まだ暗証番号を決めていません';
+    }
     var last = rows[rows.length - 1];
     var when = (DB.toJst(last.at) || '').replace('T', ' ');
     var word = last.action === 'pin_reissue' ? '入口を作り直しました' : '暗証番号を決めました';

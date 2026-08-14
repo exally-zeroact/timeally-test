@@ -31,7 +31,9 @@ function rowsFor(table, seed, store) {
       token: '11111111-1111-1111-1111-111111111111', account_id: 'u1',
       employee_id: 'E1', name: '山田 太郎', emp_no: 'A01',
       hire_date: '2024-04-01', hourly_yen: 1200,
-      init_code: 'ABCD2345', pw_hash: null, device_tokens: [],
+      /* ★seed.pwSet=true … 暗証番号は決めてあるが 帳面には記録が無い人★
+         ＝この仕組みを入れる前に決めた人。実際に居る（作らないと検査が素通りする）。 */
+      init_code: null, pw_hash: s.pwSet ? '$2a$10$dummydummydummydummydu' : null, device_tokens: [],
       fail_count: 0, locked_until: null, active: true, created_at: '2026-08-01T00:00:00Z',
     }];
   }

@@ -419,6 +419,27 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
   const p = openPage('index.html', '', {});
   await wait(); await wait(); await wait();
 
+  const pwSetPage = openPage('index.html', '', { pwSet: true });
+  await wait(); await wait(); await wait();
+
+  T('★★1枚のカードの中で 札と説明が食い違わない（暗証番号のあり／なし）★★', () => {
+    /* 2026-08-15 に踏んだ: 札は帳面を見ず pw_hash を見て、説明は帳面だけを見ていたので、
+       ★同じカードに「暗証番号あり」と「まだ決めていません」が同時に出た★。
+       ★可否と理由は同じ物から出す★（この決まりは締めでも同じ）。
+       ★「暗証番号あり・帳面に記録なし」の人を作らないと この検査は素通りする★ */
+    const d2 = pwSetPage.w.document;
+    d2.getElementById('tab-people').click();
+    const cards = [...d2.querySelectorAll('#people .tc-card')];
+    ok(cards.length > 0, '従業員のカードが無い');
+    cards.forEach((c) => {
+      const t = c.textContent.replace(/\s+/g, ' ');
+      const hasTag = /暗証番号あり/.test(t);
+      const saysNone = /まだ暗証番号を決めていません/.test(t);
+      ok(!(hasTag && saysNone), '★札と説明が食い違っている★: ' + t.slice(0, 90));
+    });
+    console.log('     実測: 従業員 ' + cards.length + '枚で 食い違い 0件');
+  });
+
   T('★★同じ従業員番号は 人が読む言葉で止まる（倉庫へ書きに行かない）★★', () => {
     const d2 = p.w.document;
     d2.getElementById('tab-people').click();
