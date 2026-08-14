@@ -334,6 +334,20 @@ for (const file of ['index.html', 'shukei.html']) {
   });
 }
 
+/* ★ログインが切れた時に 中身の無い画面を出さない★（実配信で踏んだ：
+   倉庫は401を返しているのに、画面は「0件」に見えていた） */
+{
+  const p = openPage('index.html', '', { expired: true });
+  await wait(); await wait(); await wait();
+  T('★★ログインが切れていたら 入口へ送る（空の画面を出さない）★★', () => {
+    ok(p.fake._calls.indexOf('auth.getUser') >= 0, 'ログインを見に行っていない');
+    ok(p.navTried.length > 0, '★401なのに その場に留まっている＝空の画面が出る★');
+    const src = fs.readFileSync(path.join(ROOT, 'js/tc-db.js'), 'utf8');
+    ok(/isAuthError/.test(src), '401を見分ける所が無い');
+    ok(/PGRST301|401/.test(src), '401 を見ていない');
+  });
+}
+
 T('★1000件で切れない道を通っている（range を呼んでいる）', () => {
   const r = results.filter((x) => x.file === 'index.html')[0];
   ok(r.page.fake._calls.some((c) => /\.range$/.test(c)), 'range を1度も呼んでいない＝ページめくりの道が死んでいる');

@@ -61,6 +61,11 @@ function makeQuery(table, calls, seed, saved) {
   q.update = function (v) { calls.push(table + '.update'); keep('update', v); q._data = [Object.assign({}, rowsFor(table, seed)[0], v)]; return q; };
   q.upsert = function (v) { calls.push(table + '.upsert'); keep('upsert', v); q._data = [].concat(v); return q; };
   q.then = function (res, rej) {
+    /* ★seed.expired=true で「ログインが切れた」を作れる★（401 が返る）
+       ＝ 中身の無い画面が出て理由が分からない、を捕まえるため */
+    if (seed.expired) {
+      return Promise.resolve({ data: null, error: { message: 'JWT expired', status: 401, code: 'PGRST301' } }).then(res, rej);
+    }
     var data = q._data || rowsFor(table, seed);
     return Promise.resolve({ data: data, error: null }).then(res, rej);
   };

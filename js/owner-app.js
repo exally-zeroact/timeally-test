@@ -21,6 +21,22 @@
   function thisYm() { return (DB.nowJst() || '2026-01').slice(0, 7); }
   function stamp() { return (DB.nowJst() || '').replace(/[-T:]/g, '').slice(0, 13).replace(/^(\d{8})(\d{4})$/, '$1_$2'); }
 
+  /** ★ログインが切れていたら 入口へ送る★
+   *  送らないと ★中身の無い画面が出て 理由が分からない★（実配信で踏んだ：
+   *  倉庫は401を返しているのに、画面は「0件」に見えていた）。
+   *  @returns true なら もうこの先を続けない */
+  function bailIfLoggedOut(e) {
+    if (!e || !DB.isAuthError(e)) return false;
+    global.location.replace('login.html');
+    return true;
+  }
+  function failed(msg) {
+    return function (e) {
+      if (bailIfLoggedOut(e)) return;
+      U.toast(msg + '（' + e.message + '）');
+    };
+  }
+
   function alertBox(id, msg) {
     var el = q(id);
     if (!el) { U.toast(msg); return; }
@@ -66,7 +82,7 @@
       st.user = u;
       q('main').hidden = false;
       after();
-    }).catch(function (e) { U.toast('つながりませんでした（' + e.message + '）'); });
+    }).catch(failed('つながりませんでした'));
   }
 
   /* ── ① 一覧 ───────────────────────────────────────────────── */
@@ -128,7 +144,7 @@
       drawPeople();
       return drawFixes(r[2] || []);
     }).then(drawSummary)
-      .catch(function (e) { U.toast('読めませんでした（' + e.message + '）'); });
+      .catch(failed('読めませんでした'));
   }
 
   function coOpts() {
@@ -189,14 +205,14 @@
             .eq('id', f.id).then(function () {
               return DB.approveFix(f.id, st.user.id, self);
             }).then(function () { U.toast('承認しました'); reload(); })
-            .catch(function (e) { U.toast('できませんでした（' + e.message + '）'); });
+            .catch(failed('できませんでした'));
         };
       });
       Array.prototype.forEach.call(box.querySelectorAll('[data-ng]'), function (b) {
         b.onclick = function () {
           DB.rejectFix(b.getAttribute('data-ng'), st.user.id)
             .then(function () { U.toast('戻しました'); reload(); })
-            .catch(function (e) { U.toast('できませんでした（' + e.message + '）'); });
+            .catch(failed('できませんでした'));
         };
       });
     });
@@ -240,7 +256,7 @@
             + '<td class="num">' + U.minToHm(x.s.month.holidayMin) + '</td>'
             + '<td class="num' + (x.s.warnings.length ? ' warn' : '') + '">' + x.s.warnings.length + '</td></tr>';
         }).join('') + '</table></div>';
-    }).catch(function (e) { U.toast('数えられませんでした（' + e.message + '）'); });
+    }).catch(failed('数えられませんでした'));
   }
 
   /* ── ② 従業員（入口の発行・QR） ─────────────────────────────── */
@@ -297,12 +313,12 @@
       name: name, emp_no: q('p-no').value.trim() || null,
       hire_date: hire, hourly_yen: yen, init_code: newCode(),
     }).then(function () { U.toast('入口を作りました'); q('p-name').value = ''; q('p-no').value = ''; q('p-yen').value = ''; reload(); })
-      .catch(function (e) { U.toast('作れませんでした（' + e.message + '）'); });
+      .catch(failed('作れませんでした'));
   }
   function reissue(token) {
     DB.updatePerson(token, { init_code: newCode(), pw_hash: null, device_tokens: [], fail_count: 0, locked_until: null })
       .then(function () { U.toast('入口を作り直しました。新しいあいことばを渡してください。'); reload(); })
-      .catch(function (e) { U.toast('できませんでした（' + e.message + '）'); });
+      .catch(failed('できませんでした'));
   }
 
   /* ── ③ 会社情報 ───────────────────────────────────────────── */
@@ -473,7 +489,7 @@
       warn_on: !!q('c-warn').checked,
       updated_at: new Date().toISOString(),
     }, vals)).then(function () { U.toast('保存しました'); reload(); })
-      .catch(function (e) { U.toast('保存できませんでした（' + e.message + '）'); });
+      .catch(failed('保存できませんでした'));
   }
 
   /* ── ④ 集計・印刷 ─────────────────────────────────────────── */
@@ -495,7 +511,7 @@
         }).join('');
         st.who = st.people.length ? st.people[0].employee_id : '';
         drawShukei();
-      }).catch(function (e) { U.toast('読めませんでした（' + e.message + '）'); });
+      }).catch(failed('読めませんでした'));
     });
   }
   function shiftYm2(n) {
@@ -529,7 +545,7 @@
         company: Object.assign(coOpts(), { hourlyYen: p.hourly_yen, grantDays: grantDaysOf(p) }),
       });
       renderTables(p);
-    }).catch(function (e) { U.toast('数えられませんでした（' + e.message + '）'); });
+    }).catch(failed('数えられませんでした'));
   }
 
   function grantDaysOf(p) {
@@ -643,7 +659,7 @@
         kind: '勤怠', company: (st.company || {}).name, ym: st.ym, count: rows.length, stamp: stamp(),
       }, 'csv');
       U.deliverText(global.TcCsv.monthlyCsv(rows), name);
-    }).catch(function (e) { U.toast('作れませんでした（' + e.message + '）'); });
+    }).catch(failed('作れませんでした'));
   }
 
   /** Excel … ★渡し口は file-out.js だけ★。部品は押した時にだけ読む（軽くしておく） */
@@ -686,7 +702,7 @@
         kind: '勤怠', company: (st.company || {}).name, ym: st.ym, count: rows.length, stamp: stamp(),
       }, 'xlsx');
       return global.FileOut.deliver(out, name).then(function () { U.toast('「' + name + '」を保存しました'); });
-    }).catch(function (e) { U.toast('作れませんでした（' + e.message + '）'); });
+    }).catch(failed('作れませんでした'));
   }
 
   var _loaded = {};

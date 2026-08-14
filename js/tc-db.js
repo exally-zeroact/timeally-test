@@ -58,6 +58,22 @@
     onChange: function (fn) { return client().auth.onAuthStateChange(fn); },
   };
 
+  /* ★ログインが切れた（401 / JWT expired）を見分ける★
+     見分けないと ★中身の無い画面が出て 理由が分からない★（実配信で踏んだ）。
+     倉庫の答えは 401 なのに、画面は「データが0件」に見えてしまう。 */
+  function isAuthError(e) {
+    if (!e) return false;
+    if (e.status === 401 || e.code === 'PGRST301' || e.code === '401') return true;
+    return /jwt|expired|invalid token|not authenticated|unauthor/i.test(String(e.message || ''));
+  }
+  function wrapError(where, err) {
+    var e = new Error(where + ': ' + (err && err.message ? err.message : err));
+    e.status = err && err.status;
+    e.code = err && err.code;
+    e.auth = isAuthError(err);
+    return e;
+  }
+
   /* ── 読み（★全部めくって取る★） ────────────────────────────── */
   function selectAll(table, build) {
     var rows = [], from = 0;
@@ -65,7 +81,7 @@
       var q = client().from(table).select('*');
       if (build) q = build(q);
       return q.range(from, from + PAGE - 1).then(function (r) {
-        if (r.error) throw new Error(table + ': ' + r.error.message);
+        if (r.error) throw wrapError(table, r.error);
         var got = r.data || [];
         rows = rows.concat(got);
         if (got.length < PAGE) return rows;
@@ -213,6 +229,7 @@
 
   global.TcDb = {
     client: client, Auth: Auth, Emp: Emp, rpc: rpc,
+    isAuthError: isAuthError, wrapError: wrapError,
     toJst: toJst, fromJst: fromJst, nowJst: nowJst, nextDay: nextDay,
     selectAll: selectAll, PAGE: PAGE,
     getCompany: getCompany, saveCompany: saveCompany,
