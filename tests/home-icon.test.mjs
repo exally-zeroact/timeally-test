@@ -129,9 +129,11 @@ if (process.argv.includes('--self-test')) {
     ok(c && c.length === 4, '★本物の四隅を読めていない★');
     ok(pngPixels(Buffer.from('not a png')) === null || pngSize(Buffer.from('not a png')) === null, 'PNGでない物を通している');
   });
-  S('②-c 白の判定が効いている（白を白と言い、絵の色を白と言わない）', () => {
+  S('②-c 白と「薄い縁」の判定が効いている', () => {
     ok(isWhitish('#FFFFFF') && isWhitish('#FEFEFE'), '白を白と言えていない');
     ok(!isWhitish('#E68805') && !isWhitish('#FBCD06') && !isWhitish('#7D3204'), '絵の色を白と言っている');
+    ok(isPale(0xEE, 0xBD, 0x79), '★白に溶けかけた縁（実際に残っていた色）を見逃す★');
+    ok(!isPale(0xE6, 0x88, 0x05) && !isPale(0xFB, 0xCD, 0x06), '枠や面を「薄い」と言っている');
     /* ★元の絵（白の余白つき）を通したら 必ず赤になる★＝この検査が空振りしていない証拠 */
     const c = pngCorners(fs.readFileSync(path.join(ROOT, SOURCE)));
     ok(c.every(isWhitish), '★元の絵の四隅を白と判定できていない＝空振り★');
@@ -189,26 +191,34 @@ export function isWhitish(hex) {
   return r > 235 && g > 235 && b > 235;
 }
 
-T('★★白の余白が1pxも無い（四隅と 各辺の真ん中を実際に読む）★★', () => {
-  const bad = [], seen = new Set();
+/** 白へ溶けかけた「薄い色」か（★白だけ潰すと 薄い縁が残った★＝実際に踏んだ）
+ *  この絵の色は ★青がほとんど無い★（縁 #E68805 は b=5／面 #FBCD06 は b=6／図柄 #7D3204 は b=4）。
+ *  白へ溶けるほど ★青が増えて明るくなる★ので、その2つで見分ける。
+ *  （実際に残っていた #EEBD79 は b=121・明るさ183 ＝ これで捕まる） */
+export function isPale(r, g, b) { return b > 60 && (r + g + b) / 3 > 150; }
+
+T('★★端を1周ぐるっと数えて 白も薄い縁も0（枠が途切れていない）★★', () => {
+  const bad = [];
+  let total = 0;
   for (const rel of Object.keys(ICONS)) {
     const p = pngPixels(fs.readFileSync(path.join(ROOT, rel)));
     if (!p) { bad.push(rel + ' の画素を読めない'); continue; }
-    const at = (x, y) => {
-      const i = y * (p.w * p.ch) + x * p.ch;
-      return '#' + [p.data[i], p.data[i + 1], p.data[i + 2]].map((v) => ('0' + v.toString(16)).slice(-2)).join('').toUpperCase();
+    const stride = p.w * p.ch;
+    let white = 0, pale = 0, n = 0;
+    const look = (x, y) => {
+      const i = y * stride + x * p.ch, r = p.data[i], g = p.data[i + 1], b = p.data[i + 2];
+      n++;
+      if (r > 235 && g > 235 && b > 235) white++;
+      else if (isPale(r, g, b)) pale++;
     };
-    const pts = [['隅1', 0, 0], ['隅2', p.w - 1, 0], ['隅3', 0, p.h - 1], ['隅4', p.w - 1, p.h - 1],
-      ['上辺', (p.w / 2) | 0, 0], ['下辺', (p.w / 2) | 0, p.h - 1],
-      ['左辺', 0, (p.h / 2) | 0], ['右辺', p.w - 1, (p.h / 2) | 0]];
-    pts.forEach(([name, x, y]) => {
-      const c = at(x, y); seen.add(c);
-      if (isWhitish(c)) bad.push('★' + rel + ' の' + name + 'が白（' + c + '）★');
-    });
+    for (let k = 0; k < p.w; k++) { look(k, 0); look(k, p.h - 1); }
+    for (let k = 0; k < p.h; k++) { look(0, k); look(p.w - 1, k); }
+    total += n;
+    if (white) bad.push('★' + rel + ' の端に白 ' + white + '点★');
+    if (pale) bad.push('★' + rel + ' の端に薄い色 ' + pale + '点（枠が途切れて見える）★');
   }
   ok(bad.length === 0, bad.join(' / '));
-  console.log('     実測: ' + Object.keys(ICONS).length + '枚 × 8点 = '
-    + (Object.keys(ICONS).length * 8) + '点 / ★白 0点★ / 端の色: ' + [...seen].join(' '));
+  console.log('     実測: ' + Object.keys(ICONS).length + '枚の端 ' + total + '点 / ★白 0点・薄い色 0点★');
 });
 
 T('★アイコンが「白紙」になっていない（絵が本当に入っている）', () => {
