@@ -49,13 +49,21 @@ const PLAN = {
     ['b-signout-no', 'やめる（ログアウトを取り消す）'],
     ['b-signout-yes', 'ログアウト（本当に出る）'],
   ],
+  /* ★押す順に意味がある★ … 締め日を過ぎた月へ行く → 確定する → 渡す → 解除する。
+     ★解除した後は 渡す口が閉じる★ ところまで、この画面で1本に繋げて押す。 */
   'shukei.html': [
-    ['b-prev', '前の月'],
-    ['b-next', '次の月'],
+    ['b-prev', '前の月（★締め日を過ぎた月＝締め待ちになる★）'],
+    ['b-close', 'この月を確定する（理由の欄が出る）'],
+    ['b-do', '記録して実行 →★確定★', { creason: '8月分として給与へ渡すため' }],
     ['b-print', '印刷（★中身が0枚なら開かない★）'],
     ['b-csv', 'この人の日ごと（CSV）'],
     ['b-kyuyo', '給与へ渡す（全員・CSV）'],
     ['b-xlsx', 'Excel（全員）'],
+    ['b-reopen', '確定を解除する（★理由が要る★）'],
+    ['b-do', '記録して実行 →★解除★（ここから CSV は出せない）', { creason: '打刻漏れが見つかったため' }],
+    ['b-close', 'もう一度 確定する（＝解除の後は 締め待ちに戻っている）'],
+    ['b-cancel', 'やめる（記録を足さずに閉じる）'],
+    ['b-next', '次の月'],
   ],
   'punch.html': [
     ['b-in', '出勤'], ['b-out', '退勤'],
@@ -156,16 +164,23 @@ for (const [file, list] of Object.entries(PLAN)) {
   }
   const dateInput = page.w.document.querySelector('.tc-date-input');
   if (dateInput) dateInput.value = '2026-08-04';
-  const missing = [], threw = [];
-  for (const [id] of list) {
+  const missing = [], threw = [], sawDisabled = [];
+  for (const [id, , fill] of list) {
     const el = page.w.document.getElementById(id);
     if (!el) { missing.push(id); continue; }
     if (typeof el.onclick !== 'function' && el.tagName !== 'A') { missing.push(id + '(配線なし)'); continue; }
+    /* ★押す直前に入れる★（押した拍子に欄が空にされる物があるので、先入れでは間に合わない） */
+    for (const [k, v] of Object.entries(fill || {})) {
+      const f = page.w.document.getElementById(k);
+      if (f) f.value = v;
+    }
+    /* ★押せない物は「押せない」と記録して次へ★（無理に click しても何も起きず 緑に見える） */
+    if (el.disabled) { sawDisabled.push(id); continue; }
     try { el.click(); } catch (e) { threw.push(id + ': ' + e.message); }
     await wait();
   }
   await wait(); await wait();
-  results.push({ file, page, missing, threw });
+  results.push({ file, page, missing, threw, sawDisabled });
 }
 
 for (const r of results) {
@@ -195,6 +210,51 @@ T('★「渡す」を押したらファイルが実際に作られた（名前�
   const hint = r.page.w.document.getElementById('namehint').textContent;
   ok(/この名前で保存します/.test(hint), '★押す前に保存名を出していない★');
   console.log('     実測: ' + r.page.delivered.join(' / '));
+});
+
+/* ── 締め（実UIで 確定 → 渡す → 解除 まで通す） ───────────────────── */
+T('★★実UIで「確定」を押したら 記録が1行 増えた（押しただけで終わっていない）★★', () => {
+  const r = results.filter((x) => x.file === 'shukei.html')[0];
+  const log = r.page.fake._store.tc_close;
+  const kinds = log.map((x) => x.action);
+  ok(kinds.indexOf('close') >= 0, '★確定の記録が無い★: ' + JSON.stringify(kinds));
+  ok(kinds.indexOf('reopen') >= 0, '★解除の記録が無い★: ' + JSON.stringify(kinds));
+  const rp = log.filter((x) => x.action === 'reopen')[0];
+  ok((rp.reason || '').length >= 2, '★解除の理由が残っていない★');
+  ok(log.every((x) => x.by_uid), '★誰がやったかが残っていない★');
+  ok(log.every((x) => x.ym === '2026-07'), '別の月に記録している: ' + JSON.stringify(log.map((x) => x.ym)));
+  const snap = log.filter((x) => x.action === 'close')[0].snapshot;
+  ok(snap && snap.rows && snap.rows.length >= 1, '★確定した時の数字を焼き付けていない★');
+  console.log('     実測: 記録 ' + log.length + '行 = ' + kinds.join(' → ')
+    + ' / 焼き付けた人数 ' + (snap.rows || []).length);
+});
+
+T('★★解除したら 渡す口が閉じる（古い数字を配らない）★★', () => {
+  const r = results.filter((x) => x.file === 'shukei.html')[0];
+  const d2 = r.page.w.document;
+  /* 押した順の最後は 次の月(2026-08=受付中) なので、どちらにせよ閉じている */
+  ['b-csv', 'b-kyuyo', 'b-xlsx'].forEach((id) => {
+    ok(d2.getElementById(id).disabled, '★' + id + ' が押せるままになっている★');
+  });
+  /* ★「なぜ押せないか」が 押せない物の側に付いている★（別の場所で理由を探させない） */
+  const why = d2.getElementById('b-kyuyo').title;
+  ok(why && why.length > 0, '★押せない理由が付いていない★');
+  ok(/確定/.test(why), '理由が「確定」に触れていない: ' + why);
+  /* 解除の後に もう一度 確定を押せた＝締め待ちに戻っている */
+  ok(r.sawDisabled.length === 0 || !r.sawDisabled.includes('b-close'),
+    '★解除の後に 確定を押せない（締め待ちに戻っていない）★');
+  console.log('     実測: 押せなかった物 ' + JSON.stringify(r.sawDisabled) + ' / 理由「' + why + '」');
+});
+
+T('★★状態は 色ではなく文字で出る（受付中／締め待ち／確定）★★', () => {
+  const r = results.filter((x) => x.file === 'shukei.html')[0];
+  const el = r.page.w.document.getElementById('cstate');
+  ok(['受付中', '締め待ち', '確定'].indexOf(el.textContent) >= 0, '状態の文字が出ていない: ' + el.textContent);
+  ok(!r.page.w.document.getElementById('closebox').hidden, '締めの箱が出ていない');
+  /* ★空の箱を見せない★ … 理由が空なら 文字も空（枠だけ残さない作りかを見る） */
+  const hist = r.page.w.document.getElementById('chist').textContent;
+  ok(hist.length > 0, '★記録が1行も出ていない（消している）★');
+  console.log('     実測: 状態「' + el.textContent + '」/ 記録の表示 ' + hist.length + '文字');
 });
 
 T('★印刷は「紙だけの新しい窓」で開く（中身が0枚なら開かない）', () => {

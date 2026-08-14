@@ -596,6 +596,10 @@
       q('b-csv').onclick = doCsvDaily;
       q('b-kyuyo').onclick = doCsvMonthly;
       q('b-xlsx').onclick = doXlsx;
+      q('b-close').onclick = function () { askClose('close'); };
+      q('b-reopen').onclick = function () { askClose('reopen'); };
+      q('b-cancel').onclick = function () { st.ask = null; drawClose(); };
+      q('b-do').onclick = doClose;
       Promise.all([DB.getCompany(), DB.listPeople()]).then(function (r) {
         st.company = r[0] || {};
         st.people = r[1] || [];
@@ -626,6 +630,8 @@
     }
     var per = global.TcCalc.period(st.ym, (st.company && st.company.close_day) || 31);
     q('period').textContent = '対象: ' + per.from + ' 〜 ' + per.to;
+    DB.listCloseLog(st.ym).then(function (log) { st.closeLog = log || []; drawClose(); })
+      .catch(failed('締めの記録を読めませんでした'));
     Promise.all([
       DB.loadPunches(p.employee_id, per.from, per.to),
       DB.loadShifts(p.employee_id, per.from, per.to),
@@ -641,6 +647,156 @@
       });
       renderTables(p);
     }).catch(failed('数えられませんでした'));
+  }
+
+  /* ── 締め（受付中／締め待ち／確定） ─────────────────────────────
+     ★状態を決めるのは lib/tc-close.js の1本だけ★。
+     ここは ★受け取って塗るだけ★（画面で if を書かない＝2画面で答えが割れない）。 */
+  function closeState() {
+    return global.TcClose.stateOf({
+      ym: st.ym,
+      closeDay: (st.company && st.company.close_day) || 31,
+      today: (DB.nowJst() || '').slice(0, 10),
+      log: st.closeLog || [],
+    });
+  }
+
+  function drawClose() {
+    var box = q('closebox');
+    if (!box) return;
+    if (!st.company) { box.hidden = true; return; }
+    var c = closeState();
+    st.close = c;
+    box.hidden = false;
+
+    q('cstate').textContent = c.label;
+    q('cstate').className = 'tc-state ' + c.tone;
+    q('cwhen').textContent = c.state === 'closed'
+      ? '確定: ' + jstOf(c.closedAt)
+      : (c.reopenedAt ? '解除: ' + jstOf(c.reopenedAt) : c.periodFrom + ' 〜 ' + c.periodTo);
+
+    /* ★なぜ押せないか／なぜ気をつけるかは 1か所(why)から出す★ */
+    var why = q('cwhy');
+    var msg = '', warn = false;
+    if (st.ask === 'reopen') { msg = c.why.reopen || '解除すると 数字がまた動きます'; warn = !!c.exportedAt; }
+    else if (st.ask === 'close') { msg = 'この月の数字を止めます。後から直すには 解除が要ります'; }
+    else if (c.state === 'closed') { msg = c.why.requestFix; }
+    else if (c.state === 'pending') { msg = c.why.exportCsv; warn = !!c.why.exportCsv && !!closeRowExists(); }
+    else { msg = c.why.close; }
+    why.textContent = msg || '';
+    why.className = 'tc-why' + (warn ? ' warn' : '');
+
+    q('b-close').hidden = !c.can.close;
+    q('b-reopen').hidden = !c.can.reopen;
+    q('cpanel').hidden = !st.ask;
+    q('b-do').textContent = st.ask === 'reopen' ? '解除を記録して実行' : '確定を記録して実行';
+    q('creason').placeholder = st.ask === 'reopen'
+      ? '例: 打刻漏れが見つかったため' : '例: 8月分として給与へ渡すため（空でも可）';
+
+    /* ★記録は消さない＝全部そのまま出す★ */
+    q('chist').innerHTML = c.history.length
+      ? c.history.slice().reverse().map(function (r) {
+        return '<span class="tc-histrow">' + U.esc(jstOf(r.at)) + '　'
+          + U.esc(global.TcClose.describe(r)) + (r.by_name ? '　' + U.esc(r.by_name) : '') + '</span>';
+      }).join('')
+      : '';
+
+    /* ★渡す口は 確定していない限り閉じる★（古い数字を配らない） */
+    ['b-csv', 'b-kyuyo', 'b-xlsx'].forEach(function (id) {
+      var b = q(id);
+      if (!b) return;
+      b.disabled = !c.can.exportCsv;
+      b.title = c.can.exportCsv ? '' : c.why.exportCsv;
+    });
+  }
+  function closeRowExists() { return (st.closeLog || []).some(function (r) { return r.action === 'close'; }); }
+  function jstOf(iso) { var v = DB.toJst(iso); return v ? v.replace('T', ' ') : ''; }
+
+  function askClose(kind) {
+    st.ask = kind;
+    drawClose();
+    var el = q('creason');
+    el.value = '';
+    el.focus();
+  }
+
+  function doClose() {
+    var kind = st.ask;
+    if (!kind) return;
+    var reason = (q('creason').value || '').trim();
+    if (kind === 'reopen') {
+      /* ★止める線は lib/tc-close.js が持つ★（画面で長さを決めない） */
+      var v = global.TcClose.canReopen({ reason: reason });
+      if (!v.ok) { U.toast(v.msg); q('creason').focus(); return; }
+    }
+    q('b-do').disabled = true;
+    var whoNow = null;
+    DB.Auth.user().then(function (u) {
+      whoNow = u;
+      /* 確定の時だけ ★その時の数字を焼き付ける★（後で食い違いに気づける） */
+      return kind === 'close' ? snapshot() : null;
+    }).then(function (snap) {
+      return DB.addCloseLog({
+        account_id: whoNow.id, ym: st.ym, action: kind, by_uid: whoNow.id,
+        by_name: whoNow.email || '', reason: reason, snapshot: snap,
+      });
+    }).then(function () {
+      st.ask = null;
+      q('b-do').disabled = false;
+      U.toast(kind === 'close' ? st.ym + ' を確定しました' : st.ym + ' の確定を解除しました（記録に残ります）');
+      return DB.listCloseLog(st.ym).then(function (log) { st.closeLog = log || []; drawClose(); });
+    }).catch(function (e) { q('b-do').disabled = false; failed('記録できませんでした')(e); });
+  }
+
+  /** ★確定した時の数字★（人数・合計）。後で人が増えても「渡した時はこうだった」が残る */
+  function snapshot() {
+    return allMonth().then(function (rows) {
+      return {
+        at_ym: st.ym, people: rows.length,
+        rows: rows.map(function (x) {
+          return {
+            id: x.p.employee_id, name: x.p.name || '',
+            worked: x.s.month.workedMin, ot: x.s.month.otMin,
+            night: x.s.month.nightMin, holiday: x.s.month.holidayMin,
+          };
+        }),
+      };
+    });
+  }
+
+  /** ★全員の月計を作るのは この1本だけ★（CSV・Excel・焼き付けが同じ数字になる） */
+  function allMonth() {
+    var per = global.TcCalc.period(st.ym, (st.company && st.company.close_day) || 31);
+    return Promise.all(st.people.map(function (p) {
+      return Promise.all([
+        DB.loadPunches(p.employee_id, per.from, per.to),
+        DB.loadShifts(p.employee_id, per.from, per.to),
+      ]).then(function (r) {
+        return {
+          p: p,
+          s: global.TcCalc.summarize({
+            ym: st.ym, punches: r[0], shifts: r[1], fixes: [],
+            company: Object.assign(coOpts(), { hourlyYen: p.hourly_yen, personHolidayDow: p.legal_holiday_dow }),
+          }),
+        };
+      });
+    }));
+  }
+
+  /** ★渡す前に必ず通す門★（確定していない月の数字を外へ出さない） */
+  function gateExport() {
+    var c = st.close || closeState();
+    if (c.can.exportCsv) return true;
+    U.toast(c.why.exportCsv);
+    return false;
+  }
+  /** 渡した事を記録に残す（★「もう給与へ渡しています」を出すため★） */
+  function noteExport() {
+    return DB.Auth.user().then(function (u) {
+      return DB.addCloseLog({ account_id: u.id, ym: st.ym, action: 'export', by_uid: u.id, by_name: u.email || '' });
+    }).then(function () {
+      return DB.listCloseLog(st.ym).then(function (log) { st.closeLog = log || []; drawClose(); });
+    }).catch(function () { /* 記録できなくても 渡した物は渡した。画面は止めない */ });
   }
 
   function grantDaysOf(p) {
@@ -730,9 +886,13 @@
     var p = personOf(st.who);
     if (!p || !st.sum) { U.toast('先に対象を選んでください'); return; }
     var s = st.sum;
+    /* ★紙にも状態を刷る★（確定前の紙が「確定」の顔で回ると、後で数字が動いた時に食い違う）
+       ★これは「どう絞り込んだか」ではなく「この数字が動くかどうか」なので刷ってよい★ */
+    var c = st.close || closeState();
     var body = '<h1>' + U.esc((st.company || {}).name || '') + '　勤務表</h1>'
       + '<span class="sub">' + U.esc(p.name || p.employee_id) + '　'
-      + U.esc(s.period.from) + ' 〜 ' + U.esc(s.period.to) + '</span>'
+      + U.esc(s.period.from) + ' 〜 ' + U.esc(s.period.to) + '　【' + U.esc(c.label) + '】'
+      + (c.state === 'closed' ? '' : '　※この数字はまだ動きます') + '</span>'
       + q('daily').outerHTML.replace('class="tc"', '')
       + '<h1 style="margin-top:8px">月計</h1>' + q('total').outerHTML.replace('class="tc"', '');
     U.printPaper(fileName(p, 'pdf').replace(/\.pdf$/, ''), body);
@@ -741,49 +901,31 @@
   function doCsvDaily() {
     var p = personOf(st.who);
     if (!p || !st.sum) { U.toast('先に対象を選んでください'); return; }
+    if (!gateExport()) return;
     U.deliverText(global.TcCsv.dailyCsv(st.sum), fileName(p, 'csv'));
+    noteExport();
   }
 
   /** ★給与への受け口（全員・1人1行）★ 氏名が空の人がいたら先に知らせる */
   function doCsvMonthly() {
-    var per = global.TcCalc.period(st.ym, (st.company && st.company.close_day) || 31);
+    if (!gateExport()) return;
     var noName = st.people.filter(function (p) { return !(p.name || '').trim(); });
     if (noName.length) { U.toast('氏名が未入力の人が ' + noName.length + '人います（受け取る側で消えます）'); }
-    Promise.all(st.people.map(function (p) {
-      return Promise.all([
-        DB.loadPunches(p.employee_id, per.from, per.to),
-        DB.loadShifts(p.employee_id, per.from, per.to),
-      ]).then(function (r) {
-        var s = global.TcCalc.summarize({
-          ym: st.ym, punches: r[0], shifts: r[1], fixes: [],
-          company: Object.assign(coOpts(), { hourlyYen: p.hourly_yen, personHolidayDow: p.legal_holiday_dow }),
-        });
-        return { no: p.emp_no || '', name: p.name, month: s.month };
-      });
-    })).then(function (rows) {
+    allMonth().then(function (rows) {
+      var out = rows.map(function (x) { return { no: x.p.emp_no || '', name: x.p.name, month: x.s.month }; });
       var name = global.TcName.build({
-        kind: '勤怠', company: (st.company || {}).name, ym: st.ym, count: rows.length, stamp: stamp(),
+        kind: '勤怠', company: (st.company || {}).name, ym: st.ym, count: out.length, stamp: stamp(),
       }, 'csv');
-      U.deliverText(global.TcCsv.monthlyCsv(rows), name);
+      U.deliverText(global.TcCsv.monthlyCsv(out), name);
+      noteExport();
     }).catch(failed('作れませんでした'));
   }
 
   /** Excel … ★渡し口は file-out.js だけ★。部品は押した時にだけ読む（軽くしておく） */
   function doXlsx() {
+    if (!gateExport()) return;
     load('lib/xlsx.full.min.js').then(function () {
-      var per = global.TcCalc.period(st.ym, (st.company && st.company.close_day) || 31);
-      return Promise.all(st.people.map(function (p) {
-        return Promise.all([
-          DB.loadPunches(p.employee_id, per.from, per.to),
-          DB.loadShifts(p.employee_id, per.from, per.to),
-        ]).then(function (r) {
-          var s = global.TcCalc.summarize({
-            ym: st.ym, punches: r[0], shifts: r[1], fixes: [],
-            company: Object.assign(coOpts(), { hourlyYen: p.hourly_yen, personHolidayDow: p.legal_holiday_dow }),
-          });
-          return { p: p, s: s };
-        });
-      }));
+      return allMonth();
     }).then(function (rows) {
       var X = global.XLSX;
       var wb = X.utils.book_new();
@@ -807,7 +949,10 @@
       var name = global.TcName.build({
         kind: '勤怠', company: (st.company || {}).name, ym: st.ym, count: rows.length, stamp: stamp(),
       }, 'xlsx');
-      return global.FileOut.deliver(out, name).then(function () { U.toast('「' + name + '」を保存しました'); });
+      return global.FileOut.deliver(out, name).then(function () {
+        U.toast('「' + name + '」を保存しました');
+        return noteExport();
+      });
     }).catch(failed('作れませんでした'));
   }
 

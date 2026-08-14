@@ -10,8 +10,11 @@
  */
 'use strict';
 
-function rowsFor(table, seed) {
+function rowsFor(table, seed, store) {
   var s = seed || {};
+  /* ★締めの記録は「入れた物が読める」ようにする★
+     ここを空のまま返すと、確定を押しても状態が変わらず ★押せた気になる緑★ になる。 */
+  if (table === 'tc_close') return (store && store.tc_close) || [];
   if (table === 'tc_companies') {
     return [{
       account_id: 'u1', name: 'テスト商事', close_day: 31, daily_std_min: 480,
@@ -50,15 +53,25 @@ function rowsFor(table, seed) {
   return [];
 }
 
-function makeQuery(table, calls, seed, saved) {
+function makeQuery(table, calls, seed, saved, store) {
   var q = {};
   /* ★何を送ったかを取っておく★（押しただけで終わっていないか・中身が正しいかを見る） */
   var keep = function (kind, v) { [].concat(v).forEach(function (row) { saved.push({ table: table, kind: kind, row: row }); }); };
   var chain = ['select', 'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'is', 'not', 'in', 'order', 'limit'];
   chain.forEach(function (m) { q[m] = function () { calls.push(table + '.' + m); return q; }; });
   q.range = function () { calls.push(table + '.range'); return q; };
-  q.insert = function (v) { calls.push(table + '.insert'); keep('insert', v); q._data = [].concat(v); return q; };
-  q.update = function (v) { calls.push(table + '.update'); keep('update', v); q._data = [Object.assign({}, rowsFor(table, seed)[0], v)]; return q; };
+  q.insert = function (v) {
+    calls.push(table + '.insert'); keep('insert', v);
+    q._data = [].concat(v);
+    /* ★追記だけの帳面は 本当に積む★（次に読んだ時に出てこないと 状態が変わらない） */
+    if (table === 'tc_close' && store) {
+      [].concat(v).forEach(function (row, i) {
+        store.tc_close.push(Object.assign({ id: 'c' + (store.tc_close.length + i + 1), at: store.clock() }, row));
+      });
+    }
+    return q;
+  };
+  q.update = function (v) { calls.push(table + '.update'); keep('update', v); q._data = [Object.assign({}, rowsFor(table, seed, store)[0], v)]; return q; };
   q.upsert = function (v) { calls.push(table + '.upsert'); keep('upsert', v); q._data = [].concat(v); return q; };
   q.then = function (res, rej) {
     /* ★seed.expired=true で「ログインが切れた」を作れる★（401 が返る）
@@ -66,7 +79,7 @@ function makeQuery(table, calls, seed, saved) {
     if (seed.expired) {
       return Promise.resolve({ data: null, error: { message: 'JWT expired', status: 401, code: 'PGRST301' } }).then(res, rej);
     }
-    var data = q._data || rowsFor(table, seed);
+    var data = q._data || rowsFor(table, seed, store);
     return Promise.resolve({ data: data, error: null }).then(res, rej);
   };
   q.catch = function (fn) { return q.then(null, fn); };
@@ -76,15 +89,26 @@ function makeQuery(table, calls, seed, saved) {
 function createFake(seed) {
   var calls = [], saved = [];
   seed = seed || {};
+  /* ★足した順に時刻が進む時計★（同じ時刻だと「確定と解除のどちらが新しいか」が決まらない） */
+  var tick = 0;
+  var store = {
+    tc_close: (seed.closeLog || []).slice(),
+    clock: function () { tick++; return '2026-08-15T' + ('0' + (9 + tick)).slice(-2) + ':00:00Z'; },
+  };
   return {
     _calls: calls,
     _saved: saved,
-    from: function (t) { calls.push('from:' + t); return makeQuery(t, calls, seed, saved); },
+    _store: store,
+    from: function (t) { calls.push('from:' + t); return makeQuery(t, calls, seed, saved, store); },
     rpc: function (name, args) {
       calls.push('rpc:' + name);
       var out = { ok: true };
       if (name === 'tc_auth') out = { found: true, name: '山田 太郎', has_password: true, remembered: true, locked: false };
-      if (name === 'tc_pub_info') out = { found: true, company: 'テスト商事', name: '山田 太郎' };
+      /* ★notice は倉庫が作る文★（画面が組み立てない）。seed.empClosed=true で締め切った後を作る */
+      if (name === 'tc_pub_info') {
+        out = { found: true, company: 'テスト商事', name: '山田 太郎', state: 'open', ym: '2026-08', notice: '' };
+        if (seed.empClosed) { out.state = 'closed'; out.notice = '8月は締め切りました。直しは会社へ言ってください'; }
+      }
       if (name === 'tc_verify') out = { ok: true, device_token: 'dev1', name: '山田 太郎' };
       if (name === 'tc_set_password') out = { ok: true };
       if (name === 'tc_punch_add') out = { ok: true, id: 'p9', pending: args && args.p_src === 'calendar' };

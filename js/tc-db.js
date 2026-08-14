@@ -191,6 +191,21 @@
       .then(function (r) { if (r.error) throw new Error(r.error.message); return (r.data || [])[0]; });
   }
 
+  /* ── 締めの記録（★追記だけ★） ──────────────────────────────
+     ★update も delete も書かない★（倉庫の側でも渡していない）。
+     ここに「消す」を1本でも足したら、直しの跡が消える。 */
+  function listCloseLog(ym) {
+    return selectAll('tc_close', function (q) {
+      if (ym) q = q.eq('ym', ym);
+      return q.order('at');
+    });
+  }
+  /** 記録を1行 足す。action は close / reopen / export のどれか */
+  function addCloseLog(row) {
+    return client().from('tc_close').insert(row).select()
+      .then(function (r) { if (r.error) throw wrapError('tc_close', r.error); return (r.data || [])[0]; });
+  }
+
   /* ── 従業員（anon）… ★RPC経由のみ★ ───────────────────────── */
   function rpc(name, args) {
     return client().rpc(name, args).then(function (r) {
@@ -237,5 +252,6 @@
     loadPunches: loadPunches, addPunch: addPunch,
     listFixes: listFixes, approveFix: approveFix, rejectFix: rejectFix,
     loadShifts: loadShifts, saveShift: saveShift,
+    listCloseLog: listCloseLog, addCloseLog: addCloseLog,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

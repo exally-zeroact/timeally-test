@@ -20,7 +20,7 @@
   var U = global.TcUi;
   var DB = global.TcDb;
 
-  var st = { token: '', device: '', pw: '', name: '', ym: '' };
+  var st = { token: '', device: '', pw: '', name: '', ym: '', notice: '', state: 'open' };
 
   function q(id) { return d.getElementById(id); }
   function param(k) {
@@ -44,7 +44,18 @@
     if (r.bad_init) return 'はじめのあいことばが違います。あと' + (r.remaining == null ? '' : r.remaining + '回') + '。';
     if (r.remaining != null) return 'あいことばが違います。あと' + r.remaining + '回。';
     if (r.future) return 'これから先の時刻は入れられません。';
+    /* ★締め切った後★ … 出す文は「締め切りました」だけ。
+       ★なぜ締めたか・どう数えるかの話は 1文字も出さない★（倉庫が返す文をそのまま使う） */
+    if (r.closed) return st.notice || '締め切りました。直しは会社へ言ってください。';
     return 'うまくいきませんでした。会社にお伝えください。';
+  }
+
+  /** ★締め切りの知らせを出す（打つ前に分かるように）★ 出るのは1文だけ */
+  function drawNotice() {
+    var el = q('closed-note');
+    if (!el) return;
+    el.textContent = st.notice || '';
+    el.hidden = !st.notice;
   }
 
   /* ── 入口 ─────────────────────────────────────────────────── */
@@ -73,6 +84,10 @@
     DB.Emp.info(st.token).then(function (info) {
       if (info && info.found) {
         st.name = info.name || '';
+        /* ★文を作るのは倉庫の1か所★（画面で組み立てない＝言葉が2通りにならない） */
+        st.notice = info.notice || '';
+        st.state = info.state || 'open';
+        drawNotice();
         var w = q('who');
         if (w) w.textContent = (info.company ? info.company + ' / ' : '') + st.name;
         var h = q('hello');
@@ -129,7 +144,10 @@
         var b = q(p[0]);
         if (!b) return;
         b.onclick = function () { push(p[1], p[2], b); };
+        /* ★締め切った後は押せない★（押せても倉庫が断るが、押させない方が親切） */
+        b.disabled = st.state !== 'open';
       });
+      drawNotice();
       var f = q('b-forget');
       if (f) f.onclick = function () {
         if (global.localStorage) global.localStorage.removeItem(devKey());
@@ -169,6 +187,7 @@
       q('b-prev').onclick = function () { shift(-1); };
       q('b-next').onclick = function () { shift(1); };
       q('b-add').onclick = addLater;
+      drawNotice();
       draw();
     });
   }

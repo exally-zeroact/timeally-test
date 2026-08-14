@@ -206,6 +206,37 @@ create table if not exists timeally.tc_shift (
 );
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- ★6本目の棚 tc_close … 締めの記録（追記だけ）★（2026-08-15）
+--   ★上書きしない・消さない★＝直しの跡が残る。
+--   「表は5つだけ」と決めたが、★確定/解除は「いつ・誰が・なぜ」を残さないと
+--   後で どの数字を給与へ渡したのか 誰も言えなくなる★ ので1本だけ足した。
+--   ★行を書き換えない＝足すだけ★ なので、他の5本とは性質が違う（帳面）。
+--   労基法109条（記録は5年・当分の間3年）と同じ考え方（lib/tc-law.js）。
+--
+--   action  close  … 確定した
+--           reopen … 解除した（★理由が要る★）
+--           export … 給与へ渡した（CSV/Excelを出した）
+-- ─────────────────────────────────────────────────────────────────────────
+create table if not exists timeally.tc_close (
+  id         uuid primary key default gen_random_uuid(),
+  account_id uuid not null references auth.users(id) on delete cascade,
+  ym         text not null check (ym ~ '^[0-9]{4}-[0-9]{2}$'),
+  action     text not null check (action in ('close','reopen','export')),
+  at         timestamptz not null default now(),
+  by_uid     uuid not null,
+  by_name    text not null default '',
+  reason     text not null default '',
+  -- ★確定した時の数字を そのまま焼き付ける★（後で人数や合計が動いても、
+  --   「渡した時はこうだった」が残る＝食い違いに気づける）
+  snapshot   jsonb
+);
+create index if not exists tc_close_idx on timeally.tc_close (account_id, ym, at);
+-- ★解除には理由が要る（画面だけでなく倉庫でも止める）★
+alter table timeally.tc_close drop constraint if exists tc_close_reason_req;
+alter table timeally.tc_close add  constraint tc_close_reason_req
+  check (action <> 'reopen' or length(btrim(reason)) >= 2);
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- RLS … 本人（account_id = auth.uid()）の行だけ。従業員(anon)は1行も直接読めない。
 -- ─────────────────────────────────────────────────────────────────────────
 alter table timeally.tc_companies enable row level security;
@@ -229,6 +260,16 @@ create policy own_tc_fix on timeally.tc_fix for all
 drop policy if exists own_tc_shift on timeally.tc_shift;
 create policy own_tc_shift on timeally.tc_shift for all
   using (account_id = auth.uid()) with check (account_id = auth.uid());
+
+-- ★tc_close だけは for all にしない＝読む/足すだけ。直す/消す の決まりを作らない★
+--   （決まりが無い＝その操作は誰にも通らない。倉庫の側で「追記だけ」を守る）
+alter table timeally.tc_close enable row level security;
+drop policy if exists own_tc_close_read on timeally.tc_close;
+create policy own_tc_close_read on timeally.tc_close for select
+  using (account_id = auth.uid());
+drop policy if exists own_tc_close_add on timeally.tc_close;
+create policy own_tc_close_add on timeally.tc_close for insert
+  with check (account_id = auth.uid() and by_uid = auth.uid());
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- 窓口(view) … ★アプリは必ず窓ごしに読む★（部屋を直接指さない＝部屋ごと引っ越せる）
@@ -254,6 +295,12 @@ create or replace view public.tc_fix with (security_invoker = true) as
   select * from timeally.tc_fix;
 alter view public.tc_fix set (security_invoker = true);
 grant select, insert, update, delete on public.tc_fix to authenticated;
+
+-- ★tc_close の窓は 読む/足す だけ渡す（update/delete は渡さない＝追記だけ）★
+create or replace view public.tc_close with (security_invoker = true) as
+  select * from timeally.tc_close;
+alter view public.tc_close set (security_invoker = true);
+grant select, insert on public.tc_close to authenticated;
 
 create or replace view public.tc_shift with (security_invoker = true) as
   select * from timeally.tc_shift;
@@ -334,13 +381,41 @@ returns boolean language sql immutable set search_path=public, extensions, timea
       or (p_pw is not null and v_pub.pw_hash is not null and v_pub.pw_hash = crypt(p_pw, v_pub.pw_hash));
 $$;
 
+-- ★その日が どの締め(YYYY-MM)に入るか★（lib/tc-close.js と同じ線を倉庫でも引く）
+--   締め日20 → 7/21〜8/20 は '2026-08'。★締め日30 の2月は 日が28までしか無いので自然に末日へ寄る★
+create or replace function timeally.tc_period_ym(p_close_day int, p_d date)
+returns text language sql immutable as $$
+  select case when extract(day from p_d) <= greatest(1, least(31, coalesce(p_close_day,31)))
+              then to_char(p_d,'YYYY-MM')
+              else to_char(p_d + interval '1 month','YYYY-MM') end;
+$$;
+
+-- ★締めの状態を倉庫でも決める★（open / pending / closed）
+--   画面だけで止めると ★URLを直に叩けば通る★。入口の側で止める。
+create or replace function timeally.tc_state(p_account uuid, p_d date)
+returns text language plpgsql stable set search_path=public, extensions, timeally as $$
+declare v_cd int; v_ym text; v_1st date; v_end date; v_close timestamptz; v_reopen timestamptz;
+begin
+  select close_day into v_cd from timeally.tc_companies where account_id = p_account;
+  v_cd := greatest(1, least(31, coalesce(v_cd, 31)));
+  v_ym := timeally.tc_period_ym(v_cd, p_d);
+  v_1st := to_date(v_ym || '-01', 'YYYY-MM-DD');
+  -- ★締めの最終日＝「締め日」と「その月の末日」の小さい方★
+  v_end := least((v_1st + interval '1 month - 1 day')::date, (v_1st + (v_cd - 1) * interval '1 day')::date);
+  select max(at) into v_close  from timeally.tc_close where account_id=p_account and ym=v_ym and action='close';
+  select max(at) into v_reopen from timeally.tc_close where account_id=p_account and ym=v_ym and action='reopen';
+  if v_close is not null and (v_reopen is null or v_close > v_reopen) then return 'closed'; end if;
+  if ((now() at time zone 'Asia/Tokyo')::date) > v_end then return 'pending'; end if;
+  return 'open';
+end $$;
+
 -- ★打刻を入れる★
 --   src='punch'    … その場の打刻。approved_at は即 now()（承認は要らない）
 --   src='calendar' … 後から入れた物。★必ず申請扱い＝approved_at は null★
 create or replace function public.tc_punch_add(p_token uuid, p_device text, p_pw text,
                                                p_at timestamptz, p_kind text, p_src text)
 returns jsonb language plpgsql security definer set search_path=public, extensions, timeally as $$
-declare v_pub timeally.tc_pub; v_id uuid; v_src text;
+declare v_pub timeally.tc_pub; v_id uuid; v_src text; v_st text;
 begin
   select * into v_pub from timeally.tc_pub where token=p_token;
   if v_pub.token is null or not v_pub.active then return jsonb_build_object('ok',false,'unauth',true); end if;
@@ -350,6 +425,14 @@ begin
   v_src := case when p_src = 'calendar' then 'calendar' else 'punch' end;
   -- ★未来の打刻は入れさせない（原本を汚さない）★
   if p_at > now() + interval '5 minutes' then return jsonb_build_object('ok',false,'future',true); end if;
+  -- ★締め日が過ぎた月には 入れさせない★（画面で隠すだけでは URL を直に叩けば通る）
+  --   返すのは「締め切りました」だけ。★割増・丸めの話は1文字も返さない★
+  v_st := timeally.tc_state(v_pub.account_id, ((p_at at time zone 'Asia/Tokyo')::date));
+  if v_st <> 'open' then
+    return jsonb_build_object('ok',false,'closed',true,'state',v_st,
+      'ym', timeally.tc_period_ym((select close_day from timeally.tc_companies where account_id=v_pub.account_id),
+                                  ((p_at at time zone 'Asia/Tokyo')::date)));
+  end if;
   insert into timeally.tc_punch(account_id, employee_id, at, kind, src, device, approved_at)
   values (v_pub.account_id, v_pub.employee_id, p_at, p_kind, v_src, left(coalesce(p_device,''),64),
           case when v_src='punch' then now() else null end)
@@ -383,11 +466,15 @@ create or replace function public.tc_fix_request(p_token uuid, p_device text, p_
                                                  p_d date, p_before int, p_after int,
                                                  p_reason text, p_punch_ids uuid[])
 returns jsonb language plpgsql security definer set search_path=public, extensions, timeally as $$
-declare v_pub timeally.tc_pub; v_id uuid;
+declare v_pub timeally.tc_pub; v_id uuid; v_st text;
 begin
   select * into v_pub from timeally.tc_pub where token=p_token;
   if v_pub.token is null or not v_pub.active then return jsonb_build_object('ok',false,'unauth',true); end if;
   if not timeally.tc_ok(v_pub, p_device, p_pw) then return jsonb_build_object('ok',false,'unauth',true); end if;
+  -- ★確定した月は 申請も受け取らない★（受け取ると「出したのに直らない」が起きる）
+  --   ★締め待ち(pending)は 受け取る★＝締め日の後こそ直しが出る
+  v_st := timeally.tc_state(v_pub.account_id, p_d);
+  if v_st = 'closed' then return jsonb_build_object('ok',false,'closed',true,'state',v_st); end if;
   insert into timeally.tc_fix(account_id, employee_id, d, before_min, after_min, reason, requested_by, punch_ids)
   values (v_pub.account_id, v_pub.employee_id, p_d, p_before, p_after, coalesce(p_reason,''), 'employee',
           coalesce(p_punch_ids,'{}'))
@@ -398,12 +485,22 @@ end $$;
 -- 会社の設定のうち ★従業員の画面に要る物だけ★（丸め方や率は返さない）
 create or replace function public.tc_pub_info(p_token uuid)
 returns jsonb language plpgsql security definer set search_path=public, extensions, timeally as $$
-declare v_pub timeally.tc_pub; v_co timeally.tc_companies;
+declare v_pub timeally.tc_pub; v_co timeally.tc_companies; v_st text; v_ym text;
 begin
   select * into v_pub from timeally.tc_pub where token=p_token;
   if v_pub.token is null or not v_pub.active then return jsonb_build_object('found',false); end if;
   select * into v_co from timeally.tc_companies where account_id = v_pub.account_id;
-  return jsonb_build_object('found',true,'company', coalesce(v_co.name,''), 'name', v_pub.name);
+  v_st := timeally.tc_state(v_pub.account_id, (now() at time zone 'Asia/Tokyo')::date);
+  v_ym := timeally.tc_period_ym(v_co.close_day, (now() at time zone 'Asia/Tokyo')::date);
+  -- ★今日が締め切り済みかどうかだけ返す★（丸め方・率・所定は返さない）
+  --   ★notice は そのまま画面に出す文★＝従業員に見せる文を作るのは ここ1か所。
+  --   ★割増・丸め・切り捨て・金額の言葉は 1文字も入れない★
+  --   （lib/tc-close.js の employeeNotice と ★同じ文★。tests/tc-close が突き合わせている）
+  return jsonb_build_object('found',true,'company', coalesce(v_co.name,''), 'name', v_pub.name,
+    'state', v_st, 'ym', v_ym,
+    'notice', case when v_st = 'closed'
+      then ltrim(right(v_ym, 2), '0') || '月は締め切りました。直しは会社へ言ってください'
+      else '' end);
 end $$;
 
 -- ★窓(view)への権限だけでは足りない★（2026-08-14 実UIを押して分かった）
@@ -417,6 +514,8 @@ grant select, insert, update, delete on timeally.tc_pub       to authenticated;
 grant select, insert, update, delete on timeally.tc_punch     to authenticated;
 grant select, insert, update, delete on timeally.tc_fix       to authenticated;
 grant select, insert, update, delete on timeally.tc_shift     to authenticated;
+-- ★tc_close は 読む/足す だけ（直す・消す は渡さない＝追記だけを倉庫で守る）★
+grant select, insert                  on timeally.tc_close     to authenticated;
 
 grant execute on function
   public.tc_auth(uuid,text),

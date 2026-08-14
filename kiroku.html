@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="format-detection" content="telephone=no" />
     <title>Timeally — 自分の記録</title>
-    <link rel="icon" href="icons/favicon-32.png?v=2af93a5c" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=2af93a5c" />
+    <link rel="icon" href="icons/favicon-32.png?v=fc36a071" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=fc36a071" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=2af93a5c" />
+    <link rel="stylesheet" href="css/timeally.css?v=fc36a071" />
   </head>
   <body>
     <div class="tc-appbar">
@@ -25,6 +25,9 @@
 
     <div class="tc-wrap" id="main" hidden>
       <div class="tc-note">あなたが打った時刻を、そのまま並べています。</div>
+
+      <!-- ★締め切りの知らせ★ 打った時刻は締め切った後も そのまま見えたまま -->
+      <div class="tc-alert" id="closed-note" hidden></div>
 
       <div class="tc-tabs">
         <button class="tc-btn sub" id="b-prev" type="button">前の月</button>
@@ -71,11 +74,11 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=2af93a5c"></script>
-    <script src="js/env-badge.js?v=2af93a5c"></script>
-    <script src="js/tc-ui.js?v=2af93a5c"></script>
-    <script src="js/tc-db.js?v=2af93a5c"></script>
-    <script src="js/emp-app.js?v=2af93a5c"></script>
+    <script src="js/supa-config.js?v=fc36a071"></script>
+    <script src="js/env-badge.js?v=fc36a071"></script>
+    <script src="js/tc-ui.js?v=fc36a071"></script>
+    <script src="js/tc-db.js?v=fc36a071"></script>
+    <script src="js/emp-app.js?v=fc36a071"></script>
     <script>
       EmpApp.startKiroku();
     </script>

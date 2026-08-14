@@ -117,11 +117,16 @@ async function main() {
   const a = after[0] || {};
   console.log('当てた後:', JSON.stringify(a));
 
-  const ok = Number(a.tables) >= 5 && Number(a.views) >= 5 && Number(a.funcs) >= 7
-    && Number(a.rls_on) >= 5 && Number(a.invoker_true) >= 5;
+  const ok = Number(a.tables) >= 6 && Number(a.views) >= 6 && Number(a.funcs) >= 7
+    && Number(a.rls_on) >= 6 && Number(a.invoker_true) >= 6;
   console.log(`\nAPPLY RESULT: ${ok ? 'OK' : 'NG'}`
     + `  棚=${a.tables} 窓=${a.views} 関数=${a.funcs} RLS=${a.rls_on} security_invoker=true の窓=${a.invoker_true}`);
   process.exit(ok ? 0 : 1);
 }
 
-main().catch((e) => { console.error('★失敗★ ' + e.message); process.exit(1); });
+/* ★import しただけで倉庫に当たらないようにする門★（2026-08-15 実際に踏んだ）
+   probe-close.mjs が stripJsComments を1つ借りただけで main() が走り、
+   ★「見るだけ」のつもりが 設計図を当てていた★。sql-guard.mjs と同じ門を付ける。
+   ＝直接 node で叩いた時だけ動く。借りる側では何も起きない。 */
+const DIRECT = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (DIRECT) main().catch((e) => { console.error('★失敗★ ' + e.message); process.exit(1); });

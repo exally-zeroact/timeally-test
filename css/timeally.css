@@ -223,6 +223,30 @@ table.tc td.warn { color: #B3261E; }
   white-space: normal; word-break: normal; overflow-wrap: break-word;
 }
 
+/* ── 締め（受付中／締め待ち／確定） ─────────────────────────────
+   ★状態は 色ではなく「文字」で分かるようにする★
+     色だけで区別すると、色が見えにくい人に何も伝わらない。
+   ★注意書きは flex/grid の箱に直接入れない★（1文字ずつ縦に割れる。前科3回）
+     → 見出しの行だけ flex にして、文は必ず block の箱に入れる。 */
+.tc-closebox {
+  border: 1px solid #F0E0B8; border-radius: 10px;
+  background: #FFFFFF; padding: 10px 12px; margin: 12px 0;
+}
+.tc-closebox .tc-closehead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tc-closebox .tc-closehead .tc-spacer { flex: 1 1 auto; }
+.tc-state {
+  display: inline-block; font-weight: 700; font-size: 14px;
+  padding: 3px 10px; border-radius: 999px; border: 1px solid #F0B400;
+  background: #FFE08A; color: #2B2418;                            /* 受付中＝明るい黄の面に黒 */
+}
+.tc-state.wait { background: #FFC72C; color: #2B2418; }           /* 締め待ち＝主色 */
+.tc-state.done { background: #FFFFFF; color: #8F6200; border-color: #8F6200; }  /* 確定＝白地に濃い黄 */
+.tc-closebox .tc-when { font-size: 12px; color: #78705C; }
+.tc-closebox .tc-why { display: block; font-size: 13px; color: #8F6200; margin-top: 6px; }
+.tc-closebox .tc-why.warn { color: #B3261E; }                     /* ★注意も警告も赤（橙は使わない）★ */
+.tc-hist { display: block; margin-top: 8px; font-size: 12px; color: #78705C; }
+.tc-hist .tc-histrow { display: block; padding: 3px 0; border-top: 1px solid #F0E0B8; }
+
 /* ── 紙（印刷は「紙だけの新しい窓」で刷るので、ここは画面用の下敷き） ── */
 @media print {
   .tc-appbar, .tc-btn, .tc-tabs, .tc-toast { display: none !important; }
