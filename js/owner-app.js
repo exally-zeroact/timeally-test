@@ -78,7 +78,7 @@
          ★白紙のダイアログを開かない★。画面の中で聞く */
       q('b-signout').onclick = function () {
         var box = q('signout-ask');
-        q('signout-ask-text').textContent = '出ますか？　もう一度ログインが要ります。';
+        q('signout-ask-text').textContent = 'ログアウトしますか？　もう一度ログインが要ります。';
         box.hidden = false;
         if (box.scrollIntoView) box.scrollIntoView({ block: 'nearest' });
       };

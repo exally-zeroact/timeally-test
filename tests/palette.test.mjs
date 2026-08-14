@@ -115,6 +115,16 @@ if (process.argv.includes('--self-test')) {
     ok(findBad('color:#123456').length === 1, '拾えていない');
     ok(findBad('color:#FFC72C').length === 0, '誤検知');
   });
+  S('⑤ ★黄色いタブが2つになる作り物★を捕まえる（本物は1つ）', () => {
+    const bad = '.tc-btn.sub{background:#FFFFFF;} .tc-tabs .tc-btn[aria-selected=\'true\']{background:#FFE08A;}'
+      + ' .tc-btn.go{background:#FFE08A;}';
+    const painted = bgRules(bad).filter((r) => r.bg === '#FFE08A');
+    ok(painted.length === 2, '作り物で2本 見つけられない＝この検査が空振り: ' + painted.length);
+    const css = fs.readFileSync(path.join(ROOT, 'css/timeally.css'), 'utf8');
+    const real = bgRules(css).filter((r) => /\.tc-btn|\.tc-tabs/.test(r.sel))
+      .filter((r) => r.bg === '#FFE08A' && !/:active/.test(r.sel));
+    ok(real.length === 1, '★本物で ' + real.length + '本 塗っている★');
+  });
   S('④ ★禁止の濃い緑★ は書き方を変えても捕まえる', () => {
     ok(findBanned('background: rgb(26, 74, 46)').length === 1, 'rgb()で書かれた禁止色を見逃す');
     ok(findBanned('background:#1a4a2e').length === 1, '小文字の禁止色を見逃す');
@@ -170,6 +180,45 @@ T('★注意の橙を使っていない（主色と混ざる）', () => {
     if (/#92500A|#FF9900|#FFA500/i.test(t)) bad.push(f);
   });
   ok(bad.length === 0, '橙を使っている: ' + bad.join(', '));
+});
+
+/* ★選択中の黄(#FFE08A)を塗ってよいのは 今 開いているタブ1つだけ★（司さん 2026-08-14）
+   前は「集計」の面も #FFE08A だったので ★黄色いタブが常に2つ★あり、
+   「今どこに居るか」が読めなかった。★色は文字で探さず 値で数える★ */
+export const SELECTED = '#FFE08A';
+
+/** CSSの「セレクタ → 背景色」を値で拾う（@media は中身だけ見る・簡易だが空振りしない） */
+export function bgRules(css) {
+  const clean = css.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const out = [];
+  for (const chunk of clean.split('}')) {
+    const i = chunk.indexOf('{');
+    if (i < 0) continue;
+    const sel = chunk.slice(0, i).replace(/^[\s\S]*?\{/, '').trim();
+    const body = chunk.slice(i + 1);
+    const m = /background\s*:\s*([^;]+);/.exec(body);
+    if (!m) continue;
+    const c = colorsOf(m[1]);
+    if (c.length) out.push({ sel: sel, bg: key(c[0]) });
+  }
+  return out;
+}
+
+T('★★選択中の黄を塗るのは「今 開いているタブ」だけ（集計の面は白）★★', () => {
+  const css = fs.readFileSync(path.join(ROOT, 'css/timeally.css'), 'utf8');
+  const rules = bgRules(css);
+  /* タブの行に関わる規則だけ見る（表の見出しや札は別物） */
+  const tabRules = rules.filter((r) => /\.tc-btn|\.tc-tabs/.test(r.sel));
+  const painted = tabRules.filter((r) => r.bg === SELECTED && !/:active/.test(r.sel));
+  ok(painted.length === 1, '選択中の黄を塗っている規則が ' + painted.length + '本: '
+    + painted.map((r) => r.sel).join(' / '));
+  ok(/aria-selected/.test(painted[0].sel),
+    '★選択中の印(aria-selected)以外に黄を塗っている: ' + painted[0].sel + '★');
+  /* 集計（別ページへ飛ぶ物）の面は白 */
+  const go = tabRules.filter((r) => /\.tc-btn\.go$/.test(r.sel.trim()))[0];
+  ok(go, '.tc-btn.go の背景が読めない');
+  ok(go.bg === '#FFFFFF', '★集計の面が白でない（' + go.bg + '）＝黄色いタブが2つに見える★');
+  console.log('     実測: 黄(' + SELECTED + ')を塗る規則 1本（' + painted[0].sel.trim() + '）／集計の面 ' + go.bg);
 });
 
 T('★入力欄は16px（小さいと iPhone が勝手に拡大してスクロールが壊れる）', () => {

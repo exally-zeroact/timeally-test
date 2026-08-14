@@ -110,8 +110,14 @@ h3 { font-size: 14px; color: #8F6200; margin: 14px 0 6px; }
   text-decoration: underline;
 }
 .tc-btn.quiet:active { background: #F0B400; }
-/* ★別のページへ飛ぶ物★（タブではない）＝色を変えて「→」を付ける */
-.tc-btn.go { background: #FFE08A; border-color: #F0B400; color: #2B2418; text-decoration: none; }
+/* ★別のページへ飛ぶ物★（タブではない）
+   ★面は白のまま★。黄(#FFE08A)を塗ってよいのは ★今 開いているタブ1つだけ★。
+   （前は面を #FFE08A で塗っていたので ★黄色いタブが常に2つ★あり、
+     「今どこに居るか」が読めなかった。司さんの指摘で直した）
+   別ページだと分かる印は ★「→」と 枠線・文字色★で足りる。面を塗らない。 */
+.tc-btn.go {
+  background: #FFFFFF; border-color: #F0B400; color: #8F6200; text-decoration: none;
+}
 .tc-btn.go:active { background: #F0B400; }
 /* 確認の中の「出る／やめる」を横に並べる（★注意書きの箱そのものは block のまま★） */
 .tc-askrow { display: block; margin-top: 8px; }

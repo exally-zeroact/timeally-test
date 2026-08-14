@@ -4,17 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <title>Timeally — 一覧</title>
-    <link rel="icon" href="icons/favicon-32.png?v=6e9439c0" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=6e9439c0" />
+    <link rel="icon" href="icons/favicon-32.png?v=ee267d77" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=ee267d77" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
     <meta name="theme-color" content="#FFC72C" />
-    <link rel="manifest" href="manifest.json?v=6e9439c0" />
+    <link rel="manifest" href="manifest.json?v=ee267d77" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=6e9439c0" />
+    <link rel="stylesheet" href="css/timeally.css?v=ee267d77" />
   </head>
   <body>
     <div class="tc-appbar">
@@ -22,7 +22,7 @@
       <span class="tc-sub" id="coname"></span>
       <span class="tc-spacer"></span>
       <!-- ★「出る」はタブと同じ形にしない★（同じ形だとタブだと思って押す。実機で踏んだ） -->
-      <button class="tc-btn quiet" id="b-signout" type="button">出る</button>
+      <button class="tc-btn quiet" id="b-signout" type="button">ログアウト</button>
     </div>
 
     <div class="tc-wrap" id="main" hidden>
@@ -32,14 +32,14 @@
         <button class="tc-btn sub" id="tab-company" type="button" role="tab" aria-selected="false">会社</button>
         <button class="tc-btn sub" id="tab-people" type="button" role="tab" aria-selected="false">従業員</button>
         <button class="tc-btn sub" id="tab-list" type="button" role="tab" aria-selected="true">一覧</button>
-        <a class="tc-btn go" id="go-shukei" href="shukei.html?v=6e9439c0">集計 →</a>
+        <a class="tc-btn go" id="go-shukei" href="shukei.html?v=ee267d77">集計 →</a>
       </div>
 
       <!-- 出るを押した時の確認（★白紙のダイアログを開かない・画面の中で聞く★） -->
       <div class="tc-alert" id="signout-ask" hidden>
         <span id="signout-ask-text"></span>
         <span class="tc-askrow">
-          <button class="tc-btn danger" id="b-signout-yes" type="button">出る</button>
+          <button class="tc-btn danger" id="b-signout-yes" type="button">ログアウト</button>
           <button class="tc-btn sub" id="b-signout-no" type="button">やめる</button>
         </span>
       </div>
@@ -142,18 +142,18 @@
       </section>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=6e9439c0"></script>
-    <script src="js/env-badge.js?v=6e9439c0"></script>
-    <script src="lib/tc-law.js?v=6e9439c0"></script>
-    <script src="lib/tc-calc.js?v=6e9439c0"></script>
-    <script src="lib/tc-csv.js?v=6e9439c0"></script>
-    <script src="lib/tc-name.js?v=6e9439c0"></script>
-    <script src="lib/tc-hours.js?v=6e9439c0"></script>
-    <script src="lib/qr.js?v=6e9439c0"></script>
-    <script src="js/file-out.js?v=6e9439c0"></script>
-    <script src="js/tc-ui.js?v=6e9439c0"></script>
-    <script src="js/tc-db.js?v=6e9439c0"></script>
-    <script src="js/owner-app.js?v=6e9439c0"></script>
+    <script src="js/supa-config.js?v=ee267d77"></script>
+    <script src="js/env-badge.js?v=ee267d77"></script>
+    <script src="lib/tc-law.js?v=ee267d77"></script>
+    <script src="lib/tc-calc.js?v=ee267d77"></script>
+    <script src="lib/tc-csv.js?v=ee267d77"></script>
+    <script src="lib/tc-name.js?v=ee267d77"></script>
+    <script src="lib/tc-hours.js?v=ee267d77"></script>
+    <script src="lib/qr.js?v=ee267d77"></script>
+    <script src="js/file-out.js?v=ee267d77"></script>
+    <script src="js/tc-ui.js?v=ee267d77"></script>
+    <script src="js/tc-db.js?v=ee267d77"></script>
+    <script src="js/owner-app.js?v=ee267d77"></script>
     <script>
       OwnerApp.startIndex();
     </script>

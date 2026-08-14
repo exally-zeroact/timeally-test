@@ -45,9 +45,9 @@ const PLAN = {
     ['b-next', '次の月'],
     ['b-addperson', 'この人の入口を作る'],
     ['b-savecompany', '会社情報を保存する'],
-    ['b-signout', '出る（★確認が出るだけ。まだ出ない★）'],
-    ['b-signout-no', 'やめる（出るのを取り消す）'],
-    ['b-signout-yes', '出る（本当に出る）'],
+    ['b-signout', 'ログアウト（★確認が出るだけ。まだ出ない★）'],
+    ['b-signout-no', 'やめる（ログアウトを取り消す）'],
+    ['b-signout-yes', 'ログアウト（本当に出る）'],
   ],
   'shukei.html': [
     ['b-prev', '前の月'],
@@ -263,7 +263,30 @@ T('★★「出る」はタブと同じ形にしない・押しても1回 確認
   ok(r.page.fake._calls.indexOf('auth.signOut') < 0
     || r.page.fake._calls.indexOf('auth.signOut') > r.page.fake._calls.indexOf('auth.getUser'),
   '確認なしで出ている');
-  console.log('     実測: 並び ' + order.join(' → ') + ' ／「出る」は ' + out.className);
+  /* ★言葉は「ログアウト」★（「出る」だとどこから出るのか分からない・司さん指摘） */
+  ok(out.textContent.trim() === 'ログアウト', '右上が「' + out.textContent.trim() + '」');
+  ok(d.getElementById('b-signout-yes').textContent.trim() === 'ログアウト',
+    '確認の中のボタンが「' + d.getElementById('b-signout-yes').textContent.trim() + '」');
+  console.log('     実測: 並び ' + order.join(' → ') + ' ／ 右上は「' + out.textContent.trim() + '」' + out.className);
+});
+
+T('★★開いているタブは いつでも1つだけ（4つ順に押して毎回 数える）★★', () => {
+  const r = results.filter((x) => x.file === 'index.html')[0];
+  const d = r.page.w.document;
+  const tabs = ['tab-company', 'tab-people', 'tab-list'];
+  const counts = [];
+  tabs.forEach((id) => {
+    d.getElementById(id).click();
+    const on = [...d.querySelectorAll('.tc-tabs[role="tablist"] [aria-selected]')]
+      .filter((e) => e.getAttribute('aria-selected') === 'true');
+    counts.push(id + ':' + on.length);
+    ok(on.length === 1, id + ' を押したら 開いているタブが ' + on.length + '個');
+    ok(on[0].id === id, id + ' を押したのに ' + on[0].id + ' が開いている事になっている');
+  });
+  /* ★集計は「開いているタブ」にならない★（別のページへ飛ぶ物） */
+  const go = d.getElementById('go-shukei');
+  ok(!go.hasAttribute('aria-selected'), '集計が選択中の印を持っている＝タブに見える');
+  console.log('     実測: ' + counts.join(' / ') + '（集計は選択中の印を持たない）');
 });
 
 T('★丸めの選び方が画面に出ていて、法律の外なら注意が出る', () => {
