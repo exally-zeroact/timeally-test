@@ -21,24 +21,33 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HTML = fs.readdirSync(ROOT).filter((f) => /\.html$/i.test(f)).sort();
 
-/* 印の材料＝配信される js/css。★HTMLは材料に入れない★（印を書き込むと自分が変わる） */
+/* 印の材料＝配信される js/css/アイコン/manifest。
+   ★HTMLは材料に入れない★（印を書き込むと自分が変わる）
+   ★アイコンと manifest も材料に入れる★＝差し替えた日に ?v= が変わってキャッシュが切れる
+   （入れないと「アイコンを直したのにホーム画面が古いまま」になる） */
 function assets() {
   const out = [];
-  for (const dir of ['js', 'lib', 'css']) {
+  for (const dir of ['js', 'lib', 'css', 'icons']) {
     const p = path.join(ROOT, dir);
     if (!fs.existsSync(p)) continue;
     for (const f of fs.readdirSync(p).sort()) {
-      if (/\.(js|css)$/i.test(f)) out.push(path.posix.join(dir, f));
+      if (/\.(js|css|png|svg)$/i.test(f)) out.push(path.posix.join(dir, f));
     }
   }
+  if (fs.existsSync(path.join(ROOT, 'manifest.json'))) out.push('manifest.json');
   return out;
 }
 
 export function stampOf() {
   const h = crypto.createHash('sha256');
   for (const rel of assets()) {
-    const text = fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
-    h.update(rel + '\0' + text + '\0');
+    /* ★絵は中身をそのまま（テキストとして読むと壊れる）／文字は改行をLFに直してから★
+       （Windowsで作ると CRLF になり、同じ中身なのに印が変わってCIと食い違う） */
+    const buf = fs.readFileSync(path.join(ROOT, rel));
+    const data = /\.(png|svg)$/i.test(rel) ? buf : Buffer.from(buf.toString('utf8').replace(/\r\n/g, '\n'), 'utf8');
+    h.update(rel + '\0');
+    h.update(data);
+    h.update('\0');
   }
   return h.digest('hex').slice(0, 8);
 }

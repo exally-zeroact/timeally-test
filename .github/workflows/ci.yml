@@ -91,6 +91,10 @@ jobs:
         run: node tests/hidden-works.test.mjs
       - name: ★空の箱を見せない (打ち消しを外す/!importantを外して赤になるかの自己確認)
         run: node tests/hidden-works.test.mjs --self-test
+      - name: ★ホーム画面のアイコン (実在/正方形/寸法・全画面にapple-touch-icon・★従業員にmanifestを付けない★)
+        run: node tests/home-icon.test.mjs
+      - name: ★ホーム画面のアイコン (従業員に manifest を付けたら赤になるかの自己確認)
+        run: node tests/home-icon.test.mjs --self-test
 
       # ── 借り物 ────────────────────────────────────────────────────
       - name: ★借りてきた物 (出どころと1バイトも違わない・VENDOR.md と一致)
