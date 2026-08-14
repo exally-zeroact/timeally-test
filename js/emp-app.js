@@ -200,6 +200,12 @@
   function draw() {
     var lab = q('ymlabel');
     if (lab) lab.textContent = st.ym.replace('-', '年') + '月';
+    /* ★見ている月が締め切られているかを 倉庫に聞く★
+       （今日の分だけ見ていると、前の月を開いた人に何も出ない） */
+    DB.Emp.info(st.token, st.ym + '-15').then(function (i) {
+      st.notice = (i && i.notice) || '';
+      drawNotice();
+    }).catch(function () { /* 聞けなくても 記録の表示は止めない */ });
     var from = st.ym + '-01';
     var to = new Date(Date.UTC(+st.ym.slice(0, 4), +st.ym.slice(5, 7), 0)).toISOString().slice(0, 10);
     DB.Emp.mine(st.token, st.device, st.pw, from, to).then(function (r) {

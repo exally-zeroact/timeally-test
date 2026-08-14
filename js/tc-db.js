@@ -215,7 +215,8 @@
   }
   var Emp = {
     auth: function (token, device) { return rpc('tc_auth', { p_token: token, p_device: device }); },
-    info: function (token) { return rpc('tc_pub_info', { p_token: token }); },
+    /** d を渡すと ★その日が入る締めの状態★ を返す（省略すると今日） */
+    info: function (token, d) { return rpc('tc_pub_info', { p_token: token, p_d: d || null }); },
     setPassword: function (token, init, pw) { return rpc('tc_set_password', { p_token: token, p_init: init, p_pw: pw }); },
     verify: function (token, pw) { return rpc('tc_verify', { p_token: token, p_pw: pw }); },
     punch: function (token, device, pw, wallTime, kind, src) {

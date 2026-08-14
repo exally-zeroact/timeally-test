@@ -483,15 +483,19 @@ begin
 end $$;
 
 -- 会社の設定のうち ★従業員の画面に要る物だけ★（丸め方や率は返さない）
-create or replace function public.tc_pub_info(p_token uuid)
+--   p_d … ★見ている月の中の1日★（省略すると今日）。
+--         従業員が前の月を開いた時に「その月が締め切られているか」を返すために要る。
+--         ★返すのは state と 出す文だけ★（数字は1つも渡さない）。
+create or replace function public.tc_pub_info(p_token uuid, p_d date default null)
 returns jsonb language plpgsql security definer set search_path=public, extensions, timeally as $$
-declare v_pub timeally.tc_pub; v_co timeally.tc_companies; v_st text; v_ym text;
+declare v_pub timeally.tc_pub; v_co timeally.tc_companies; v_st text; v_ym text; v_day date;
 begin
   select * into v_pub from timeally.tc_pub where token=p_token;
   if v_pub.token is null or not v_pub.active then return jsonb_build_object('found',false); end if;
   select * into v_co from timeally.tc_companies where account_id = v_pub.account_id;
-  v_st := timeally.tc_state(v_pub.account_id, (now() at time zone 'Asia/Tokyo')::date);
-  v_ym := timeally.tc_period_ym(v_co.close_day, (now() at time zone 'Asia/Tokyo')::date);
+  v_day := coalesce(p_d, (now() at time zone 'Asia/Tokyo')::date);
+  v_st := timeally.tc_state(v_pub.account_id, v_day);
+  v_ym := timeally.tc_period_ym(v_co.close_day, v_day);
   -- ★今日が締め切り済みかどうかだけ返す★（丸め方・率・所定は返さない）
   --   ★notice は そのまま画面に出す文★＝従業員に見せる文を作るのは ここ1か所。
   --   ★割増・丸め・切り捨て・金額の言葉は 1文字も入れない★
@@ -524,8 +528,11 @@ grant execute on function
   public.tc_punch_add(uuid,text,text,timestamptz,text,text),
   public.tc_my_punches(uuid,text,text,date,date),
   public.tc_fix_request(uuid,text,text,date,int,int,text,uuid[]),
-  public.tc_pub_info(uuid)
+  public.tc_pub_info(uuid,date)
 to anon, authenticated;
+
+-- ★引数を増やした前の形は 落とす★（残ると 古い形が呼べてしまい、締めの門が無い方が通る）
+drop function if exists public.tc_pub_info(uuid);
 
 -- 初回コードの再発行（社長）はRLSで直接 update すればよい:
 --   update tc_pub set init_code='ABCD1234', pw_hash=null, device_tokens='{}', fail_count=0, locked_until=null
