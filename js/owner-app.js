@@ -74,7 +74,18 @@
     needUser(function () {
       st.ym = thisYm();
       bindTabs();
-      q('b-signout').onclick = function () { DB.Auth.signOut().then(function () { global.location.href = 'login.html'; }); };
+      /* ★出るは1回 確認する★（タブと間違えて押した＝実機で踏んだ）
+         ★白紙のダイアログを開かない★。画面の中で聞く */
+      q('b-signout').onclick = function () {
+        var box = q('signout-ask');
+        q('signout-ask-text').textContent = '出ますか？　もう一度ログインが要ります。';
+        box.hidden = false;
+        if (box.scrollIntoView) box.scrollIntoView({ block: 'nearest' });
+      };
+      q('b-signout-no').onclick = function () { q('signout-ask').hidden = true; };
+      q('b-signout-yes').onclick = function () {
+        DB.Auth.signOut().then(function () { global.location.href = 'login.html'; });
+      };
       q('b-prev').onclick = function () { shiftYm(-1); };
       q('b-next').onclick = function () { shiftYm(1); };
       q('b-addperson').onclick = addPerson;
@@ -82,6 +93,7 @@
       ['c-round', 'c-runit', 'c-rdir', 'c-rscope'].forEach(function (id) {
         var el = q(id); if (el) el.onchange = drawRoundNote;
       });
+      var hol = q('c-holiday'); if (hol) hol.onchange = drawHolidayNote;
       var hw = q('p-hire-wrap');
       if (hw) hw.innerHTML = U.dateField('', '');
       reload();
@@ -301,13 +313,21 @@
     { id: 'c-week', col: 'week_std_min', def: 2400, maxMin: 24 * 7 * 60, label: '1週の所定' },
     { id: 'c-break', col: 'break_default_min', def: 60, maxMin: 24 * 60, label: '休憩の既定' },
   ];
+  var HOUR_EXAMPLE = '例: 8 ／ 7.5 ／ 8:30 ／ 45分';
   function drawHourHint(f) {
     var el = q(f.id + '-hint');
     if (!el) return;
-    var r = global.TcHours.read(q(f.id).value, { maxMin: f.maxMin });
-    if (r.error === 'empty') { el.textContent = f.label + 'を入れてください（例: 8 / 7.5 / 8:30）'; return; }
-    if (r.error === 'unreadable') { el.textContent = '読めません。数字で入れてください（例: 8 / 7.5 / 8:30）'; return; }
-    if (r.error === 'too_big') { el.textContent = '大きすぎます（' + global.TcHours.toText(f.maxMin) + '時間まで）'; return; }
+    var Hs = global.TcHours;
+    var r = Hs.read(q(f.id).value, { maxMin: f.maxMin });
+    if (r.error === 'empty') { el.textContent = f.label + 'を入れてください（' + HOUR_EXAMPLE + '）'; return; }
+    if (r.error === 'unreadable') { el.textContent = '読めません（' + HOUR_EXAMPLE + '）'; return; }
+    if (r.error === 'too_big') {
+      /* ★止めた本当の理由を言う★（「大きすぎます」だけだと 何が長いのか分からない） */
+      el.textContent = Hs.toText(r.read) + '時間（' + r.read + '分）と読みました。'
+        + f.label + 'は ' + Hs.toText(f.maxMin) + '時間までです。'
+        + '分で入れたい時は「45分」のように単位を付けてください。';
+      return;
+    }
     el.textContent = '＝ ' + r.min + '分（中ではこの分数で数えます）';
   }
 
@@ -321,7 +341,9 @@
       if (el && !el._wired) { el._wired = true; el.oninput = function () { drawHourHint(f); }; }
       drawHourHint(f);
     });
-    set('c-holiday', c.legal_holiday_dow == null ? 0 : c.legal_holiday_dow);
+    /* ★新しい会社の既定は「決めていない」★（勝手に日曜を法定休日にしない） */
+    set('c-holiday', c.legal_holiday_dow == null ? -1 : c.legal_holiday_dow);
+    drawHolidayNote();
 
     /* 単位の選択肢は lib から作る（画面に数字を書き並べない） */
     var unitSel = q('c-runit');
@@ -342,6 +364,30 @@
     var w = q('c-warn'); if (w) w.checked = !!c.warn_on;
     var cn = q('coname'); if (cn) cn.textContent = c.name || '';
     drawRoundNote();
+  }
+
+  /* ★法定休日は「週に1日」が定義そのもの★（労基法35条：毎週少なくとも1日 か 4週4日）
+     土日休みでも ★法定休日は1日／もう1日は所定休日（法定外）★＝割増が違う。
+     ★特定する義務は無い★（「明確にするのが望ましい」まで）ので、
+     ★決めていない会社に アプリが勝手に日曜を決めない★。決めていない間は休日の割増を付けない。 */
+  function drawHolidayNote() {
+    var n = q('holiday-note'), a = q('holiday-warn');
+    var v = Number((q('c-holiday') || {}).value);
+    if (n) {
+      n.textContent = '法定休日は「週に1日」です。週休2日の会社でも、'
+        + 'もう1日は所定休日（法定外）になります。'
+        + '今は「毎週1日」の会社向けです（4週4日の決め方はまだ入れていません）。';
+    }
+    if (!a) return;
+    if (v < 0) {
+      a.hidden = false;
+      a.textContent = '★法定休日を決めていないので、休日の割増は付けていません★　'
+        + '就業規則で決めて、ここで選んでください。'
+        + '（決めていない状態でこちらが勝手に曜日を決めると、会社が決めていない事を'
+        + 'アプリが決めてしまうため、付けていません）';
+    } else {
+      a.hidden = true;
+    }
   }
 
   /** 画面で選んでいる丸め方 */
@@ -418,7 +464,8 @@
       account_id: st.user.id,
       name: q('c-name').value.trim(),
       close_day: Number(q('c-close').value) || 31,
-      legal_holiday_dow: Number(q('c-holiday').value) || 0,
+      /* ★-1（決めていない）を 0（日）に落とさない★（|| だと -1 も 0 も消える） */
+      legal_holiday_dow: Number(q('c-holiday').value),
       rounding: mode,
       round_unit_min: r2.unitMin,
       round_dir: r2.dir,

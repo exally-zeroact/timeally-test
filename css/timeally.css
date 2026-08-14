@@ -102,6 +102,20 @@ h3 { font-size: 14px; color: #8F6200; margin: 14px 0 6px; }
 .tc-btn.sub:active { background: #FFE08A; }
 .tc-btn.danger { background: #FFFFFF; color: #B3261E; border-color: #B3261E; }
 .tc-btn.wide { display: block; width: 100%; }
+/* ★「出る」＝タブと同じ形にしない★（同じ形だとタブだと思って押す。実機で踏んだ）
+   面を持たせず、字も細く小さくして「並びの仲間ではない」と分かるようにする */
+.tc-btn.quiet {
+  background: transparent; border-color: transparent; color: #2B2418;
+  font-weight: 400; font-size: 13px; padding: 8px 10px; min-height: 36px;
+  text-decoration: underline;
+}
+.tc-btn.quiet:active { background: #F0B400; }
+/* ★別のページへ飛ぶ物★（タブではない）＝色を変えて「→」を付ける */
+.tc-btn.go { background: #FFE08A; border-color: #F0B400; color: #2B2418; text-decoration: none; }
+.tc-btn.go:active { background: #F0B400; }
+/* 確認の中の「出る／やめる」を横に並べる（★注意書きの箱そのものは block のまま★） */
+.tc-askrow { display: block; margin-top: 8px; }
+.tc-askrow .tc-btn { margin-right: 8px; }
 
 /* 打刻の大きいボタン（従業員） */
 .tc-punchgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }

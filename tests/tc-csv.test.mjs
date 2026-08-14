@@ -83,7 +83,7 @@ T('★深夜・休日・有給・欠勤も そのまま渡る', () => {
   const m = realMonth([
     P('2026-08-03T21:00', 'in'), P('2026-08-04T02:00', 'out'),   // 深夜4時間
     P('2026-08-09T09:00', 'in'), P('2026-08-09T15:00', 'out'),   // 日曜=法定休日6時間
-  ]);
+  ], { legalHolidayDow: 0 });   // ★法定休日を「日」と決めている会社★（既定は「決めていない」）
   const row = KINTAI.parse(CSV.monthlyCsv([{ name: 'B', month: m }])).rows[0];
   eq(row.nightMin, 240); eq(row.holidayMin, 360);
 });

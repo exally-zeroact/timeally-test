@@ -45,6 +45,46 @@ T('★「8:30」の書き方も受ける（打つ人が迷わない）', () => {
   eq(H.toMin('8:5'), 485, '1桁の分も受ける');
 });
 
+T('★★「45分」は45分。時間にしない（実機で踏んだ）★★', () => {
+  eq(H.toMin('45分'), 45);
+  eq(H.toMin('60分'), 60);
+  eq(H.toMin('90分'), 90);
+  eq(H.toMin('5分'), 5);
+  eq(H.toMin('24分'), 24);
+  eq(H.toMin('1440分'), 1440);
+  eq(H.toMin('45m'), 45);
+  eq(H.toMin('45min'), 45);
+  /* ★休憩は世の中ほぼ「45分」「60分」と書く欄★ */
+  eq(H.read('45分', { maxMin: H.MAX_DAY_MIN }).min, 45, '★45時間で止まってはいけない★');
+  eq(H.read('60分', { maxMin: H.MAX_DAY_MIN }).min, 60);
+});
+
+T('★時間と分を混ぜた書き方', () => {
+  eq(H.toMin('1時間30分'), 90);
+  eq(H.toMin('8時間30分'), 510);
+  eq(H.toMin('0時間45分'), 45);
+  eq(H.toMin('8時間'), 480);
+  eq(H.toMin('8h30m'), 510);
+  eq(H.toMin('8h'), 480);
+});
+
+T('★どの書き方で読んだかを返す（画面の言い方を変えるのに使う）', () => {
+  eq(H.unitOf('45分'), 'minute');
+  eq(H.unitOf('8'), 'hour');
+  eq(H.unitOf('8:30'), 'hm');
+  eq(H.unitOf('8時間30分'), 'hm');
+  eq(H.unitOf('あ'), null);
+});
+
+T('★止めた本当の理由を返す（「大きすぎます」の嘘をつかない）', () => {
+  const r = H.read('1441分', { maxMin: H.MAX_DAY_MIN });
+  eq(r.error, 'too_big');
+  eq(r.read, 1441, '読めた分数を返す（何が長すぎたか言える）');
+  eq(r.maxMin, 1440);
+  eq(H.read('あ').error, 'unreadable');
+  eq(H.read('').error, 'empty');
+});
+
 T('★全角数字・全角コロン・空白・「時間」「分」も受ける', () => {
   eq(H.toMin('８'), 480);
   eq(H.toMin('７．５'), 450);
@@ -119,6 +159,12 @@ if (process.argv.includes('--self-test')) {
     const wrong = (s) => Number(String(s).replace(/時間|分/g, '')) * 60;
     eq(wrong('8時間30分'), 49800, '作り物が壊れていない＝この検査が空振り');
     eq(H.toMin('8時間30分'), 510, '★本物が830時間にしている★');
+  });
+  S('①-b ★単位を消してから読む作り物は「45分」を45時間にする（本物は45分）★', () => {
+    const wrong = (s) => Number(String(s).replace(/時間|分|h|m/gi, '')) * 60;
+    eq(wrong('45分'), 2700, '作り物が壊れていない＝この検査が空振り');
+    eq(H.toMin('45分'), 45, '★本物が45時間にしている（実機で踏んだ穴）★');
+    eq(H.read('45分', { maxMin: H.MAX_DAY_MIN }).error, null, '★本物が45分を止めている★');
   });
   S('② 空欄を0にする作り物は「未入力」と「0時間」を混ぜる（本物は分ける）', () => {
     const wrong = (s) => Number(s) || 0;

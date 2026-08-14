@@ -157,10 +157,28 @@ T('★週40時間を超えた分は法定外残業（日ごとの残業と二重
   eq(sat.weekOtMin, 480, '超えた日に付く');
 });
 T('★法定休日（日曜）の労働は休日労働。時間外にも週40時間にも入れない', () => {
-  const s = run([P('2026-08-09T09:00', 'in'), P('2026-08-09T19:00', 'out')]);  // 日曜10時間
+  // ★法定休日を「日」と決めている会社★（既定は「決めていない」なので明示する）
+  const s = run([P('2026-08-09T09:00', 'in'), P('2026-08-09T19:00', 'out')], { legalHolidayDow: 0 });
   const d = s.days.find((x) => x.d === '2026-08-09');
   eq(d.holidayMin, 600); eq(d.otMin, 0); eq(d.stdMin, 0);
   eq(s.month.holidayMin, 600); eq(s.month.otMin, 0);
+});
+
+T('★★法定休日を決めていない会社には 休日の割増を付けない（勝手に日曜にしない）★★', () => {
+  // 労基法35条の法定休日は「週に1日」。★特定する義務は無い★ので、
+  // 決めていない会社に アプリが曜日を決めてしまわない事を固定する。
+  const ps = [P('2026-08-09T09:00', 'in'), P('2026-08-09T19:00', 'out')];   // 日曜10時間
+  const s = run(ps);                                   // 会社情報を何も入れない＝決めていない
+  const d = s.days.find((x) => x.d === '2026-08-09');
+  eq(d.isLegalHoliday, false, '★勝手に法定休日にしている★');
+  eq(d.holidayMin, 0, '★決めていないのに休日の割増を付けている★');
+  eq(s.month.holidayMin, 0);
+  eq(d.workMin, 600, '働いた時間そのものは消さない');
+  eq(d.otMin, 120, 'ふつうの日として 8時間を超えた分が時間外');
+  // ★既定では出さないが、中では常に数えている★
+  eq(s.warnings.filter((w) => w.code === 'holiday_not_set').length, 1);
+  // 決めた会社では その気づきは出ない
+  eq(run(ps, { legalHolidayDow: 0 }).warnings.filter((w) => w.code === 'holiday_not_set').length, 0);
 });
 
 /* ── 締め期間 ───────────────────────────────────────────────────── */

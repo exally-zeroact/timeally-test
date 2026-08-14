@@ -37,14 +37,17 @@ const PLAN = {
     ['b-reset', 'パスワードを忘れた → 送り直しを呼ぶ'],
   ],
   'index.html': [
-    ['tab-list', '一覧のタブ'],
+    ['tab-company', '会社のタブ（★左から1番目★）'],
     ['tab-people', '従業員のタブ'],
-    ['tab-company', '会社情報のタブ'],
+    ['tab-list', '一覧のタブ'],
+    ['go-shukei', '集計 →（★別のページへ飛ぶ★）'],
     ['b-prev', '前の月'],
     ['b-next', '次の月'],
     ['b-addperson', 'この人の入口を作る'],
     ['b-savecompany', '会社情報を保存する'],
-    ['b-signout', '出る'],
+    ['b-signout', '出る（★確認が出るだけ。まだ出ない★）'],
+    ['b-signout-no', 'やめる（出るのを取り消す）'],
+    ['b-signout-yes', '出る（本当に出る）'],
   ],
   'shukei.html': [
     ['b-prev', '前の月'],
@@ -234,6 +237,33 @@ T('★★「時間」で入れた設定が「分」で倉庫へ行く（8→480 
   ok(sent.row.week_std_min === 2400, '1週の所定が ' + sent.row.week_std_min + '（2400のはず）');
   ok(sent.row.break_default_min === 60, '休憩の既定が ' + sent.row.break_default_min + '（60のはず）');
   console.log('     実測: 8→' + sent.row.daily_std_min + ' / 40→' + sent.row.week_std_min + ' / 1→' + sent.row.break_default_min);
+});
+
+T('★★「出る」はタブと同じ形にしない・押しても1回 確認する★★', () => {
+  const r = results.filter((x) => x.file === 'index.html')[0];
+  const d = r.page.w.document;
+  const out = d.getElementById('b-signout');
+  const tab = d.getElementById('tab-list');
+  /* ★見た目が同じだとタブだと思って押す（実機で踏んだ）★ */
+  ok(out.className !== tab.className, '「出る」がタブと同じ見た目（class が同じ）');
+  ok(/quiet/.test(out.className), '「出る」を目立たない形にしていない');
+  /* ★タブの行の中に居ない★（ヘッダーへ移した） */
+  ok(!out.closest('.tc-tabs'), '「出る」がまだタブの行に並んでいる');
+  /* 並びは 会社 → 従業員 → 一覧 → 集計（★月めくりの行と混ぜない★＝role=tablist の行だけ見る） */
+  const row = d.querySelector('.tc-tabs[role="tablist"]');
+  ok(row, 'タブの行が見つからない');
+  const order = [...row.children].map((e) => e.id).filter(Boolean);
+  ok(order.join(',') === 'tab-company,tab-people,tab-list,go-shukei',
+    '並びが違う: ' + order.join(','));
+  /* ★集計は別のページへ飛ぶ物だと分かる★ */
+  const go = d.getElementById('go-shukei');
+  ok(go.tagName === 'A' && /shukei\.html/.test(go.getAttribute('href')), '集計が飛び先を持っていない');
+  ok(/→/.test(go.textContent), '飛ぶ物だと分かる印（→）が無い');
+  /* ★押しただけでは出ない（確認が出る）★ */
+  ok(r.page.fake._calls.indexOf('auth.signOut') < 0
+    || r.page.fake._calls.indexOf('auth.signOut') > r.page.fake._calls.indexOf('auth.getUser'),
+  '確認なしで出ている');
+  console.log('     実測: 並び ' + order.join(' → ') + ' ／「出る」は ' + out.className);
 });
 
 T('★丸めの選び方が画面に出ていて、法律の外なら注意が出る', () => {

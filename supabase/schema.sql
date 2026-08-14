@@ -35,7 +35,11 @@ create table if not exists timeally.tc_companies (
   week_std_min      int  not null default 2400,    -- 週の所定（分）
   week_legal_min    int  not null default 2400,    -- 週の法定（分）。特例事業は 2640
   break_default_min int  not null default 60,      -- 休憩の既定（分）
-  legal_holiday_dow int  not null default 0,       -- 法定休日の曜日（0=日）
+  -- 法定休日の曜日（0=日 … 6=土）／★-1 = 決めていない（就業規則で特定していない）★
+  --   労基法35条の法定休日は「週に1日」。★特定する義務は無い★（明確にするのが望ましい、まで）。
+  --   ★決めていない会社に アプリが勝手に曜日を決めない★＝休日の割増を付けない。
+  --   だから ★新しい会社の既定は -1★。
+  legal_holiday_dow int  not null default -1 check (legal_holiday_dow between -1 and 6),
   week_start_dow    int  not null default 0,       -- 週の起算（0=日）
   -- ★丸め方★
   --   none    = 1分単位（既定・適法）
@@ -108,6 +112,11 @@ alter table timeally.tc_companies add  constraint tc_companies_round_dir_check
 alter table timeally.tc_companies drop constraint if exists tc_companies_round_scope_check;
 alter table timeally.tc_companies add  constraint tc_companies_round_scope_check
   check (round_scope in ('day','month'));
+-- ★法定休日に「決めていない(-1)」を足す★（既に在る行の値は動かさない）
+alter table timeally.tc_companies alter column legal_holiday_dow set default -1;
+alter table timeally.tc_companies drop constraint if exists tc_companies_legal_holiday_dow_check;
+alter table timeally.tc_companies add  constraint tc_companies_legal_holiday_dow_check
+  check (legal_holiday_dow between -1 and 6);
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- ③ tc_punch … ★打刻の生データ＝原本★
