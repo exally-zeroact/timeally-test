@@ -28,6 +28,18 @@
     return m ? decodeURIComponent(m[1]) : '';
   }
   function devKey() { return 'tc_dev_' + st.token; }
+
+  /** ★中身が空なら 箱ごと消す★
+      .tc-note には枠が付いているので ★文字を空にしただけでは「空の枠」が残る★。
+      2026-08-15 実配信で出た（★暗証番号あり・端末を忘れた★人の入口に、
+      何も書いていない箱が1つ余分に見えていた）。 */
+  function setNote(id, msg) {
+    var el = q(id);
+    if (!el) return;
+    el.textContent = msg || '';
+    el.hidden = !msg;
+  }
+
   function alertBox(msg) {
     var el = q('gate-alert');
     if (!el) { U.toast(msg); return; }
@@ -110,8 +122,7 @@
       if (a.locked) { openGate(a.has_password ? 'again' : 'first'); alertBox('まちがいが続いたので、15分ほどお待ちください。'); return; }
       if (a.remembered) { closeGate(); after(); return; }
       openGate(a.has_password ? 'again' : 'first');
-      var n = q('gate-note');
-      if (n) n.textContent = a.has_password ? '' : 'これから使う暗証番号を決めてください。次からは これだけで入れます。';
+      setNote('gate-note', a.has_password ? '' : 'これから使う暗証番号を決めてください。次からは これだけで入れます。');
     }).catch(function (e) { alertBox('つながりませんでした（' + e.message + '）'); });
 
     /* ★決める（初回だけ）★ … 決めたら そのまま入る（続けて もう一度 打たせない） */

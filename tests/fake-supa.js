@@ -103,9 +103,16 @@ function createFake(seed) {
     rpc: function (name, args) {
       calls.push('rpc:' + name);
       var out = { ok: true };
-      /* seed.noPassword=true で「まだ暗証番号を決めていない人」を作れる */
+      /* seed.noPassword=true … まだ暗証番号を決めていない人
+         ★seed.forgotten=true … 暗証番号は決めてあるが 端末を忘れた人★
+           ＝この形でしか出ない不具合がある（2026-08-15 実機で 空の箱が出たのが これ）。
+             作らないと ★見張りが空振りする★ ので、必ず1枚 開く。 */
       if (name === 'tc_auth') {
-        out = { found: true, name: '山田 太郎', has_password: !seed.noPassword, remembered: !seed.noPassword, locked: false };
+        out = {
+          found: true, name: '山田 太郎', locked: false,
+          has_password: !seed.noPassword,
+          remembered: !seed.noPassword && !seed.forgotten,
+        };
       }
       /* ★notice は倉庫が作る文★（画面が組み立てない）。seed.empClosed=true で締め切った後を作る */
       if (name === 'tc_pub_info') {

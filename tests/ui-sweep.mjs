@@ -79,6 +79,12 @@ const PLAN = {
 };
 
 /** HTMLを開いて、外のCDNは読まず、うちのファイルだけを順に実行する */
+/** ★開いた画面は全部ここに溜める★
+    本文を見る検査（★ / あいことば / 空の箱）が ★1枚も見落とさない★ ようにするため。
+    2026-08-15 に踏んだ: 溜めずに results だけ見ていたら、入口を開いた画面を数えておらず
+    ★バグを入れ直しても緑のまま★だった。 */
+const opened_pages = [];
+
 function openPage(file, search, seed) {
   const html = fs.readFileSync(path.join(ROOT, file), 'utf8');
   const locals = [...html.matchAll(/<script src="((?!https?:)[^"]+)"/g)].map((m) => m[1].split('?')[0]);
@@ -128,7 +134,9 @@ function openPage(file, search, seed) {
     vm.runInContext(fs.readFileSync(p, 'utf8'), ctx, { filename: rel });
   }
   for (const code of inline) vm.runInContext(code, ctx, { filename: file + '#inline' });
-  return { w, errors, opened, delivered, fake, locals, navTried };
+  const page = { w, errors, opened, delivered, fake, locals, navTried, file };
+  opened_pages.push(page);
+  return page;
 }
 
 /* ★押す前に入れておく値★
@@ -272,19 +280,10 @@ T('★★画面に出た文に ★ が混じっていない（★はコードの
   console.log('     実測: ' + results.length + '画面の本文を見て ★ は 0件');
 });
 
-T('★★画面に出た文に「あいことば」が無い（言葉は「暗証番号」1つ）★★', () => {
-  /* ★書いた物ではなく 出た物を見る★（描き終わった後の本文を1枚ずつ数える）。
-     言葉が2つある物は必ず食い違う（司さん 2026-08-15）。 */
-  const bad = [];
-  for (const r of results) {
-    const t = r.page.w.document.body.textContent || '';
-    if (t.indexOf('あいことば') >= 0) bad.push(r.file);
-  }
-  ok(bad.length === 0, '★「あいことば」が出ている画面: ' + bad.join(', '));
-  const withPin = results.filter((r) => /暗証番号/.test(r.page.w.document.body.textContent || ''));
-  ok(withPin.length >= 2, '「暗証番号」と書いている画面が ' + withPin.length + '枚しかない');
-  console.log('     実測: ' + results.length + '画面を見て「あいことば」0件／「暗証番号」' + withPin.length + '画面');
-});
+/* ★本文を見る検査は この下ではなく ファイルの一番下でやる★
+   （入口を開いた画面など ★後から開く画面も含めて数える★ ため）。
+   2026-08-15 に踏んだ: 空の箱の検査を途中に置いたら、入口の画面を見ておらず
+   ★バグを入れ直しても緑のまま★だった（＝見張りが空振りしていた）。 */
 
 T('★印刷は「紙だけの新しい窓」で開く（中身が0枚なら開かない）', () => {
   const r = results.filter((x) => x.file === 'shukei.html')[0];
@@ -309,6 +308,22 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
 /* ── 暗証番号（★従業員が持つ秘密は これ1つだけ★） ───────────────── */
 {
   const TOKEN = '11111111-1111-1111-1111-111111111111';
+
+  /* ★「暗証番号あり・端末を忘れた」人の入口★ … この形でしか出ない不具合がある。
+     ★開いておかないと 下の本文の検査が空振りする★（2026-08-15 実機で出た空の箱がこれ） */
+  {
+    const p = openPage('punch.html', '?t=' + TOKEN, { forgotten: true });
+    await wait(); await wait();
+    T('★★端末を忘れた人の入口は「暗証番号」1つを聞くだけ★★', () => {
+      const d2 = p.w.document;
+      ok(!d2.getElementById('gate').hidden, '入口が出ていない');
+      ok(d2.getElementById('gate-first').hidden, '★決めていない人の案内が出ている（もう決めてある）★');
+      ok(!d2.getElementById('gate-again').hidden, '暗証番号の欄が出ていない');
+      const boxes = [...d2.querySelectorAll('#gate input')].filter((el) => !el.closest('[hidden]'));
+      ok(boxes.length === 1, '★聞いている欄が ' + boxes.length + '個ある（1つのはず）★');
+      console.log('     実測: 端末を忘れた人に 聞く欄は ' + boxes.length + '個');
+    });
+  }
 
   T('★★従業員の入口に 秘密の欄が1つしか無い（あいことばの欄が消えている）★★', () => {
     const p = openPage('punch.html', '?t=' + TOKEN, { noPassword: true });
@@ -648,6 +663,50 @@ for (const file of ['index.html', 'shukei.html']) {
 T('★1000件で切れない道を通っている（range を呼んでいる）', () => {
   const r = results.filter((x) => x.file === 'index.html')[0];
   ok(r.page.fake._calls.some((c) => /\.range$/.test(c)), 'range を1度も呼んでいない＝ページめくりの道が死んでいる');
+});
+
+/* ═══ 本文を見る検査（★一番下でやる＝開いた画面を1枚残らず数える★） ═══════ */
+
+T('★★画面に出た文に ★ が混じっていない（★はコードの目印で 人に見せる物ではない）★★', () => {
+  /* 2026-08-15 実配信で出た: 社長の画面に「会社が★解除★してください」がそのまま出ていた。
+     ★書いた物ではなく 出た物を見る★（描き終わった後の本文を1枚ずつ数える）。 */
+  const bad = [];
+  for (const p of opened_pages) {
+    const t = p.w.document.body.textContent || '';
+    const hits = (t.match(/★[^★\n]{0,40}★/g) || []);
+    if (hits.length) bad.push(p.file + ': ' + hits.slice(0, 3).join(' / '));
+  }
+  ok(bad.length === 0, '★が出ている画面: ' + bad.join(' ｜ '));
+  console.log('     実測: ' + opened_pages.length + '枚 数えて ★ は 0件');
+});
+
+T('★★中身が空なのに 枠だけ出ている箱が無い（空の箱を人に見せない）★★', () => {
+  /* ★前科3回＋2026-08-15 にもう1回★ … 文字を空にしただけでは .tc-note の枠が残る
+     （入口に 何も書いていない箱が1つ余分に見えていた）。 */
+  const bad = [];
+  for (const p of opened_pages) {
+    p.w.document.querySelectorAll('.tc-note, .tc-alert').forEach((el) => {
+      if (el.hidden || el.closest('[hidden]')) return;     // 消してある物は見ない
+      const t = (el.textContent || '').replace(/[\s　]/g, '');
+      if (!t && !el.querySelector('img,svg,input,button,a')) bad.push(p.file + '#' + (el.id || el.className));
+    });
+  }
+  ok(bad.length === 0, '★空の箱が出ている★: ' + bad.join(' ｜ '));
+  console.log('     実測: ' + opened_pages.length + '枚の 見えている箱を数えて 空は 0件');
+});
+
+T('★★画面に出た文に「あいことば」が無い（言葉は「暗証番号」1つ）★★', () => {
+  /* 言葉が2つある物は必ず食い違う（司さん 2026-08-15）。 */
+  const bad = [], withPin = [];
+  for (const p of opened_pages) {
+    const t = p.w.document.body.textContent || '';
+    if (t.indexOf('あいことば') >= 0) bad.push(p.file);
+    if (/暗証番号/.test(t)) withPin.push(p.file);
+  }
+  ok(bad.length === 0, '★「あいことば」が出ている画面: ' + [...new Set(bad)].join(', '));
+  ok(withPin.length >= 2, '「暗証番号」と書いている画面が ' + withPin.length + '枚しかない');
+  console.log('     実測: ' + opened_pages.length + '枚を見て「あいことば」0件／「暗証番号」'
+    + [...new Set(withPin)].length + '種類の画面');
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
