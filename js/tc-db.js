@@ -107,7 +107,13 @@
   }
   function addPerson(p) {
     return client().from('tc_pub').insert(p).select()
-      .then(function (r) { if (r.error) throw new Error(r.error.message); return (r.data || [])[0]; });
+      .then(function (r) {
+        /* ★倉庫が断った理由(code)を落とさない★
+           new Error(message) だけにすると ★23505（重なり）が分からなくなり★、
+           画面が「作れませんでした」としか言えない。 */
+        if (r.error) throw wrapError('tc_pub', r.error);
+        return (r.data || [])[0];
+      });
   }
   function updatePerson(token, patch) {
     return client().from('tc_pub').update(patch).eq('token', token).select()

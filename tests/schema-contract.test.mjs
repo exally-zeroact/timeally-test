@@ -97,6 +97,23 @@ T('★表は5つ＋帳面1つだけ（増やさない）', () => {
   found.forEach((t) => ok(want.indexOf(t) >= 0, '★見覚えのない表 ' + t + ' が増えている★'));
 });
 
+T('★★同じ人を2行 作らせない（給与CSVが壊れる型を倉庫で止める）★★', () => {
+  /* ★employee_id と emp_no は別物★
+       employee_id … 機械が作る鍵（打刻・予定・締めが これで人を指す）→ ★空も重なりも許さない★
+       emp_no      … 人が打つ従業員番号（給与CSVに載る）→ ★空は許す・重なりは許さない★
+     「空を許す」の根拠は tests/vendor/kintai-csv.js を実際に読んだ結果（氏名が必須・番号は運ぶだけ）。 */
+  ok(/alter table timeally\.tc_pub add\s+constraint tc_pub_uniq_employee_id\s+unique \(account_id, employee_id\)/.test(SQL),
+    '★(account_id, employee_id) の一意が無い★');
+  ok(/constraint tc_pub_employee_id_not_blank\s+check \(length\(btrim\(employee_id\)\) > 0\)/.test(SQL),
+    '★空の鍵を止めていない★');
+  ok(/create unique index if not exists tc_pub_uniq_emp_no[\s\S]{0,200}?on timeally\.tc_pub \(account_id, emp_no\)/.test(SQL),
+    '★従業員番号(emp_no)の一意が無い★');
+  ok(/tc_pub_uniq_emp_no[\s\S]{0,200}?where emp_no is not null and btrim\(emp_no\) <> ''/.test(SQL),
+    '★emp_no の一意に「空は除く」が無い（番号を使わない会社が1人しか作れなくなる）★');
+  /* ★付け外しできる形で書く★（2回当てても落ちない） */
+  ok(/drop constraint if exists tc_pub_uniq_employee_id/.test(SQL), '2回当てると落ちる書き方');
+});
+
 T('★★帳面(tc_close)は 追記だけ＝直す/消す の決まりを作らない★★', () => {
   LOG_TABLES.forEach((t) => {
     ok(new RegExp('alter table timeally\\.' + t + ' enable row level security').test(SQL), t + ' に RLS が無い');

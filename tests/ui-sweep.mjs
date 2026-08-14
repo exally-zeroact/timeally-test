@@ -290,6 +290,85 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
   ok(r.page.fake._calls.indexOf('rpc:tc_fix_request') >= 0, '申請が送られていない');
 });
 
+/* ── ①まだ暗証番号を決めていない人が 記録の画面を先に開いた時 ───────────
+   ★入口を2つ作らない★＝決める所は打つ画面の1か所だけ。?t= を落とさずに渡す。 */
+{
+  const TOKEN = '11111111-1111-1111-1111-111111111111';
+  const p = openPage('kiroku.html', '?t=' + TOKEN, { noPassword: true });
+  await wait(); await wait(); await wait();
+
+  T('★★暗証番号を決めていない人でも 記録の画面が行き止まりにならない★★', () => {
+    const d2 = p.w.document;
+    ok(!d2.getElementById('gate').hidden, '入口が出ていない');
+    ok(!d2.getElementById('gate-first').hidden, '★「決めていない人」の案内が出ていない（空の枠だけ）★');
+    ok(d2.getElementById('gate-again').hidden, '★あいことば欄が出たまま（決めていないのに入れと言っている）★');
+    /* ★空の箱を見せない★ … 案内の中に 押せる物が本当に在るか */
+    const a = d2.getElementById('to-setpw');
+    ok(a && a.textContent.trim().length > 0, '案内が空');
+    console.log('     実測: 出た案内「' + a.textContent.trim() + '」');
+  });
+
+  T('★★渡し先に ?t= が残っている（落とすと社長のログイン画面へ飛ぶ）★★', () => {
+    const href = p.w.document.getElementById('to-setpw').getAttribute('href');
+    ok(/^punch\.html\?/.test(href), '飛び先が打つ画面でない: ' + href);
+    ok(href.indexOf('t=' + TOKEN) >= 0, '★?t= が落ちている★: ' + href);
+    ok(/back=kiroku/.test(href), '★戻り先を持っていない（決めさせた所で放り出す）★');
+    console.log('     実測: ' + href);
+  });
+
+  /* ★「決め終わったら記録の画面へ戻る」は ここでは測れない★
+     jsdom の window.location は差し替えられない（Cannot redefine property）。
+     ★測れない物を、測れたふりで緑にしない★。
+     ⇒ ★本物のブラウザで通した★（2026-08-15・timeally-test.vercel.app）:
+        暗証番号を決めていない人のリンクで kiroku を開く → 案内を押す →
+        打つ画面で決める → ★kiroku.html?t=… へ戻り 記録が出た★
+     ここで見張れるのは「渡し先が正しいか」まで（上の2本）。 */
+}
+
+/* ── ②同じ従業員番号の人を2人 作らせない ───────────────────────── */
+{
+  const p = openPage('index.html', '', {});
+  await wait(); await wait(); await wait();
+
+  T('★★同じ従業員番号は 人が読む言葉で止まる（倉庫へ書きに行かない）★★', () => {
+    const d2 = p.w.document;
+    d2.getElementById('tab-people').click();
+    const before = p.fake._calls.filter((c) => c === 'tc_pub.insert').length;
+    /* 種の人は emp_no='A01'。同じ番号で作ろうとする */
+    d2.getElementById('p-name').value = '別の 人';
+    d2.getElementById('p-no').value = 'A01';
+    d2.getElementById('b-addperson').click();
+    const after = p.fake._calls.filter((c) => c === 'tc_pub.insert').length;
+    ok(after === before, '★重なっているのに倉庫へ書きに行った★');
+    const toast = (d2.querySelector('.tc-toast') || {}).textContent || '';
+    ok(/もう使われています/.test(toast), '★人が読む言葉で止めていない★: ' + toast);
+    ok(toast.indexOf('A01') >= 0, 'どの番号かを言っていない: ' + toast);
+    console.log('     実測: 「' + toast + '」／倉庫へは書きに行かなかった');
+  });
+
+  T('★★重なっていない番号なら通る（止めすぎていない）★★', () => {
+    const d2 = p.w.document;
+    const before = p.fake._calls.filter((c) => c === 'tc_pub.insert').length;
+    d2.getElementById('p-name').value = '新しい 人';
+    d2.getElementById('p-no').value = 'A99';
+    d2.getElementById('b-addperson').click();
+    const after = p.fake._calls.filter((c) => c === 'tc_pub.insert').length;
+    ok(after === before + 1, '★重なっていないのに止めた★');
+  });
+
+  T('★★従業員番号が空でも作れる（番号を使っていない会社が在る）★★', () => {
+    const d2 = p.w.document;
+    const before = p.fake._calls.filter((c) => c === 'tc_pub.insert').length;
+    d2.getElementById('p-name').value = '番号なし 人';
+    d2.getElementById('p-no').value = '';
+    d2.getElementById('b-addperson').click();
+    const after = p.fake._calls.filter((c) => c === 'tc_pub.insert').length;
+    ok(after === before + 1, '★空の番号を止めてしまった★');
+    const sent = p.fake._saved.filter((s) => s.table === 'tc_pub' && s.kind === 'insert').slice(-1)[0];
+    ok(sent.row.emp_no === null, '★空を空文字で送っている（倉庫の一意に引っかかる）★: ' + JSON.stringify(sent.row.emp_no));
+  });
+}
+
 /* ── 締め切った月を 従業員が開いた時（★もう1回 開いて押す★） ─────────── */
 {
   const closedPages = {};

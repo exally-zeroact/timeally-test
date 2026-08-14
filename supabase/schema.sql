@@ -128,6 +128,33 @@ alter table timeally.tc_companies add  constraint tc_companies_holiday_mode_chec
   check (holiday_mode in ('none','dow','per_person','w4d4'));
 -- ★人ごとの上書き★（null = 会社の決まりに従う）
 alter table timeally.tc_pub add column if not exists legal_holiday_dow int;
+
+-- ★同じ人を2行 作らせない（指示役の裁定 2026-08-15）★
+--   ★人が入ってからでは剥がせない★ので、まだ0行/4行のうちに入れる。
+--   実測（2026-08-15 両方の倉庫を読むだけで数えた）:
+--     DB-test … 4行／employee_id 別々4／emp_no 別々4／空の emp_no 0
+--     本番    … 0行（まだ誰も居ない）
+--   ⇒ ★消す物も直す物も無しで足せる★
+--
+--   ★2つは別物★（ここを混ぜると危ない）:
+--     employee_id … ★機械が作る鍵★（'E'+時刻）。打刻・予定・締めが これで人を指す
+--     emp_no      … ★人が打つ従業員番号★。★給与CSVの「従業員番号」に載るのはこちら★
+alter table timeally.tc_pub drop constraint if exists tc_pub_uniq_employee_id;
+alter table timeally.tc_pub add  constraint tc_pub_uniq_employee_id
+  unique (account_id, employee_id);
+-- ★空の鍵を作らせない★（空だと打刻が誰の物か分からなくなる）
+alter table timeally.tc_pub drop constraint if exists tc_pub_employee_id_not_blank;
+alter table timeally.tc_pub add  constraint tc_pub_employee_id_not_blank
+  check (length(btrim(employee_id)) > 0);
+
+-- ★従業員番号(emp_no)は「入れたなら重ならない」★
+--   ★空は許す★＝番号を使っていない会社が実際にある（うちの実物もそう）。
+--   ★給与の受け口(kintai-csv.js)を実際に読んで確かめた★:
+--     氏名が空の行は ★落とされる★（＝氏名が必須）／従業員番号は ★運ぶだけで必須ではない★
+--   だから ★空を禁止せず、重なりだけを止める★（部分的な一意）。
+create unique index if not exists tc_pub_uniq_emp_no
+  on timeally.tc_pub (account_id, emp_no)
+  where emp_no is not null and btrim(emp_no) <> '';
 alter table timeally.tc_pub drop constraint if exists tc_pub_legal_holiday_dow_check;
 alter table timeally.tc_pub add  constraint tc_pub_legal_holiday_dow_check
   check (legal_holiday_dow is null or legal_holiday_dow between 0 and 6);

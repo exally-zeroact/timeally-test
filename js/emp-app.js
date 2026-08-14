@@ -73,6 +73,12 @@
     if (again) again.hidden = mode === 'first';
     var t = q('gate-title');
     if (t) t.textContent = mode === 'first' ? 'はじめての方' : 'あいことば';
+    /* ★記録の画面には あいことばを決める所を置かない★（入口は1か所）。
+       決める場所（打つ画面）へ ★?t= を落とさずに★ 渡し、★決め終わったらここへ戻す★。 */
+    var go = q('to-setpw');
+    if (go && st.token) {
+      go.href = 'punch.html?t=' + encodeURIComponent(st.token) + '&back=kiroku';
+    }
   }
   function closeGate() {
     var g = q('gate');
@@ -117,7 +123,13 @@
         if (!r || !r.ok) { alertBox(reason(r)); return; }
         return DB.Emp.verify(st.token, a).then(function (v) {
           if (!v || !v.ok) { alertBox(reason(v)); return; }
-          remember(v.device_token); closeGate(); after();
+          remember(v.device_token);
+          /* ★記録の画面から来た人は 元の画面へ戻す★（決めさせた所で放り出さない） */
+          if (param('back') === 'kiroku') {
+            global.location.href = 'kiroku.html?t=' + encodeURIComponent(st.token);
+            return;
+          }
+          closeGate(); after();
         });
       }).catch(function (e) { alertBox('つながりませんでした（' + e.message + '）'); });
     };

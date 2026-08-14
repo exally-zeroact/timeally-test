@@ -103,7 +103,10 @@ function createFake(seed) {
     rpc: function (name, args) {
       calls.push('rpc:' + name);
       var out = { ok: true };
-      if (name === 'tc_auth') out = { found: true, name: '山田 太郎', has_password: true, remembered: true, locked: false };
+      /* seed.noPassword=true で「まだ暗証番号を決めていない人」を作れる */
+      if (name === 'tc_auth') {
+        out = { found: true, name: '山田 太郎', has_password: !seed.noPassword, remembered: !seed.noPassword, locked: false };
+      }
       /* ★notice は倉庫が作る文★（画面が組み立てない）。seed.empClosed=true で締め切った後を作る */
       if (name === 'tc_pub_info') {
         out = { found: true, company: 'テスト商事', name: '山田 太郎', state: 'open', ym: '2026-08', notice: '' };

@@ -316,18 +316,40 @@
   function addPerson() {
     var name = q('p-name').value.trim();
     if (!name) { U.toast('氏名を入れてください（給与に渡すときに要ります）'); return; }
+    var no = q('p-no').value.trim();
+    /* ★押す前に止める★（倉庫でも止まるが、待たせてから断るより先に言う）
+       ★空は止めない★＝従業員番号を使っていない会社が実際にある。重なりだけ止める。 */
+    if (no && (st.people || []).some(function (p) { return (p.emp_no || '').trim() === no; })) {
+      U.toast('この従業員番号は もう使われています（' + no + '）'); q('p-no').focus(); return;
+    }
+    /* ★同じ氏名は 止めずに知らせる★（同姓同名は本当にある）。
+       ただし ★給与の受け口は氏名で人を見分ける★ので、黙って通すと後で取り違える。 */
+    var same = (st.people || []).filter(function (p) { return (p.name || '').trim() === name; }).length;
     var hire = (d.querySelector('#p-hire-wrap .tc-date-input') || {}).value || null;
     var yen = q('p-yen').value === '' ? null : Number(q('p-yen').value);
     var pHol = (q('p-hol') || {}).value;
     DB.addPerson({
       account_id: st.user.id,
       employee_id: 'E' + Date.now().toString(36),
-      name: name, emp_no: q('p-no').value.trim() || null,
+      name: name, emp_no: no || null,
       hire_date: hire, hourly_yen: yen, init_code: newCode(),
       /* ★人ごとの法定休日★（空なら会社の決まりに従う） */
       legal_holiday_dow: pHol === '' || pHol == null ? null : Number(pHol),
-    }).then(function () { U.toast('入口を作りました'); q('p-name').value = ''; q('p-no').value = ''; q('p-yen').value = ''; reload(); })
-      .catch(failed('作れませんでした'));
+    }).then(function () {
+      U.toast(same ? '入口を作りました（同じ氏名の人が ' + same + '人います。給与は氏名で見分けるので、従業員番号を入れてください）'
+        : '入口を作りました');
+      q('p-name').value = ''; q('p-no').value = ''; q('p-yen').value = '';
+      reload();
+    }).catch(function (e) {
+      /* ★倉庫が断った時も 人の言葉に直す★（23505＝一意に当たった） */
+      if (e && (e.code === '23505' || /duplicate key|already exists/i.test(String(e.message || '')))) {
+        U.toast(/emp_no/.test(String(e.message || ''))
+          ? 'この従業員番号は もう使われています（' + no + '）'
+          : 'この人は もう作られています');
+        return;
+      }
+      failed('作れませんでした')(e);
+    });
   }
   function reissue(token) {
     DB.updatePerson(token, { init_code: newCode(), pw_hash: null, device_tokens: [], fail_count: 0, locked_until: null })
