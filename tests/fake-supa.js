@@ -17,7 +17,7 @@ function rowsFor(table, seed, store) {
   if (table === 'tc_close') return (store && store.tc_close) || [];
   if (table === 'tc_companies') {
     return [{
-      account_id: 'u1', name: 'テスト商事', close_day: 31, daily_std_min: 480,
+      account_id: 'u1', name: 'テスト商事', close_day: s.closeDay || 31, daily_std_min: 480,
       week_std_min: 2400, week_legal_min: 2400, break_default_min: 60,
       legal_holiday_dow: 0, week_start_dow: 0,
       rounding: s.rounding || 'none',
@@ -27,6 +27,20 @@ function rowsFor(table, seed, store) {
     }];
   }
   if (table === 'tc_pub') {
+    /* ★seed.people で人数を増やせる★（全員ぶんを刷った時の枚数を実物で数えるため） */
+    if (s.people > 1) {
+      var arr = [];
+      for (var k = 0; k < s.people; k++) {
+        arr.push({
+          token: '1111111' + k + '-1111-1111-1111-111111111111', account_id: 'u1',
+          employee_id: 'E' + (k + 1), name: ['山田 太郎', '佐藤 花子', '鈴木 一郎'][k] || ('従業員' + k),
+          emp_no: 'A0' + (k + 1), hire_date: '2024-04-01', hourly_yen: 1200,
+          init_code: null, pw_hash: null, device_tokens: [],
+          fail_count: 0, locked_until: null, active: true, created_at: '2026-08-01T00:00:00Z',
+        });
+      }
+      return arr;
+    }
     return [{
       token: '11111111-1111-1111-1111-111111111111', account_id: 'u1',
       employee_id: 'E1', name: '山田 太郎', emp_no: 'A01',
@@ -38,6 +52,22 @@ function rowsFor(table, seed, store) {
     }];
   }
   if (table === 'tc_punch') {
+    /* ★seed.days を渡すと 1か月ぶんの打刻を作る★（紙が1枚に収まるかを実物で数えるため）
+       ★repeat で わざと増やせる★＝2枚になった時の見出しを確かめる用。 */
+    if (s.days) {
+      var out = [], ym = s.ym || '2026-08';
+      var y = Number(ym.slice(0, 4)), mo = Number(ym.slice(5, 7));
+      for (var i = 0; i < s.days; i++) {
+        var dt = new Date(Date.UTC(y, mo - 1, 1 + i));
+        var ymd = dt.toISOString().slice(0, 10);
+        for (var r = 0; r < (s.repeat || 1); r++) {
+          out.push(
+            { id: 'p' + i + '_' + r + 'a', account_id: 'u1', employee_id: 'E1', at: ymd + 'T00:00:00Z', kind: 'in', src: 'punch', device: null, approved_at: ymd + 'T00:00:00Z', voided_at: null, created_at: ymd + 'T00:00:00Z' },
+            { id: 'p' + i + '_' + r + 'b', account_id: 'u1', employee_id: 'E1', at: ymd + 'T11:30:00Z', kind: 'out', src: 'punch', device: null, approved_at: ymd + 'T11:30:00Z', voided_at: null, created_at: ymd + 'T11:30:00Z' });
+        }
+      }
+      return out;
+    }
     return [
       { id: 'p1', account_id: 'u1', employee_id: 'E1', at: '2026-08-03T00:00:00Z', kind: 'in', src: 'punch', device: null, approved_at: '2026-08-03T00:00:00Z', voided_at: null, created_at: '2026-08-03T00:00:00Z' },
       { id: 'p2', account_id: 'u1', employee_id: 'E1', at: '2026-08-03T11:00:00Z', kind: 'out', src: 'punch', device: null, approved_at: '2026-08-03T11:00:00Z', voided_at: null, created_at: '2026-08-03T11:00:00Z' },

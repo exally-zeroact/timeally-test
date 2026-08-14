@@ -89,13 +89,26 @@
       '<!doctype html><html lang="ja"><head><meta charset="utf-8">'
       + '<meta name="viewport" content="width=device-width,initial-scale=1">'
       + '<title>' + esc(title) + '</title><style>'
-      + "body{font-family:'Noto Sans JP',system-ui,sans-serif;color:#2B2418;margin:12mm;font-size:11px;}"
-      + 'h1{font-size:15px;color:#8F6200;margin:0 0 6px;}'
-      + '.sub{font-size:11px;color:#78705C;margin:0 0 10px;display:block;'
+      /* ★余白は @page だけ★（body にも margin を書くと ★二重になる★。
+         2026-08-15 実測: 片側22mm（10+12）で 31日ぶんが ★3枚★ になっていた） */
+      /* ★行の高さも詰める★（1行19px→約15px。31日＋見出しで 約120px 減る） */
+      + "body{font-family:'Noto Sans JP',system-ui,sans-serif;color:#2B2418;margin:0;font-size:10px;line-height:1.25;}"
+      + 'h1{font-size:14px;color:#8F6200;margin:0 0 4px;}'
+      + '.sub{font-size:10px;color:#78705C;margin:0 0 6px;display:block;'
       + 'white-space:normal;word-break:normal;overflow-wrap:break-word;}'
       + 'table{border-collapse:collapse;width:100%;}'
-      + 'th,td{border:1px solid #F0E0B8;padding:3px 5px;text-align:right;white-space:nowrap;}'
-      + 'th{background:#FFE08A;}td.l,th.l{text-align:left;}td.warn{color:#B3261E;}'
+      /* ★白黒コピーで読めるようにする★（薄い黄の罫線はコピーでほぼ飛ぶ）
+         ＝ ★色ではなく濃さで作る★。見出しは背景ではなく ★太字＋下の太い線★で分ける。 */
+      + 'th,td{border:1px solid #999999;padding:1px 4px;text-align:right;white-space:nowrap;}'
+      + 'th{background:none;font-weight:700;}'
+      + 'thead th{border-bottom:2px solid #333333;}'   /* ★太線は見出しの行だけ★（月計の各行に出ると うるさい） */
+      + 'td.l,th.l{text-align:left;}td.warn{color:#B3261E;}'
+      /* ★2枚になった時は 見出しを2枚目にも出す／1行を2枚に割らない★ */
+      + 'thead{display:table-header-group;}tr{break-inside:avoid;page-break-inside:avoid;}'
+      /* ★月計は横に並べる★（縦12行だと それだけで紙の1/3を使う） */
+      + '.paper-sum{display:flex;gap:12px;align-items:flex-start;margin-top:6px;}'
+      + '.paper-sum table{width:auto;}'
+      + '.paper-foot{display:block;margin-top:6px;font-size:9px;color:#78705C;}'
       + '@page{size:A4 landscape;margin:10mm;}'
       + '</style></head><body>' + body + '</body></html>'
     );

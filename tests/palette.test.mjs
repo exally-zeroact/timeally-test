@@ -33,6 +33,16 @@ export const EXTRA = {
   '#FFFFFF': '白（面の下地）',
   '#B3261E': '注意・警告の赤（白文字で6.5）。★注意の橙は使わない＝主色の黄と混ざるため★',
 };
+/* ★紙だけの2色★（2026-08-15 指示役の指摘）
+   ★白黒コピーすると 薄い黄の罫線(#F0E0B8)はほぼ飛び、見出しの黄も灰色になって見出しに見えない★。
+   ⇒ ★紙は色ではなく 濃さで作る★。★画面では使わない★ので、
+      使ってよいのは ★印刷の紙を組み立てる所（js/tc-ui.js の printPaper）だけ★。
+      他のファイルに出てきたら赤にする（下の検査が場所まで見る）。 */
+export const PAPER_ONLY = {
+  '#999999': '紙の罫線（白黒コピーでも残る濃さ）',
+  '#333333': '紙の見出しの下線（太い線で見出しを分ける）',
+};
+const PAPER_FILE = 'js/tc-ui.js';
 /* ★全アプリ禁止★（値で持つ。文字で書かない＝他の見張りと喧嘩しない） */
 const BANNED = [[0x1a, 0x4a, 0x2e]];
 
@@ -64,8 +74,10 @@ function hslToRgb(h, s, l) {
 const key = (c) => '#' + c.map((v) => ('0' + v.toString(16)).slice(-2)).join('').toUpperCase();
 
 /** 透ける黒・白（影・被せ物）は許す。それ以外は許可リストに無ければ違反。 */
-export function findBad(text) {
+export function findBad(text, file) {
   const allow = new Set(Object.keys(APPROVED).concat(Object.keys(EXTRA)));
+  /* ★紙だけの色は 紙を組み立てる所でしか許さない★（画面に混ざったら赤） */
+  if (file === PAPER_FILE) Object.keys(PAPER_ONLY).forEach((k) => allow.add(k));
   const bad = [];
   for (const c of colorsOf(text)) {
     const k = key(c);
@@ -148,7 +160,7 @@ T('★配信物を実際にめくっている（空振りしていない）', ()
 T('★承認済みの色（＋白・赤）以外を使っていない', () => {
   const bad = [];
   files.forEach((f) => {
-    findBad(fs.readFileSync(path.join(ROOT, f), 'utf8')).forEach((c) => bad.push(f + ' → ' + c));
+    findBad(fs.readFileSync(path.join(ROOT, f), 'utf8'), f).forEach((c) => bad.push(f + ' → ' + c));
   });
   ok(bad.length === 0, '承認外の色:\n   - ' + bad.join('\n   - '));
 });

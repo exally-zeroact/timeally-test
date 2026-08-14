@@ -643,6 +643,7 @@
       q('b-next').onclick = function () { shiftYm2(1); };
       q('who').onchange = function () { st.who = q('who').value; drawShukei(); };
       q('b-print').onclick = doPrint;
+      q('b-printall').onclick = doPrintAll;
       q('b-csv').onclick = doCsvDaily;
       q('b-kyuyo').onclick = doCsvMonthly;
       q('b-xlsx').onclick = doXlsx;
@@ -924,38 +925,60 @@
     return global.TcLaw.yukyuGrantDays(months);
   }
 
-  function renderTables(p) {
-    var s = st.sum;
+  /** ★日ごとの表の中身を作るのは1本だけ★（画面も紙も同じ物を見る）
+      ★見出しは <thead> に入れる★＝紙が2枚になった時に ★2枚目にも見出しが出る★
+      （table-header-group が効くのは thead だけ。無いと 数字だけの紙になる）。 */
+  function dailyInner(s) {
     var CSV = global.TcCsv;
     var head = CSV.DAILY_HEADERS;
     var aoa = CSV.dailyAoa(s);
-    q('daily').innerHTML = '<tr>' + head.map(function (h, i) {
+    return '<thead><tr>' + head.map(function (h, i) {
       return '<th class="' + (i <= 1 || i === head.length - 1 ? 'l' : '') + '">' + U.esc(h) + '</th>';
-    }).join('') + '</tr>'
+    }).join('') + '</tr></thead><tbody>'
       + aoa.slice(1).map(function (row) {
         return '<tr>' + row.map(function (c, i) {
           return '<td class="' + (i <= 1 || i === row.length - 1 ? 'l' : 'num') + '">' + U.esc(c) + '</td>';
         }).join('') + '</tr>';
-      }).join('');
+      }).join('') + '</tbody>';
+  }
+
+  function renderTables(p) {
+    var s = st.sum;
+    q('daily').innerHTML = dailyInner(s);
 
     /* ★割増の内訳を全部 出す★（社長が「なぜこれが残業でないのか」を説明できるように）
        ★総労働 ＝ 所定内 ＋ 所定超 ＋ 時間外 ＋ 休日★（深夜は上乗せなので足さない）
        率は ★LAW の数から作る★（説明文に直書きしない） */
+    st.totalRows = totalRowsOf(p, s);
+    q('total').innerHTML = st.totalRows.map(function (r) { return tr(r[0], r[1]); }).join('');
+    drawCutBox(s);
+    drawWarns(s);
+    U.nameHint(q('namehint'), fileName(p, 'csv'));
+  }
+
+  /** ★月計の中身は1か所で作る★（画面も紙も 同じ配列を見る＝食い違わない）
+      率は ★LAW の数から作る★（説明文に直書きしない） */
+  function totalRowsOf(p, s) {
     var LAW = global.TcLaw, pc = function (r) { return Math.round(r * 100) + '%'; };
     var m2 = s.month;
-    q('total').innerHTML = ''
-      + tr('出勤日数', m2.shukkin)
-      + tr('総労働', U.minToHm(m2.workedMin))
-      + tr('　所定内', U.minToHm(m2.stdMin))
-      + tr('　所定超（割増なし）', U.minToHm(m2.overStdMin))
-      + tr('　時間外（' + pc(LAW.rateOf('ot')) + '）', U.minToHm(m2.otMin))
-      + tr('　　うち月60時間超（' + pc(LAW.rateOf('ot60')) + '）', U.minToHm(m2.ot60Min))
-      + tr('　休日（' + pc(LAW.rateOf('holiday')) + '）', U.minToHm(m2.holidayMin))
-      + tr('深夜（' + pc(LAW.rateOf('night')) + '・上乗せ）', U.minToHm(m2.nightMin))
-      + tr('　うち休日の深夜（' + pc(LAW.rateOf('holiday_night')) + '）', U.minToHm(m2.holidayNightMin))
-      + tr('有給消化', m2.yukyu) + tr('有給残', yukyuLeft(p, s)) + tr('欠勤', m2.kekkin);
+    return [
+      ['出勤日数', String(m2.shukkin)],
+      ['総労働', U.minToHm(m2.workedMin)],
+      ['　所定内', U.minToHm(m2.stdMin)],
+      ['　所定超（割増なし）', U.minToHm(m2.overStdMin)],
+      ['　時間外（' + pc(LAW.rateOf('ot')) + '）', U.minToHm(m2.otMin)],
+      ['　　うち月60時間超（' + pc(LAW.rateOf('ot60')) + '）', U.minToHm(m2.ot60Min)],
+      ['　休日（' + pc(LAW.rateOf('holiday')) + '）', U.minToHm(m2.holidayMin)],
+      ['深夜（' + pc(LAW.rateOf('night')) + '・上乗せ）', U.minToHm(m2.nightMin)],
+      ['　うち休日の深夜（' + pc(LAW.rateOf('holiday_night')) + '）', U.minToHm(m2.holidayNightMin)],
+      ['有給消化', String(m2.yukyu)],
+      ['有給残', String(yukyuLeft(p, s))],
+      ['欠勤', String(m2.kekkin)],
+    ];
+  }
 
-    /* ★切り捨てた時間と金額は必ず出す（黙って消さない）★ */
+  /* ★切り捨てた時間と金額は必ず出す（黙って消さない）★ */
+  function drawCutBox(s) {
     var box = q('cutbox');
     var cut = s.cut;
     if (s.round.unitMin <= 1 || (!cut.workedMin && !cut.otMin && !cut.nightMin && !cut.holidayMin)) {
@@ -968,7 +991,9 @@
         + ' / 休日 ' + U.minToHm(cut.holidayMin)
         + '　金額: ' + (cut.yen == null ? '時給が未設定です' : cut.yen.toLocaleString('ja-JP') + '円');
     }
+  }
 
+  function drawWarns(s) {
     var w = q('warns');
     var on = st.company && st.company.warn_on;
     if (!s.warnings.length) {
@@ -981,8 +1006,6 @@
         return '<div class="tc-alert">' + U.esc(x.detail) + '</div>';
       }).join('');
     }
-
-    U.nameHint(q('namehint'), fileName(p, 'csv'));
   }
   function tr(k, v) { return '<tr><th class="l">' + U.esc(k) + '</th><td class="num">' + U.esc(v) + '</td></tr>'; }
   function yukyuLeft(p, s) {
@@ -998,6 +1021,30 @@
     }, ext);
   }
 
+  /** ★1人ぶんの紙を組み立てる（1人＝A4横1枚）★
+      ・★月計は横に3つ並べる★（縦12行だと それだけで紙の1/3を使い、2枚に割れる）
+      ・★出した日を刷る★（机の上で新旧が混ざらない）
+      ・★どう絞り込んだかは刷らない★（対象の人と期間と状態だけ）
+      ・★1人が2枚に割れない★ように、続けて刷る時は 人の頭で改ページする */
+  function paperOf(p, s, dailyHtml, rows, pageBreak) {
+    var c = st.close || closeState();
+    var col = Math.ceil(rows.length / 3);
+    var groups = [rows.slice(0, col), rows.slice(col, col * 2), rows.slice(col * 2)];
+    return '<section' + (pageBreak ? ' style="break-before:page;page-break-before:always"' : '') + '>'
+      + '<h1>' + U.esc((st.company || {}).name || '') + '　勤務表</h1>'
+      + '<span class="sub">' + U.esc(p.name || p.employee_id) + '　'
+      + U.esc(s.period.from) + ' 〜 ' + U.esc(s.period.to) + '　【' + U.esc(c.label) + '】'
+      + (c.state === 'closed' ? '' : '　※この数字はまだ動きます') + '</span>'
+      + dailyHtml.replace('class="tc"', '')
+      + '<div class="paper-sum">'
+      + groups.filter(function (g) { return g.length; }).map(function (g) {
+        return '<table>' + g.map(function (r) { return tr(r[0], r[1]); }).join('') + '</table>';
+      }).join('')
+      + '</div>'
+      + '<span class="paper-foot">出した日: ' + U.esc((DB.nowJst() || '').replace('T', ' ')) + '</span>'
+      + '</section>';
+  }
+
   /* 印刷 … ★紙だけの新しい窓で刷る／中身が0枚なら開かない★
      ★紙に「どう絞り込んだか」は刷らない★（対象の人と期間だけ書く） */
   function doPrint() {
@@ -1006,14 +1053,23 @@
     var s = st.sum;
     /* ★紙にも状態を刷る★（確定前の紙が「確定」の顔で回ると、後で数字が動いた時に食い違う）
        ★これは「どう絞り込んだか」ではなく「この数字が動くかどうか」なので刷ってよい★ */
-    var c = st.close || closeState();
-    var body = '<h1>' + U.esc((st.company || {}).name || '') + '　勤務表</h1>'
-      + '<span class="sub">' + U.esc(p.name || p.employee_id) + '　'
-      + U.esc(s.period.from) + ' 〜 ' + U.esc(s.period.to) + '　【' + U.esc(c.label) + '】'
-      + (c.state === 'closed' ? '' : '　※この数字はまだ動きます') + '</span>'
-      + q('daily').outerHTML.replace('class="tc"', '')
-      + '<h1 style="margin-top:8px">月計</h1>' + q('total').outerHTML.replace('class="tc"', '');
+    var body = paperOf(p, s, q('daily').outerHTML, st.totalRows);
     U.printPaper(fileName(p, 'pdf').replace(/\.pdf$/, ''), body);
+  }
+
+  /** ★全員ぶんを1回で刷る★（月末に10人ぶん10回 押さなくてよい）
+      ★1人1枚で続けて出る／1人が2枚に割れない★（人の頭で改ページする） */
+  function doPrintAll() {
+    if (!st.people.length) { U.toast('従業員がいません'); return; }
+    allMonth().then(function (rows) {
+      var body = rows.map(function (x, i) {
+        return paperOf(x.p, x.s, '<table>' + dailyInner(x.s) + '</table>', totalRowsOf(x.p, x.s), i > 0);
+      }).join('');
+      var name = global.TcName.build({
+        kind: '勤務表', company: (st.company || {}).name, ym: st.ym, count: rows.length, stamp: stamp(),
+      }, 'pdf').replace(/\.pdf$/, '');
+      U.printPaper(name, body);
+    }).catch(failed('作れませんでした'));
   }
 
   function doCsvDaily() {

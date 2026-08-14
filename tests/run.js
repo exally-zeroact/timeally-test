@@ -28,7 +28,10 @@ for (const f of files) {
 }
 /* 門番と印も同じ列に並べる（走らせない見張りは無いのと同じ） */
 for (const cmd of [['scripts/sql-guard.mjs', '--self-test'], ['scripts/sql-guard.mjs', 'supabase/schema.sql'],
-  ['scripts/stamp-build.mjs', '--check']]) {
+  ['scripts/stamp-build.mjs', '--check'],
+  /* ★紙は「実際にPDFにして枚数を数える」まで完成にしない★（高さの計算で「収まった」と言わない）
+     ※CI(ubuntu)には並べていない … ★刷るブラウザが要る★ため。★手元では毎回 走る★。 */
+  ['scripts/print-check.mjs']]) {
   total++;
   const r = spawnSync(process.execPath, cmd, { cwd: ROOT, stdio: 'inherit' });
   if (r.status !== 0) { ng++; console.log('★赤★ ' + cmd.join(' ')); }
