@@ -206,7 +206,14 @@
       return q.order('at');
     });
   }
-  /** 記録を1行 足す。action は close / reopen / export のどれか */
+  /** ★入口の記録だけ（人ごと）★ … 締めの履歴と混ぜない */
+  function listPinLog() {
+    return selectAll('tc_close', function (q) {
+      return q.in('action', ['pin_set', 'pin_reissue']).order('at');
+    });
+  }
+
+  /** 記録を1行 足す。action は close / reopen / export / pin_reissue のどれか */
   function addCloseLog(row) {
     return client().from('tc_close').insert(row).select()
       .then(function (r) { if (r.error) throw wrapError('tc_close', r.error); return (r.data || [])[0]; });
@@ -223,8 +230,9 @@
     auth: function (token, device) { return rpc('tc_auth', { p_token: token, p_device: device }); },
     /** d を渡すと ★その日が入る締めの状態★ を返す（省略すると今日） */
     info: function (token, d) { return rpc('tc_pub_info', { p_token: token, p_d: d || null }); },
-    setPassword: function (token, init, pw) { return rpc('tc_set_password', { p_token: token, p_init: init, p_pw: pw }); },
-    verify: function (token, pw) { return rpc('tc_verify', { p_token: token, p_pw: pw }); },
+    /* ★秘密は暗証番号1つだけ★（2026-08-15）。初回コードはもう受け取らない */
+    setPin: function (token, pin) { return rpc('tc_pin_set', { p_token: token, p_pin: pin }); },
+    verify: function (token, pin) { return rpc('tc_verify', { p_token: token, p_pw: pin }); },
     punch: function (token, device, pw, wallTime, kind, src) {
       return rpc('tc_punch_add', {
         p_token: token, p_device: device, p_pw: pw,
@@ -259,6 +267,6 @@
     loadPunches: loadPunches, addPunch: addPunch,
     listFixes: listFixes, approveFix: approveFix, rejectFix: rejectFix,
     loadShifts: loadShifts, saveShift: saveShift,
-    listCloseLog: listCloseLog, addCloseLog: addCloseLog,
+    listCloseLog: listCloseLog, addCloseLog: addCloseLog, listPinLog: listPinLog,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

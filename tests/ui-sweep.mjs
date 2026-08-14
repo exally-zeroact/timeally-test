@@ -70,6 +70,8 @@ const PLAN = {
     ['b-bin', '休憩に入る'], ['b-bout', '休憩から戻る'],
     ['b-ain', '私用で外出'], ['b-aout', '外出から戻る'],
     ['b-forget', 'この端末を忘れる'],
+    ['b-setpin', '暗証番号を決める（★秘密は これ1つだけ★）', { pin1: '1234', pin2: '1234' }],
+    ['b-verify', '暗証番号で入る', { pin: '1234' }],
   ],
   'kiroku.html': [
     ['b-prev', '前の月'], ['b-next', '次の月'], ['b-add', 'お願いを出す'],
@@ -270,6 +272,20 @@ T('★★画面に出た文に ★ が混じっていない（★はコードの
   console.log('     実測: ' + results.length + '画面の本文を見て ★ は 0件');
 });
 
+T('★★画面に出た文に「あいことば」が無い（言葉は「暗証番号」1つ）★★', () => {
+  /* ★書いた物ではなく 出た物を見る★（描き終わった後の本文を1枚ずつ数える）。
+     言葉が2つある物は必ず食い違う（司さん 2026-08-15）。 */
+  const bad = [];
+  for (const r of results) {
+    const t = r.page.w.document.body.textContent || '';
+    if (t.indexOf('あいことば') >= 0) bad.push(r.file);
+  }
+  ok(bad.length === 0, '★「あいことば」が出ている画面: ' + bad.join(', '));
+  const withPin = results.filter((r) => /暗証番号/.test(r.page.w.document.body.textContent || ''));
+  ok(withPin.length >= 2, '「暗証番号」と書いている画面が ' + withPin.length + '枚しかない');
+  console.log('     実測: ' + results.length + '画面を見て「あいことば」0件／「暗証番号」' + withPin.length + '画面');
+});
+
 T('★印刷は「紙だけの新しい窓」で開く（中身が0枚なら開かない）', () => {
   const r = results.filter((x) => x.file === 'shukei.html')[0];
   ok(r.page.opened.length === 1, '新しい窓が ' + r.page.opened.length + '個');
@@ -289,6 +305,64 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
   const r = results.filter((x) => x.file === 'kiroku.html')[0];
   ok(r.page.fake._calls.indexOf('rpc:tc_fix_request') >= 0, '申請が送られていない');
 });
+
+/* ── 暗証番号（★従業員が持つ秘密は これ1つだけ★） ───────────────── */
+{
+  const TOKEN = '11111111-1111-1111-1111-111111111111';
+
+  T('★★従業員の入口に 秘密の欄が1つしか無い（あいことばの欄が消えている）★★', () => {
+    const p = openPage('punch.html', '?t=' + TOKEN, { noPassword: true });
+    const d2 = p.w.document;
+    /* ★「最初のあいことば」の欄が残っていないか★ */
+    ok(!d2.getElementById('init'), '★まだ初回コードの欄がある（秘密が2つ）★');
+    ok(!d2.getElementById('pw1') && !d2.getElementById('pw2'), '★まだ8文字以上の欄がある★');
+    ok(d2.getElementById('pin1') && d2.getElementById('pin2'), '暗証番号の欄が無い');
+    const txt = d2.body.textContent;
+    ok(txt.indexOf('あいことば') < 0, '★画面に「あいことば」が残っている★');
+    ok(/暗証番号/.test(txt), '「暗証番号」と書いていない');
+    console.log('     実測: 決める欄 2つ（pin1/pin2）／初回コードの欄 0／「あいことば」0件');
+  });
+
+  /* ★T() は同期の入れ物★（async を渡すと 中で落ちても緑になる＝偽の緑）。
+     ★押すのは先に済ませて、数えるのは同期でやる★ */
+  const tried = {};
+  for (const [label, a, b] of [['4桁', '1234', '1234'], ['3桁', '123', '123'],
+    ['1111', '1111', '1111'], ['食い違い', '1234', '5678'], ['7桁', '1234567', '1234567']]) {
+    const p = openPage('punch.html', '?t=' + TOKEN, { noPassword: true });
+    await wait(); await wait();
+    p.w.document.getElementById('pin1').value = a;
+    p.w.document.getElementById('pin2').value = b;
+    p.w.document.getElementById('b-setpin').click();
+    await wait(); await wait();
+    tried[label] = {
+      sent: p.fake._calls.indexOf('rpc:tc_pin_set') >= 0,
+      alert: p.w.document.getElementById('gate-alert').textContent,
+      gateClosed: p.w.document.getElementById('gate').hidden,
+    };
+  }
+
+  T('★★4桁で決められる（倉庫まで届く／決めたら そのまま入る）★★', () => {
+    ok(tried['4桁'].sent, '★倉庫まで届いていない★');
+    ok(tried['4桁'].gateClosed, '★決めたのに入口が閉じない（もう一度 打たせている）★');
+  });
+
+  T('★★3桁と7桁は押しても倉庫へ行かない（理由も出る）★★', () => {
+    ['3桁', '7桁'].forEach((k) => {
+      ok(!tried[k].sent, '★' + k + 'なのに倉庫へ送った★');
+      ok(/4桁から6桁/.test(tried[k].alert), k + ' の理由が出ていない: ' + tried[k].alert);
+    });
+    console.log('     実測: 3桁 →「' + tried['3桁'].alert + '」／倉庫へは行かなかった');
+  });
+
+  T('★★1111 は通る（止めると人は紙に書く）★★', () => {
+    ok(tried['1111'].sent, '★1111 を止めている★');
+  });
+
+  T('★★2つが食い違ったら止まる★★', () => {
+    ok(!tried['食い違い'].sent, '★食い違っているのに送った★');
+    ok(/違います/.test(tried['食い違い'].alert), '理由が出ていない: ' + tried['食い違い'].alert);
+  });
+}
 
 /* ── ①まだ暗証番号を決めていない人が 記録の画面を先に開いた時 ───────────
    ★入口を2つ作らない★＝決める所は打つ画面の1か所だけ。?t= を落とさずに渡す。 */

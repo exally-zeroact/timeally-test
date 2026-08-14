@@ -198,8 +198,9 @@ T('★upsert の onConflict が 実在する一意制約と合っている', () 
    ★RPC 3本（tc_punch_add / tc_my_punches / tc_fix_request）の中から呼ぶ★
    「端末記憶 or 暗証番号が合っているか」を ★1か所で確かめる★ための補助。
    部屋(timeally)の中なので PostgREST からは呼べない・anon にも渡していない。 */
-export const PUBLIC_RPCS = ['tc_auth', 'tc_fix_request', 'tc_my_punches', 'tc_pub_info',
-  'tc_punch_add', 'tc_set_password', 'tc_verify'];
+/* 2026-08-15 tc_set_password → ★tc_pin_set★ に作り直した（初回コードを無くし、暗証番号1つに） */
+export const PUBLIC_RPCS = ['tc_auth', 'tc_fix_request', 'tc_my_punches', 'tc_pin_set',
+  'tc_pub_info', 'tc_punch_add', 'tc_verify'];
 /* 部屋の中の補助（★definer にしない★＝決まりを素通りできない）
    tc_ok        … 端末記憶 or 暗証番号（RPC 3本から呼ぶ）
    tc_period_ym … その日が どの締めに入るか（2026-08-15）
@@ -249,11 +250,15 @@ T('★打刻の原本を消す道が無い（出勤簿は法定三帳簿・5年 
   ok(!rpcs.some((f) => /\bdelete\s+from\b/i.test(f)), '★従業員が呼べるRPCに delete がある★');
 });
 
-T('★暗証番号は平文で持たない・8文字以上・5回で15分ロック（サーバ側で強制）', () => {
-  ok(/crypt\(p_pw, gen_salt\('bf'\)\)/.test(SQL), 'bcrypt で保存していない');
+T('★暗証番号は平文で持たない・数字4〜6桁・5回で15分ロック（サーバ側で強制）', () => {
+  ok(/crypt\(p_pin, gen_salt\('bf'\)\)/.test(SQL), 'bcrypt で保存していない');
   ok(!/pw\s+text\s*,?\s*--.*平文/.test(SQL), '平文の列がある');
-  ok(/length\(coalesce\(p_pw,''\)\) < 8/.test(SQL), '★8文字未満をサーバが弾いていない★');
+  ok(/p_pin !~ '\^\[0-9\]\{4,6\}\$'/.test(SQL), '★桁をサーバが弾いていない★');
   ok(/fail_count\+1 >= 5/.test(SQL) && /interval '15 minutes'/.test(SQL), '5回で15分ロックが無い');
+  /* ★「最初のあいことば」の口が生き残っていないか★（古い形は落とす） */
+  ok(/drop function if exists public\.tc_set_password\(uuid,text,text\)/.test(SQL),
+    '★古い tc_set_password を落としていない（初回コードの口が生き続ける）★');
+  ok(!/p_init/.test(SQL), '★まだ初回コードを受け取る所がある★');
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

@@ -113,7 +113,12 @@ function createFake(seed) {
         if (seed.empClosed) { out.state = 'closed'; out.notice = '7月は締め切りました。直しは会社へ言ってください'; out.ym = '2026-07'; }
       }
       if (name === 'tc_verify') out = { ok: true, device_token: 'dev1', name: '山田 太郎' };
-      if (name === 'tc_set_password') out = { ok: true };
+      /* ★倉庫でも桁を見る★ので、代わりの物も同じ線で断る（画面だけ通る偽の緑を作らない） */
+      if (name === 'tc_pin_set') {
+        out = /^[0-9]{4,6}$/.test(String((args && args.p_pin) || ''))
+          ? { ok: true, device_token: 'dev1', name: '山田 太郎' }
+          : { ok: false, bad_pin: true };
+      }
       if (name === 'tc_punch_add') out = { ok: true, id: 'p9', pending: args && args.p_src === 'calendar' };
       if (name === 'tc_my_punches') {
         out = {

@@ -8,7 +8,7 @@
  *     ② tests/employee-screen.test.mjs が ★この画面の言葉を機械で数える★
  *
  * 入口の作りは payslip-app の実績のある形をなぞっている:
- *   リンク(?t=…)＋最初のあいことば＋自分のあいことば(8文字以上)＋端末を覚える
+ *   リンク(?t=…)＋★暗証番号(数字4〜6桁)★＋端末を覚える
  *   ＋5回間違えたら15分あかない。★平文はどこにも持たない★
  *
  * 【利用】window.EmpApp
@@ -39,10 +39,10 @@
   function reason(r) {
     if (!r) return 'うまくいきませんでした。もう一度お試しください。';
     if (r.locked) return 'まちがいが続いたので、15分ほどお待ちください。';
-    if (r.weak) return 'あいことばは8文字以上にしてください。';
-    if (r.already_set) return 'すでに決まっています。「あいことば」を入れて入ってください。';
-    if (r.bad_init) return 'はじめのあいことばが違います。あと' + (r.remaining == null ? '' : r.remaining + '回') + '。';
-    if (r.remaining != null) return 'あいことばが違います。あと' + r.remaining + '回。';
+    /* ★止める理由は lib/tc-pin.js が持つ★（画面で桁を書かない＝2か所に書かない） */
+    if (r.bad_pin) return global.TcPin.check('1').msg;
+    if (r.already_set) return 'すでに決まっています。暗証番号を入れて入ってください。';
+    if (r.remaining != null) return '暗証番号が違います。あと' + r.remaining + '回。';
     if (r.future) return 'これから先の時刻は入れられません。';
     /* ★締め切った後★ … 出す文は「締め切りました」だけ。
        ★なぜ締めたか・どう数えるかの話は 1文字も出さない★（倉庫が返す文をそのまま使う） */
@@ -72,8 +72,8 @@
     if (first) first.hidden = mode !== 'first';
     if (again) again.hidden = mode === 'first';
     var t = q('gate-title');
-    if (t) t.textContent = mode === 'first' ? 'はじめての方' : 'あいことば';
-    /* ★記録の画面には あいことばを決める所を置かない★（入口は1か所）。
+    if (t) t.textContent = mode === 'first' ? 'はじめての方' : '暗証番号';
+    /* ★記録の画面には 暗証番号を決める所を置かない★（入口は1か所）。
        決める場所（打つ画面）へ ★?t= を落とさずに★ 渡し、★決め終わったらここへ戻す★。 */
     var go = q('to-setpw');
     if (go && st.token) {
@@ -111,34 +111,32 @@
       if (a.remembered) { closeGate(); after(); return; }
       openGate(a.has_password ? 'again' : 'first');
       var n = q('gate-note');
-      if (n) n.textContent = a.has_password ? '' : '会社から渡された「最初のあいことば」を入れて、あなたのあいことばを決めてください。';
+      if (n) n.textContent = a.has_password ? '' : 'これから使う暗証番号を決めてください。次からは これだけで入れます。';
     }).catch(function (e) { alertBox('つながりませんでした（' + e.message + '）'); });
 
-    var setpw = q('b-setpw');
-    if (setpw) setpw.onclick = function () {
-      var a = q('pw1').value, b = q('pw2').value;
-      if (a !== b) { alertBox('2つのあいことばが違います。'); return; }
-      if (a.length < 8) { alertBox('あいことばは8文字以上にしてください。'); return; }
-      DB.Emp.setPassword(st.token, q('init').value, a).then(function (r) {
+    /* ★決める（初回だけ）★ … 決めたら そのまま入る（続けて もう一度 打たせない） */
+    var setpin = q('b-setpin');
+    if (setpin) setpin.onclick = function () {
+      var v = global.TcPin.checkPair(q('pin1').value, q('pin2').value);
+      if (!v.ok) { alertBox(v.msg); return; }
+      DB.Emp.setPin(st.token, v.pin).then(function (r) {
         if (!r || !r.ok) { alertBox(reason(r)); return; }
-        return DB.Emp.verify(st.token, a).then(function (v) {
-          if (!v || !v.ok) { alertBox(reason(v)); return; }
-          remember(v.device_token);
-          /* ★記録の画面から来た人は 元の画面へ戻す★（決めさせた所で放り出さない） */
-          if (param('back') === 'kiroku') {
-            global.location.href = 'kiroku.html?t=' + encodeURIComponent(st.token);
-            return;
-          }
-          closeGate(); after();
-        });
+        remember(r.device_token);
+        /* ★記録の画面から来た人は 元の画面へ戻す★（決めさせた所で放り出さない） */
+        if (param('back') === 'kiroku') {
+          global.location.href = 'kiroku.html?t=' + encodeURIComponent(st.token);
+          return;
+        }
+        closeGate(); after();
       }).catch(function (e) { alertBox('つながりませんでした（' + e.message + '）'); });
     };
     var ver = q('b-verify');
     if (ver) ver.onclick = function () {
-      var pw = q('pw').value;
-      DB.Emp.verify(st.token, pw).then(function (v) {
-        if (!v || !v.ok) { alertBox(reason(v)); return; }
-        remember(v.device_token); closeGate(); after();
+      var v = global.TcPin.check(q('pin').value);
+      if (!v.ok) { alertBox(v.msg); return; }
+      DB.Emp.verify(st.token, v.pin).then(function (r) {
+        if (!r || !r.ok) { alertBox(reason(r)); return; }
+        remember(r.device_token); closeGate(); after();
       }).catch(function (e) { alertBox('つながりませんでした（' + e.message + '）'); });
     };
   }
@@ -169,7 +167,7 @@
       if (f) f.onclick = function () {
         if (global.localStorage) global.localStorage.removeItem(devKey());
         st.device = '';
-        U.toast('この端末を忘れました。次からあいことばを聞きます。');
+        U.toast('この端末を忘れました。次から暗証番号を聞きます。');
       };
     });
   }
@@ -228,7 +226,7 @@
     DB.Emp.mine(st.token, st.device, st.pw, from, to).then(function (r) {
       var box = q('list');
       if (!box) return;
-      if (!r || r.unauth) { box.innerHTML = '<div class="tc-alert">もう一度あいことばを入れてください。</div>'; return; }
+      if (!r || r.unauth) { box.innerHTML = '<div class="tc-alert">もう一度 暗証番号を入れてください。</div>'; return; }
       var byDay = {};
       (r.punches || []).forEach(function (p) {
         var day = p.at.slice(0, 10);

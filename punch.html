@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="format-detection" content="telephone=no" />
     <title>Timeally — 打刻</title>
-    <link rel="icon" href="icons/favicon-32.png?v=23f8e2d4" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=23f8e2d4" />
+    <link rel="icon" href="icons/favicon-32.png?v=ad863507" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=ad863507" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=23f8e2d4" />
+    <link rel="stylesheet" href="css/timeally.css?v=ad863507" />
   </head>
   <body>
     <div class="tc-appbar">
@@ -56,30 +56,31 @@
         <div class="tc-note" id="gate-note"></div>
         <div id="gate-alert" class="tc-alert" hidden></div>
 
+        <!-- ★従業員が持つ秘密は これ1つだけ★（2026-08-15 司さんの指摘）。
+             ★毎日 現場のスマホで打つ物★なので 数字キーボードが出る形にする。 -->
         <div id="gate-first">
-          <label for="init">会社から渡された 最初のあいことば</label>
-          <input type="text" id="init" autocomplete="off" autocapitalize="characters" />
-          <label for="pw1">これから使う あなたのあいことば（8文字以上）</label>
-          <input type="password" id="pw1" autocomplete="new-password" />
-          <label for="pw2">もう一度</label>
-          <input type="password" id="pw2" autocomplete="new-password" />
-          <p><button class="tc-btn wide" id="b-setpw" type="button">決める</button></p>
+          <label for="pin1">これから使う 暗証番号（数字4〜6桁）</label>
+          <input type="password" id="pin1" inputmode="numeric" autocomplete="new-password" maxlength="6" />
+          <label for="pin2">もう一度</label>
+          <input type="password" id="pin2" inputmode="numeric" autocomplete="new-password" maxlength="6" />
+          <p><button class="tc-btn wide" id="b-setpin" type="button">決める</button></p>
         </div>
 
         <div id="gate-again" hidden>
-          <label for="pw">あなたのあいことば</label>
-          <input type="password" id="pw" autocomplete="current-password" />
+          <label for="pin">暗証番号</label>
+          <input type="password" id="pin" inputmode="numeric" autocomplete="current-password" maxlength="6" />
           <p><button class="tc-btn wide" id="b-verify" type="button">入る</button></p>
         </div>
       </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=23f8e2d4"></script>
-    <script src="js/env-badge.js?v=23f8e2d4"></script>
-    <script src="js/tc-ui.js?v=23f8e2d4"></script>
-    <script src="js/tc-db.js?v=23f8e2d4"></script>
-    <script src="js/emp-app.js?v=23f8e2d4"></script>
+    <script src="js/supa-config.js?v=ad863507"></script>
+    <script src="js/env-badge.js?v=ad863507"></script>
+    <script src="lib/tc-pin.js?v=stamp?v=ad863507"></script>
+    <script src="js/tc-ui.js?v=ad863507"></script>
+    <script src="js/tc-db.js?v=ad863507"></script>
+    <script src="js/emp-app.js?v=ad863507"></script>
     <script>
       EmpApp.startPunch();
     </script>

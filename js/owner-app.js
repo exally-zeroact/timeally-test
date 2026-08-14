@@ -139,9 +139,10 @@
   function reload() {
     var lab = q('ymlabel');
     if (lab) lab.textContent = st.ym.replace('-', '年') + '月';
-    Promise.all([DB.getCompany(), DB.listPeople(), DB.listFixes()]).then(function (r) {
+    Promise.all([DB.getCompany(), DB.listPeople(), DB.listFixes(), DB.listPinLog()]).then(function (r) {
       st.company = r[0] || {};
       st.people = r[1] || [];
+      st.pinLog = r[3] || [];
       fillCompany();
       drawPeople();
       return drawFixes(r[2] || []);
@@ -278,13 +279,15 @@
     box.innerHTML = st.people.map(function (p) {
       var url = linkFor(p.token);
       return '<div class="tc-card"><div class="tc-cardhead"><b>' + U.esc(p.name || p.employee_id) + '</b>'
-        + (p.pw_hash ? '<span class="tc-tag">設定済</span>' : '<span class="tc-tag pending">未設定</span>')
+        + (p.pw_hash ? '<span class="tc-tag">暗証番号あり</span>' : '<span class="tc-tag pending">まだ決めていません</span>')
         + '<span class="tc-spacer"></span>'
         + '<button class="tc-btn sub" type="button" data-qr="' + U.esc(p.token) + '">QRを出す</button>'
         + '<button class="tc-btn sub" type="button" data-re="' + U.esc(p.token) + '">入口を作り直す</button>'
         + '</div>'
         + '<div style="word-break:break-all">' + U.esc(url) + '</div>'
-        + (p.init_code ? '<div>最初のあいことば: <b class="num">' + U.esc(p.init_code) + '</b></div>' : '')
+        /* ★いつ決めたかを出す★（身に覚えの無い日時なら 社長が気づける）
+           秘密を1つに減らした分の埋め合わせ（司さん 2026-08-15） */
+        + '<div class="tc-when">' + U.esc(pinHistoryOf(p.employee_id)) + '</div>'
         + '<div id="qr-' + U.esc(p.token) + '"></div></div>';
     }).join('');
     Array.prototype.forEach.call(box.querySelectorAll('[data-qr]'), function (b) {
@@ -297,6 +300,16 @@
   function linkFor(token) {
     return global.location.href.replace(/[^/]*$/, '') + 'punch.html?t=' + token;
   }
+
+  /** ★暗証番号を「いつ決めたか／いつ作り直したか」★（帳面から読む・消えない） */
+  function pinHistoryOf(employeeId) {
+    var rows = (st.pinLog || []).filter(function (r) { return r.employee_id === employeeId; });
+    if (!rows.length) return 'まだ暗証番号を決めていません';
+    var last = rows[rows.length - 1];
+    var when = (DB.toJst(last.at) || '').replace('T', ' ');
+    var word = last.action === 'pin_reissue' ? '入口を作り直しました' : '暗証番号を決めました';
+    return when + '　' + word + (rows.length > 1 ? '（これまで ' + rows.length + '回）' : '');
+  }
   function showQr(token) {
     var box = q('qr-' + token);
     if (!box) return;
@@ -306,13 +319,8 @@
     qr.make();
     box.innerHTML = qr.createImgTag(4, 8);
   }
-  function newCode() {
-    var s = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', out = '';   // 見間違えやすい文字は入れない
-    var a = new Uint8Array(8);
-    (global.crypto || {}).getRandomValues ? global.crypto.getRandomValues(a) : a.set([1, 2, 3, 4, 5, 6, 7, 8]);
-    for (var i = 0; i < 8; i++) out += s[a[i] % s.length];
-    return out;
-  }
+  /* ★「最初のあいことば」(init_code) はもう作らない★（2026-08-15 司さんの指摘）
+     ＝リンクと同じ口で渡す物なので 守りが増えていなかった。従業員の秘密は暗証番号1つだけ。 */
   function addPerson() {
     var name = q('p-name').value.trim();
     if (!name) { U.toast('氏名を入れてください（給与に渡すときに要ります）'); return; }
@@ -332,7 +340,7 @@
       account_id: st.user.id,
       employee_id: 'E' + Date.now().toString(36),
       name: name, emp_no: no || null,
-      hire_date: hire, hourly_yen: yen, init_code: newCode(),
+      hire_date: hire, hourly_yen: yen,
       /* ★人ごとの法定休日★（空なら会社の決まりに従う） */
       legal_holiday_dow: pHol === '' || pHol == null ? null : Number(pHol),
     }).then(function () {
@@ -351,9 +359,19 @@
       failed('作れませんでした')(e);
     });
   }
+  /** ★入口を作り直す★＝暗証番号と 覚えた端末を消し、もう一度 決められる状態に戻す。
+      ★やった事は帳面に残す★（消さない・上書きしない）＝身に覚えを後から確かめられる。 */
   function reissue(token) {
-    DB.updatePerson(token, { init_code: newCode(), pw_hash: null, device_tokens: [], fail_count: 0, locked_until: null })
-      .then(function () { U.toast('入口を作り直しました。新しいあいことばを渡してください。'); reload(); })
+    var p = (st.people || []).filter(function (x) { return x.token === token; })[0] || {};
+    DB.updatePerson(token, { init_code: null, pw_hash: null, device_tokens: [], fail_count: 0, locked_until: null })
+      .then(function () {
+        return DB.addCloseLog({
+          account_id: st.user.id, ym: st.ym, action: 'pin_reissue',
+          by_uid: st.user.id, by_name: st.user.email || '',
+          employee_id: p.employee_id || '', reason: '',
+        });
+      })
+      .then(function () { U.toast('入口を作り直しました。この人はもう一度 暗証番号を決めます。'); reload(); })
       .catch(failed('できませんでした'));
   }
 
@@ -993,7 +1011,7 @@
 
   global.OwnerApp = {
     startLogin: startLogin, startIndex: startIndex, startShukei: startShukei,
-    _st: st, _newCode: newCode, _grantDaysOf: grantDaysOf, _fileName: fileName,
+    _st: st, _grantDaysOf: grantDaysOf, _fileName: fileName, _pinHistoryOf: pinHistoryOf,
     _holNote: drawHolidayNote,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

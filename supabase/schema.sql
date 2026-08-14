@@ -248,10 +248,16 @@ create table if not exists timeally.tc_close (
   id         uuid primary key default gen_random_uuid(),
   account_id uuid not null references auth.users(id) on delete cascade,
   ym         text not null check (ym ~ '^[0-9]{4}-[0-9]{2}$'),
-  action     text not null check (action in ('close','reopen','export')),
+  -- close/reopen/export … 締めの話（月ぜんたい）
+  -- pin_set/pin_reissue … ★入口の話（人ごと・2026-08-15 追加）★
+  --   ★同じ帳面に入れる★＝追記だけ・消せない、という性質が同じだから（表は増やさない）。
+  --   ★見せる時は分ける★（締めの履歴に混ぜない。lib/tc-close.js の historyOf が分ける）
+  action     text not null check (action in ('close','reopen','export','pin_set','pin_reissue')),
   at         timestamptz not null default now(),
   by_uid     uuid not null,
   by_name    text not null default '',
+  -- ★人ごとの話（pin_set / pin_reissue）だけ入る★。締めの話は null
+  employee_id text,
   reason     text not null default '',
   -- ★確定した時の数字を そのまま焼き付ける★（後で人数や合計が動いても、
   --   「渡した時はこうだった」が残る＝食い違いに気づける）
@@ -259,6 +265,11 @@ create table if not exists timeally.tc_close (
 );
 create index if not exists tc_close_idx on timeally.tc_close (account_id, ym, at);
 -- ★解除には理由が要る（画面だけでなく倉庫でも止める）★
+-- ★もう作ってある倉庫にも足す（作り直さない）★
+alter table timeally.tc_close add column if not exists employee_id text;
+alter table timeally.tc_close drop constraint if exists tc_close_action_check;
+alter table timeally.tc_close add  constraint tc_close_action_check
+  check (action in ('close','reopen','export','pin_set','pin_reissue'));
 alter table timeally.tc_close drop constraint if exists tc_close_reason_req;
 alter table timeally.tc_close add  constraint tc_close_reason_req
   check (action <> 'reopen' or length(btrim(reason)) >= 2);
@@ -357,28 +368,44 @@ begin
     'locked',(v_pub.locked_until is not null and v_pub.locked_until > now()));
 end $$;
 
-create or replace function public.tc_set_password(p_token uuid, p_init text, p_pw text)
+-- ★暗証番号を決める（初回だけ）★（2026-08-15 司さんの指摘で作り直した）
+--   前は ★秘密が3つ★ あった: リンク／会社が渡す「最初のあいことば」／8文字以上の文字列。
+--   ★「最初のあいことば」はリンクと同じ口で渡すので 守りが増えていない★ ので無くした。
+--   ★秘密は「暗証番号（数字4〜6桁）」1つだけ★。現場で毎日 何回も打つ物だから。
+--
+--   ★守りが減る分の埋め合わせ★
+--     ・リンク(?t=)は uuid ＝ ★リンクを持っている人しか 番号を試せない★
+--     ・★5回まちがえたら15分あかない★（1人ずつ）
+--     ・★2回目からは決められない★（社長が「入口を作り直す」まで変えられない）
+--     ・★決めた事を帳面に残す★（社長の画面に日時が出る＝身に覚えが無ければ気づける）
+--
+--   ★桁は倉庫でも見る★（画面だけの検査は迂回できる）。lib/tc-pin.js と同じ線。
+create or replace function public.tc_pin_set(p_token uuid, p_pin text)
 returns jsonb language plpgsql security definer set search_path=public, extensions, timeally as $$
-declare v_pub timeally.tc_pub;
+declare v_pub timeally.tc_pub; v_dev text;
 begin
   select * into v_pub from timeally.tc_pub where token=p_token;
   if v_pub.token is null or not v_pub.active then return jsonb_build_object('ok',false); end if;
   if v_pub.locked_until is not null and v_pub.locked_until > now() then
     return jsonb_build_object('ok',false,'locked',true,'retry_at',v_pub.locked_until); end if;
+  -- ★2回目からは決められない★（作り直すのは社長の側）
   if v_pub.pw_hash is not null then return jsonb_build_object('ok',false,'already_set',true); end if;
-  -- ★最小8文字はサーバ側で強制する（画面だけの検査は迂回できる）★
-  if length(coalesce(p_pw,'')) < 8 then return jsonb_build_object('ok',false,'weak',true); end if;
-  if v_pub.init_code is null or upper(trim(coalesce(p_init,''))) <> v_pub.init_code then
-    update timeally.tc_pub set fail_count=fail_count+1,
-      locked_until = case when fail_count+1 >= 5 then now()+interval '15 minutes' else locked_until end
-      where token=p_token returning fail_count, locked_until into v_pub.fail_count, v_pub.locked_until;
-    if v_pub.fail_count >= 5 then return jsonb_build_object('ok',false,'bad_init',true,'locked',true,'retry_at',v_pub.locked_until); end if;
-    return jsonb_build_object('ok',false,'bad_init',true,'remaining',5 - v_pub.fail_count);
-  end if;
-  update timeally.tc_pub set pw_hash=crypt(p_pw, gen_salt('bf')), init_code=null, fail_count=0, locked_until=null
+  if p_pin !~ '^[0-9]{4,6}$' then return jsonb_build_object('ok',false,'bad_pin',true); end if;
+  update timeally.tc_pub set pw_hash=crypt(p_pin, gen_salt('bf')), init_code=null,
+                             fail_count=0, locked_until=null
     where token=p_token;
-  return jsonb_build_object('ok',true);
+  -- ★決めた事を残す（追記だけ・消さない）★
+  insert into timeally.tc_close(account_id, ym, action, by_uid, by_name, employee_id, reason)
+  values (v_pub.account_id, to_char((now() at time zone 'Asia/Tokyo')::date,'YYYY-MM'),
+          'pin_set', v_pub.account_id, v_pub.name, v_pub.employee_id, '');
+  -- ★決めたら そのまま入れる★（決めた直後にもう一度 打たせない）
+  v_dev := encode(gen_random_bytes(18),'hex');
+  update timeally.tc_pub set device_tokens=array_append(device_tokens, v_dev) where token=p_token;
+  return jsonb_build_object('ok',true,'device_token',v_dev,'name',v_pub.name);
 end $$;
+
+-- ★引数の違う古い形は落とす★（残ると「最初のあいことば」の口が生き続ける）
+drop function if exists public.tc_set_password(uuid,text,text);
 
 create or replace function public.tc_verify(p_token uuid, p_pw text)
 returns jsonb language plpgsql security definer set search_path=public, extensions, timeally as $$
@@ -550,7 +577,7 @@ grant select, insert                  on timeally.tc_close     to authenticated;
 
 grant execute on function
   public.tc_auth(uuid,text),
-  public.tc_set_password(uuid,text,text),
+  public.tc_pin_set(uuid,text),
   public.tc_verify(uuid,text),
   public.tc_punch_add(uuid,text,text,timestamptz,text,text),
   public.tc_my_punches(uuid,text,text,date,date),
