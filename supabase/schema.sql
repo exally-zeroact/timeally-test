@@ -348,7 +348,18 @@ begin
   return jsonb_build_object('found',true,'company', coalesce(v_co.name,''), 'name', v_pub.name);
 end $$;
 
+-- ★窓(view)への権限だけでは足りない★（2026-08-14 実UIを押して分かった）
+--   窓は security_invoker=true ＝ ★呼んだ人の権利で開く★ので、
+--   ★実の棚(timeally.*)への権限が無いと "permission denied for table" で落ちる★。
+--   行の絞り込みは RLS がやるので、ここは「棚に触ってよい」だけを渡す。
+--   ★表を足したら ここにも足す★（schema-contract の検査が抜けを赤にする）。
 grant usage on schema timeally to authenticated;
+grant select, insert, update, delete on timeally.tc_companies to authenticated;
+grant select, insert, update, delete on timeally.tc_pub       to authenticated;
+grant select, insert, update, delete on timeally.tc_punch     to authenticated;
+grant select, insert, update, delete on timeally.tc_fix       to authenticated;
+grant select, insert, update, delete on timeally.tc_shift     to authenticated;
+
 grant execute on function
   public.tc_auth(uuid,text),
   public.tc_set_password(uuid,text,text),

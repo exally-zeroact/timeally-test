@@ -106,6 +106,17 @@ T('★全部の窓に security_invoker=true が「with」と「alter」の両方
   console.log('     実測: 窓 ' + TABLES.length + '枚すべてに with＋alter＋権限');
 });
 
+T('★実の棚にも権限がある（窓だけ渡しても security_invoker では開かない）', () => {
+  /* 2026-08-14 実UIを押して踏んだ: 窓に grant しただけでは
+     "permission denied for table tc_companies"。窓は★呼んだ人の権利で開く★ので
+     実の棚(timeally.*)の権限が要る（行の絞り込みは RLS がやる）。 */
+  ok(/grant usage on schema timeally to authenticated/.test(SQL), '部屋への usage が無い');
+  TABLES.forEach((t) => {
+    ok(new RegExp('grant select, insert, update, delete on timeally\\.' + t + '\\s+to authenticated').test(SQL),
+      '★' + t + ' の実の棚に権限が無い（窓ごしでも開けない）★');
+  });
+});
+
 T('★コードが読む列が 全部 表にある（窓に無い列を読むと丸ごと落ちる）', () => {
   const js = fs.readFileSync(path.join(ROOT, 'js/tc-db.js'), 'utf8')
     + fs.readFileSync(path.join(ROOT, 'js/owner-app.js'), 'utf8');
