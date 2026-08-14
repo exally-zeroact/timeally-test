@@ -92,9 +92,14 @@ export function pngCorners(buf) {
   return [at(0, 0), at(p.w - 1, 0), at(0, p.h - 1), at(p.w - 1, p.h - 1)];
 }
 
-/* ★司さんの決定（2026-08-14・最終）★「★絵そのものにして★」
-   伸ばさない・切らない・塗り替えない。★元のPNGを そのまま縮めるだけ★。
-   （白の余白も 元の絵の一部。私が消しにいったのは やり過ぎだった） */
+/* ★司さんの決定（2026-08-14・確定）★「★白の余白なしでやれ★」
+   実機のホーム画面に ★白い枠が出た★（4回 出し直させた）。もう迷わない:
+     ・白は ★1pxも出さない★（この検査が毎回 四隅を読んで数える）
+     ・元の絵は 1344×1219 で ★正方形ではない★ので、正方形のタイルにするため
+       ★縦に約10%伸ばす★（切ると「12」が欠けるので伸ばす側を選んだ）
+     ・角の丸みの外側は ★縁の橙★（元の絵の外側は白。そこだけ置き換える）
+       → 端末が角を丸めるので ★ホーム画面では見えない★
+   ★元の絵そのもの（白の余白つき）は icons/source.png に残してある★ */
 export const SOURCE = 'icons/source.png';
 export const SOURCE_BLOB = '28e36b7328761f4608b3464dd12f57bf1d851251';   // git hash-object
 
@@ -123,6 +128,13 @@ if (process.argv.includes('--self-test')) {
     const c = pngCorners(fs.readFileSync(path.join(ROOT, 'icons/icon-512.png')));
     ok(c && c.length === 4, '★本物の四隅を読めていない★');
     ok(pngPixels(Buffer.from('not a png')) === null || pngSize(Buffer.from('not a png')) === null, 'PNGでない物を通している');
+  });
+  S('②-c 白の判定が効いている（白を白と言い、絵の色を白と言わない）', () => {
+    ok(isWhitish('#FFFFFF') && isWhitish('#FEFEFE'), '白を白と言えていない');
+    ok(!isWhitish('#E68805') && !isWhitish('#FBCD06') && !isWhitish('#7D3204'), '絵の色を白と言っている');
+    /* ★元の絵（白の余白つき）を通したら 必ず赤になる★＝この検査が空振りしていない証拠 */
+    const c = pngCorners(fs.readFileSync(path.join(ROOT, SOURCE)));
+    ok(c.every(isWhitish), '★元の絵の四隅を白と判定できていない＝空振り★');
   });
   S('②-b 元の絵の印が合っている（差し替えたら気づく）', () => {
     const got = blobHash(fs.readFileSync(path.join(ROOT, SOURCE)));
@@ -169,6 +181,34 @@ T('★元の絵（司さんが渡した物）がrepoに在って、入れ替わ�
   const s = pngSize(fs.readFileSync(p));
   ok(s.w === s.h, '元の絵が正方形でない: ' + s.w + '×' + s.h);
   console.log('     実測: ' + SOURCE + ' ' + s.w + '×' + s.h + ' / blob ' + got.slice(0, 8));
+});
+
+/** 白っぽいか（＝余白） */
+export function isWhitish(hex) {
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  return r > 235 && g > 235 && b > 235;
+}
+
+T('★★白の余白が1pxも無い（四隅と 各辺の真ん中を実際に読む）★★', () => {
+  const bad = [], seen = new Set();
+  for (const rel of Object.keys(ICONS)) {
+    const p = pngPixels(fs.readFileSync(path.join(ROOT, rel)));
+    if (!p) { bad.push(rel + ' の画素を読めない'); continue; }
+    const at = (x, y) => {
+      const i = y * (p.w * p.ch) + x * p.ch;
+      return '#' + [p.data[i], p.data[i + 1], p.data[i + 2]].map((v) => ('0' + v.toString(16)).slice(-2)).join('').toUpperCase();
+    };
+    const pts = [['隅1', 0, 0], ['隅2', p.w - 1, 0], ['隅3', 0, p.h - 1], ['隅4', p.w - 1, p.h - 1],
+      ['上辺', (p.w / 2) | 0, 0], ['下辺', (p.w / 2) | 0, p.h - 1],
+      ['左辺', 0, (p.h / 2) | 0], ['右辺', p.w - 1, (p.h / 2) | 0]];
+    pts.forEach(([name, x, y]) => {
+      const c = at(x, y); seen.add(c);
+      if (isWhitish(c)) bad.push('★' + rel + ' の' + name + 'が白（' + c + '）★');
+    });
+  }
+  ok(bad.length === 0, bad.join(' / '));
+  console.log('     実測: ' + Object.keys(ICONS).length + '枚 × 8点 = '
+    + (Object.keys(ICONS).length * 8) + '点 / ★白 0点★ / 端の色: ' + [...seen].join(' '));
 });
 
 T('★アイコンが「白紙」になっていない（絵が本当に入っている）', () => {
