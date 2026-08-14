@@ -95,6 +95,12 @@ jobs:
         run: node tests/home-icon.test.mjs
       - name: ★ホーム画面のアイコン (従業員に manifest を付けたら赤になるかの自己確認)
         run: node tests/home-icon.test.mjs --self-test
+      # 指示役から回ってきた見張り（daikou-seikyu が実物で踏んだ事故）:
+      #   HTMLの中の <script> が構文エラーでもアプリが1行も動かないまま★lintも試験も緑★になる。
+      - name: ★HTMLの中のJSが構文として通るか (script / onclick= / JSが組み立てる onclick)
+        run: node tests/html-script-syntax.test.mjs
+      - name: ★HTMLの中のJS (わざとエスケープを落として赤になるかの自己確認)
+        run: node tests/html-script-syntax.test.mjs --self-test
 
       # ── 借り物 ────────────────────────────────────────────────────
       - name: ★借りてきた物 (出どころと1バイトも違わない・VENDOR.md と一致)
