@@ -107,7 +107,7 @@ function createFake(seed) {
       /* ★notice は倉庫が作る文★（画面が組み立てない）。seed.empClosed=true で締め切った後を作る */
       if (name === 'tc_pub_info') {
         out = { found: true, company: 'テスト商事', name: '山田 太郎', state: 'open', ym: '2026-08', notice: '' };
-        if (seed.empClosed) { out.state = 'closed'; out.notice = '8月は締め切りました。直しは会社へ言ってください'; }
+        if (seed.empClosed) { out.state = 'closed'; out.notice = '7月は締め切りました。直しは会社へ言ってください'; out.ym = '2026-07'; }
       }
       if (name === 'tc_verify') out = { ok: true, device_token: 'dev1', name: '山田 太郎' };
       if (name === 'tc_set_password') out = { ok: true };

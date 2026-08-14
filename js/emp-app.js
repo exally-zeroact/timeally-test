@@ -53,9 +53,14 @@
   /** ★締め切りの知らせを出す（打つ前に分かるように）★ 出るのは1文だけ */
   function drawNotice() {
     var el = q('closed-note');
-    if (!el) return;
-    el.textContent = st.notice || '';
-    el.hidden = !st.notice;
+    if (el) {
+      el.textContent = st.notice || '';
+      el.hidden = !st.notice;
+    }
+    /* ★締め切った月には「お願い」も出せない★
+       倉庫が断るので入りはしないが、★押せてしまうと「出したのに直らない」と思われる★ */
+    var add = q('b-add');
+    if (add) add.disabled = !!st.notice;
   }
 
   /* ── 入口 ─────────────────────────────────────────────────── */

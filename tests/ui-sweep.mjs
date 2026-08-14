@@ -290,6 +290,42 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
   ok(r.page.fake._calls.indexOf('rpc:tc_fix_request') >= 0, '申請が送られていない');
 });
 
+/* ── 締め切った月を 従業員が開いた時（★もう1回 開いて押す★） ─────────── */
+{
+  const closedPages = {};
+  for (const file of ['punch.html', 'kiroku.html']) {
+    const p = openPage(file, '?t=11111111-1111-1111-1111-111111111111', { empClosed: true });
+    await wait(); await wait(); await wait();
+    closedPages[file] = p;
+  }
+
+  T('★★締め切った月: 従業員に出るのは1文だけ（割増・丸め・金額の話が1語も無い）★★', () => {
+    const t = closedPages['kiroku.html'].w.document.getElementById('closed-note');
+    ok(!t.hidden, '知らせが出ていない');
+    ok(/締め切りました/.test(t.textContent), '文が違う: ' + t.textContent);
+    ['割増', '丸め', '切り捨て', '残業', '深夜', '実労働', '金額', '円'].forEach((w) => {
+      ok(t.textContent.indexOf(w) < 0, '★' + w + ' が入っている★: ' + t.textContent);
+    });
+    console.log('     実測: 従業員に出た文「' + t.textContent + '」');
+  });
+
+  T('★★締め切った月: 打刻も お願いも 押せない（押せると「出したのに直らない」になる）★★', () => {
+    const pd = closedPages['punch.html'].w.document;
+    ['b-in', 'b-out', 'b-bin', 'b-bout', 'b-ain', 'b-aout'].forEach((id) => {
+      ok(pd.getElementById(id).disabled, '★' + id + ' が押せる★');
+    });
+    ok(closedPages['kiroku.html'].w.document.getElementById('b-add').disabled, '★お願いが押せる★');
+  });
+
+  T('★★締め切った月でも 打った時刻は見えたまま（隠さない）★★', () => {
+    const box = closedPages['kiroku.html'].w.document.getElementById('list');
+    ok(/\d\d:\d\d/.test(box.textContent), '★時刻が消えている★');
+    const n = (box.textContent.match(/\d\d:\d\d/g) || []).length;
+    ok(n >= 3, '出ている時刻が ' + n + '個');
+    console.log('     実測: 締め切った後も 時刻 ' + n + '個が見えたまま');
+  });
+}
+
 T('★従業員の追加・会社情報の保存が 実際に倉庫へ書きに行った', () => {
   const r = results.filter((x) => x.file === 'index.html')[0];
   const c = r.page.fake._calls;
