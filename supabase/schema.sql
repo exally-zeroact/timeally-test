@@ -233,6 +233,17 @@ create table if not exists timeally.tc_shift (
 );
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- ★日ごとの休憩の直し（2026-08-15）★
+--   休憩は ★押させず 会社の既定を引く★ 形にしたが、
+--   ★本当に休憩が取れなかった日★は在るので 社長が日ごとに直せるようにする。
+--   ★誰が・いつ 直したかを残す★（tc_shift は「その日の予定」の棚なので ここに置く）。
+alter table timeally.tc_shift add column if not exists break_min int;
+alter table timeally.tc_shift add column if not exists break_by  uuid;
+alter table timeally.tc_shift add column if not exists break_at  timestamptz;
+alter table timeally.tc_shift drop constraint if exists tc_shift_break_min_range;
+alter table timeally.tc_shift add  constraint tc_shift_break_min_range
+  check (break_min is null or (break_min >= 0 and break_min <= 1440));
+
 -- ★6本目の棚 tc_close … 締めの記録（追記だけ）★（2026-08-15）
 --   ★上書きしない・消さない★＝直しの跡が残る。
 --   「表は5つだけ」と決めたが、★確定/解除は「いつ・誰が・なぜ」を残さないと

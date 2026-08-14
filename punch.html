@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="format-detection" content="telephone=no" />
     <title>Timeally — 打刻</title>
-    <link rel="icon" href="icons/favicon-32.png?v=a5dc7295" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=a5dc7295" />
+    <link rel="icon" href="icons/favicon-32.png?v=ddfe9ccc" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=ddfe9ccc" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=a5dc7295" />
+    <link rel="stylesheet" href="css/timeally.css?v=ddfe9ccc" />
   </head>
   <body>
     <div class="tc-appbar">
@@ -32,17 +32,20 @@
       <label for="t">打った時刻（直せます）</label>
       <input type="time" id="t" step="60" />
 
+      <!-- ★休憩のボタンは置かない★（2026-08-15 司さんの指摘）
+           ＝現場は押さない。押さない物を前提にすると ★押し忘れがそのまま残業になる★。
+           休憩は 会社の決まりの分を 集計の側で引く。
+           ★私用で外出は残す★＝中抜けは毎日 同じ長さではないので 既定で代われない。 -->
       <div class="tc-punchgrid">
         <button class="tc-btn" id="b-in" type="button">出勤</button>
         <button class="tc-btn" id="b-out" type="button">退勤</button>
-        <button class="tc-btn sub" id="b-bin" type="button">休憩に入る</button>
-        <button class="tc-btn sub" id="b-bout" type="button">休憩から戻る</button>
         <button class="tc-btn sub" id="b-ain" type="button">私用で外出</button>
         <button class="tc-btn sub" id="b-aout" type="button">外出から戻る</button>
       </div>
 
       <div class="tc-note">
         押すと、いま欄に入っている時刻がそのまま残ります。あとから見返せます。
+        お昼などの休憩は 押さなくてかまいません（会社の決まりのぶんで扱われます）。
       </div>
 
       <p><a class="tc-btn sub wide" id="to-kiroku" href="#">自分が打った記録を見る</a></p>
@@ -75,12 +78,12 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=a5dc7295"></script>
-    <script src="js/env-badge.js?v=a5dc7295"></script>
-    <script src="lib/tc-pin.js?v=stamp?v=a5dc7295"></script>
-    <script src="js/tc-ui.js?v=a5dc7295"></script>
-    <script src="js/tc-db.js?v=a5dc7295"></script>
-    <script src="js/emp-app.js?v=a5dc7295"></script>
+    <script src="js/supa-config.js?v=ddfe9ccc"></script>
+    <script src="js/env-badge.js?v=ddfe9ccc"></script>
+    <script src="lib/tc-pin.js?v=ddfe9ccc"></script>
+    <script src="js/tc-ui.js?v=ddfe9ccc"></script>
+    <script src="js/tc-db.js?v=ddfe9ccc"></script>
+    <script src="js/emp-app.js?v=ddfe9ccc"></script>
     <script>
       EmpApp.startPunch();
     </script>

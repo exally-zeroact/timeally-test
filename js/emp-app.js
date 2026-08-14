@@ -163,8 +163,9 @@
       if (t && !t.value) t.value = (DB.nowJst() || '').slice(11, 16);   // ★いまの時刻を入れておく。直せる★
       var link = q('to-kiroku');
       if (link) link.href = 'kiroku.html?t=' + encodeURIComponent(st.token);
+      /* ★休憩は押させない★（2026-08-15）。集計の側で 会社の既定を引く。
+         ★倉庫は break_in / break_out を今も受け取る★＝★過去の打刻が読めなくなると困る★ため。 */
       var pairs = [['b-in', 'in', '出勤'], ['b-out', 'out', '退勤'],
-        ['b-bin', 'break_in', '休憩に入る'], ['b-bout', 'break_out', '休憩から戻る'],
         ['b-ain', 'away_in', '私用で外出'], ['b-aout', 'away_out', '外出から戻る']];
       pairs.forEach(function (p) {
         var b = q(p[0]);

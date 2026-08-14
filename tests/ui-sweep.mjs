@@ -65,9 +65,10 @@ const PLAN = {
     ['b-cancel', 'やめる（記録を足さずに閉じる）'],
     ['b-next', '次の月'],
   ],
+  /* ★休憩の2つは消した★（2026-08-15 司さんの指摘）＝現場は押さない。
+     外出は残す（中抜けは毎日 同じ長さではない）。 */
   'punch.html': [
     ['b-in', '出勤'], ['b-out', '退勤'],
-    ['b-bin', '休憩に入る'], ['b-bout', '休憩から戻る'],
     ['b-ain', '私用で外出'], ['b-aout', '外出から戻る'],
     ['b-forget', 'この端末を忘れる'],
     ['b-setpin', '暗証番号を決める（★秘密は これ1つだけ★）', { pin1: '1234', pin2: '1234' }],
@@ -297,7 +298,7 @@ T('★印刷は「紙だけの新しい窓」で開く（中身が0枚なら開�
 T('★従業員の画面が 打刻を倉庫へ送った（押しただけで終わっていない）', () => {
   const r = results.filter((x) => x.file === 'punch.html')[0];
   const n = r.page.fake._calls.filter((c) => c === 'rpc:tc_punch_add').length;
-  ok(n === 6, '打刻のRPCが ' + n + '回（6つのボタンぶん来ていない）');
+  ok(n === 4, '打刻のRPCが ' + n + '回（4つのボタンぶん来ていない）');
 });
 
 T('★あとから入れる は お願い(申請)として送られる', () => {
@@ -500,7 +501,7 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
 
   T('★★締め切った月: 打刻も お願いも 押せない（押せると「出したのに直らない」になる）★★', () => {
     const pd = closedPages['punch.html'].w.document;
-    ['b-in', 'b-out', 'b-bin', 'b-bout', 'b-ain', 'b-aout'].forEach((id) => {
+    ['b-in', 'b-out', 'b-ain', 'b-aout'].forEach((id) => {
       ok(pd.getElementById(id).disabled, '★' + id + ' が押せる★');
     });
     ok(closedPages['kiroku.html'].w.document.getElementById('b-add').disabled, '★お願いが押せる★');

@@ -26,8 +26,15 @@ const ok = (v, m) => { if (!v) throw new Error(m || 'false'); };
 
 /* 打刻を作る小道具（★中身は全部 手で書いた実物の時刻★） */
 const P = (at, kind, src) => ({ at, kind, src: src || 'punch' });
+/* ★このファイルは「休憩を引く前の線」を測る★（2026-08-15）
+   同じ日に ★休憩の既定★ を入れたまま所定超や残業の境目を測ると、
+   ★どの数字がどの決まりで動いたのか 分からなくなる★。
+   ⇒ ここでは ★休憩の既定を0分に固定★して、他の決まりだけを測る。
+      ★休憩そのものは tests/break.test.mjs が 既定60分の実物で測る★（両方 走らせている）。
+   会社の設定で上書きしたい時は company に breakDefaultMin を書けばよい。 */
 function run(punches, company, extra) {
-  return C.summarize(Object.assign({ ym: '2026-08', punches: punches, shifts: [], fixes: [] }, extra || {}, { company: company || {} }));
+  var co = Object.assign({ breakDefaultMin: 0 }, company || {});
+  return C.summarize(Object.assign({ ym: '2026-08', punches: punches, shifts: [], fixes: [] }, extra || {}, { company: co }));
 }
 const D1 = (s) => s.days.find((d) => d.d === '2026-08-03');   // 2026-08-03 は ★月曜★
 
@@ -318,7 +325,7 @@ if (process.argv.includes('--self-test')) {
     eq(C.splitDay({ workMin: 450, nightMin: 0 }, false, 420).dayOtMin, 0, '★本物が所定超を残業にしている★');
   });
   S('③ 日またぎを翌日に割る作り物は 出勤日が0になる（本物は480）', () => {
-    const s = C.summarize({ ym: '2026-08', punches: [P('2026-08-03T22:00', 'in'), P('2026-08-04T06:00', 'out')], company: {} });
+    const s = run([P('2026-08-03T22:00', 'in'), P('2026-08-04T06:00', 'out')]);
     eq(s.days.find((d) => d.d === '2026-08-03').workMin, 480, '★本物が出勤日にまとめていない★');
     eq(s.days.find((d) => d.d === '2026-08-04').workMin, 0, '★本物が翌日に割っている★');
   });

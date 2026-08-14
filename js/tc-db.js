@@ -188,13 +188,26 @@
           d: r.d, plannedMin: r.planned_min, dayKind: r.day_kind,
           plannedIn: r.planned_in ? String(r.planned_in).slice(0, 5) : null,
           plannedOut: r.planned_out ? String(r.planned_out).slice(0, 5) : null,
+          /* ★社長が直した休憩★（null なら 打刻 or 会社の既定を使う） */
+          breakMin: r.break_min == null ? null : Number(r.break_min),
+          breakBy: r.break_by || null,
+          breakAt: r.break_at || null,
         };
       });
     });
   }
   function saveShift(row) {
     return client().from('tc_shift').upsert(row, { onConflict: 'account_id,employee_id,d' }).select()
-      .then(function (r) { if (r.error) throw new Error(r.error.message); return (r.data || [])[0]; });
+      .then(function (r) { if (r.error) throw wrapError('tc_shift', r.error); return (r.data || [])[0]; });
+  }
+
+  /** ★その日の休憩を 社長が直す★（誰が・いつ を一緒に残す。null に戻すと 既定へ戻る） */
+  function saveDayBreak(accountId, employeeId, d, breakMin, byUid) {
+    return saveShift({
+      account_id: accountId, employee_id: employeeId, d: d,
+      break_min: breakMin, break_by: breakMin == null ? null : byUid,
+      break_at: breakMin == null ? null : new Date().toISOString(),
+    });
   }
 
   /* ── 締めの記録（★追記だけ★） ──────────────────────────────
@@ -266,7 +279,7 @@
     listPeople: listPeople, addPerson: addPerson, updatePerson: updatePerson,
     loadPunches: loadPunches, addPunch: addPunch,
     listFixes: listFixes, approveFix: approveFix, rejectFix: rejectFix,
-    loadShifts: loadShifts, saveShift: saveShift,
+    loadShifts: loadShifts, saveShift: saveShift, saveDayBreak: saveDayBreak,
     listCloseLog: listCloseLog, addCloseLog: addCloseLog, listPinLog: listPinLog,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

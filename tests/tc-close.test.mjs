@@ -136,8 +136,11 @@ T('★★締め日30 → 2月は末日に寄せる★★', () => {
 T('★日をまたぐ勤務は「出勤日」の締めに入る（8/20 22:00〜8/21 6:00 は 8/20締め）', () => {
   const ps = [{ at: '2026-08-20T22:00', kind: 'in', src: 'punch' },
     { at: '2026-08-21T06:00', kind: 'out', src: 'punch' }];
-  const aug = C.summarize({ ym: '2026-08', punches: ps, shifts: [], fixes: [], company: { closeDay: 20 } });
-  const sep = C.summarize({ ym: '2026-09', punches: ps, shifts: [], fixes: [], company: { closeDay: 20 } });
+  /* ★休憩の既定は0にする★＝ここで測るのは「どの締めに入るか」であって、休憩ではない
+     （休憩そのものは tests/break.test.mjs が 既定60分の実物で測る） */
+  const co = { closeDay: 20, breakDefaultMin: 0 };
+  const aug = C.summarize({ ym: '2026-08', punches: ps, shifts: [], fixes: [], company: co });
+  const sep = C.summarize({ ym: '2026-09', punches: ps, shifts: [], fixes: [], company: co });
   eq(aug.month.workedMin, 480, '★8/20締めに入っていない★');
   eq(sep.month.workedMin, 0, '★次の締めにも数えている（二重）★');
 });
@@ -145,7 +148,8 @@ T('★日をまたぐ勤務は「出勤日」の締めに入る（8/20 22:00〜8
 T('★境界の日に打刻が1件だけの月でも合う', () => {
   const ps = [{ at: '2026-08-20T09:00', kind: 'in', src: 'punch' },
     { at: '2026-08-20T17:00', kind: 'out', src: 'punch' }];
-  const s = C.summarize({ ym: '2026-08', punches: ps, shifts: [], fixes: [], company: { closeDay: 20 } });
+  const s = C.summarize({ ym: '2026-08', punches: ps, shifts: [], fixes: [],
+    company: { closeDay: 20, breakDefaultMin: 0 } });
   eq(s.month.workedMin, 480);
   eq(s.month.shukkin, 1);
   eq(s.days.length, 31, '7/21〜8/20 は31日');

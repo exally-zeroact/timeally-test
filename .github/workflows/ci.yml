@@ -66,6 +66,11 @@ jobs:
       - name: ★給与への受け口 (見出しを変える/小数時にする/BOMを外すと赤になるかの自己確認)
         run: node tests/tc-csv.test.mjs --self-test
 
+      - name: ★休憩 (押させず既定を引く・拘束6時間ちょうど/1分の端・打刻が在る日は動かない・法定割れは赤で知らせる)
+        run: node tests/break.test.mjs
+      - name: ★休憩 (既定を引かない/打刻を上書きする/黙って法定へ引き上げる作り物で赤になるかの自己確認)
+        run: node tests/break.test.mjs --self-test
+
       - name: ★暗証番号 (秘密は1つだけ・数字4〜6桁・1111を止めない・全角も通す・倉庫と画面が同じ線)
         run: node tests/pin.test.mjs
       - name: ★暗証番号 (8文字以上に戻す/1111を禁止する作り物で赤になるかの自己確認)

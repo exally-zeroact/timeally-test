@@ -154,6 +154,9 @@
     var c = st.company || {};
     return {
       dailyStdMin: c.daily_std_min, weekLegalMin: c.week_legal_min, closeDay: c.close_day,
+      /* ★休憩の既定★（2026-08-15）… ここで渡さないと ★会社の設定が効かない★
+         （前は誰も使っていなかったので、渡し忘れても気づけなかった） */
+      breakDefaultMin: c.break_default_min,
       rounding: c.rounding, roundUnitMin: c.round_unit_min, roundDir: c.round_dir, roundScope: c.round_scope,
       holidayMode: c.holiday_mode, legalHolidayDow: c.legal_holiday_dow,
       holidayCycleStart: c.holiday_cycle_start,
@@ -643,6 +646,14 @@
       q('b-csv').onclick = doCsvDaily;
       q('b-kyuyo').onclick = doCsvMonthly;
       q('b-xlsx').onclick = doXlsx;
+      /* ★休憩を日ごとに直す★（押させる。打たせない） */
+      Array.prototype.forEach.call(d.querySelectorAll('[data-bm]'), function (b) {
+        b.onclick = function () {
+          var v = b.getAttribute('data-bm');
+          saveDayBreak(v === '' ? null : Number(v));
+        };
+      });
+      q('brk-day').onchange = drawBreakNote;
       q('b-close').onclick = function () { askClose('close'); };
       q('b-reopen').onclick = function () { askClose('reopen'); };
       q('b-cancel').onclick = function () { st.ask = null; drawClose(); };
@@ -693,7 +704,67 @@
         }),
       });
       renderTables(p);
+      fillBreakDays();
     }).catch(failed('数えられませんでした'));
+  }
+
+  /* ── 休憩を日ごとに直す ─────────────────────────────────────
+     ★休憩は押させず 会社の既定を引く★（2026-08-15）。
+     ただし ★本当に休憩が取れなかった日★は在るので、ここで直せる。
+     ★誰が・いつ 直したかを残す★（後で「なぜこの日だけ違うのか」が言える）。 */
+  var BREAK_SRC_WORD = { punch: '打刻から', fixed: '直した値', default: '会社の既定から', none: '（6時間以下なので引きません）' };
+
+  function fillBreakDays() {
+    var sel = q('brk-day');
+    if (!sel || !st.sum) return;
+    var keep = sel.value;
+    var list = st.sum.days.filter(function (x) { return x.workMin > 0 || x.breakMin > 0; });
+    sel.innerHTML = list.map(function (x) {
+      return '<option value="' + U.esc(x.d) + '">' + U.esc(x.d.slice(5).replace('-', '/'))
+        + '（' + U.dowOf(x.d) + '）</option>';
+    }).join('');
+    if (keep && list.some(function (x) { return x.d === keep; })) sel.value = keep;
+    drawBreakNote();
+  }
+
+  function drawBreakNote() {
+    var el = q('brknote'), sel = q('brk-day');
+    if (!el || !st.sum) return;
+    var day = (st.sum.days || []).filter(function (x) { return x.d === (sel && sel.value); })[0];
+    if (!day) { el.textContent = 'この月は 直せる日がありません。'; el.hidden = false; return; }
+    el.hidden = false;
+    el.textContent = day.d + '　拘束 ' + U.minToHm(day.spanMin) + '／休憩 ' + day.breakMin + '分'
+      + '（' + (BREAK_SRC_WORD[day.breakSrc] || day.breakSrc) + '）'
+      + '／実労働 ' + U.minToHm(day.workMin);
+
+    /* ★直した日を1か所にまとめて出す★（どの日を触ったか 後から分かる） */
+    var fixed = (st.sum.days || []).filter(function (x) { return x.breakSrc === 'fixed'; });
+    var box = q('brkfixed');
+    if (box) {
+      box.hidden = !fixed.length;
+      box.textContent = fixed.length
+        ? '直した日: ' + fixed.map(function (x) {
+          return x.d.slice(5).replace('-', '/') + ' ' + x.breakMin + '分'
+            + (x.breakAt ? '（' + (DB.toJst(x.breakAt) || '').replace('T', ' ') + '）' : '');
+        }).join('　')
+        : '';
+    }
+  }
+
+  function saveDayBreak(minOrNull) {
+    var sel = q('brk-day');
+    var p = personOf(st.who);
+    if (!p || !sel || !sel.value) { U.toast('先に日を選んでください'); return; }
+    /* ★確定した月は 数字を動かさない★（可否は締めの1か所から聞く） */
+    var c = st.close || closeState();
+    if (c.state === 'closed') { U.toast(c.why.requestFix); return; }
+    DB.saveDayBreak(st.user.id, p.employee_id, sel.value, minOrNull, st.user.id)
+      .then(function () {
+        U.toast(minOrNull == null ? sel.value + ' を会社の既定にもどしました'
+          : sel.value + ' の休憩を ' + minOrNull + '分にしました');
+        drawShukei();
+      })
+      .catch(failed('直せませんでした'));
   }
 
   /* ── 締め（受付中／締め待ち／確定） ─────────────────────────────
