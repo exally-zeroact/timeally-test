@@ -11,8 +11,12 @@
 
 | repo | 倉庫 | `env` | 配信 |
 |---|---|---|---|
-| `timeally-test` | DB-test（他アプリと共有のテスト倉庫）の `timeally` 部屋 | `test` | GitHub Pages |
-| `timeally` | 本番倉庫の `timeally` 部屋 | `prod` | 未定（10月にURL切替の塊で決める） |
+| `timeally-test` | DB-test（他アプリと共有のテスト倉庫）の `timeally` 部屋 | `test` | Vercel → **https://timeally-test.vercel.app** |
+| `timeally` | 本番倉庫の `timeally` 部屋 | `prod` | Vercel（プロジェクトは作成ずみ・**まだ push していない**） |
+
+**配信は Vercel。GitHub Pages は使わない。**
+`exally-zeroact.github.io/…` は **URL に Exally の名前が出る**（github.io を使っているのは
+うちで Exally だけ。他は全部 `*.vercel.app`）。**Timeally は別アプリなので混ぜない。**
 
 **`js/supa-config.js` をもう片方の repo にコピーしない。** これ1本が環境の分かれ目。
 
