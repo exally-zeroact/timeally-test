@@ -1,0 +1,105 @@
+name: CI
+
+# Timeally（タイマリー）— タイムカード
+#
+# ★1本ずつ並べる★ … tests/run.js でまとめても走るが、CIは1本ずつ並べる。
+#   赤くなった時に ★どれで落ちたか一目で分かる★のが大事。
+# ★足したテストは ここに並べるまで1本も走らない★
+#   tests/ci-coverage.test.mjs が「並べ忘れ」を赤にする（前科あり）。
+# ★--self-test（わざと壊して赤になるか）も並べる★
+#   空振りしている見張りは、無いのと同じ。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ★依存は「使う前」に入れる★
+      #   CIは毎回まっさらなので、node_modules が無いと jsdom を使う検査が SKIP になる。
+      #   うちは ★SKIPを緑と呼ばない★ 作りなので、そのまま赤になる（その振る舞いが正しい）。
+      - name: 依存を入れる (jsdom)
+        run: npm install --no-audit --no-fund
+
+      # ── 配信物の入口（コードより先に見る） ─────────────────────────
+      - name: ★?v= の貼り忘れ (github.io のHTTPキャッシュで「直したのに出ない」を作らない)
+        run: node scripts/stamp-build.mjs --check
+      - name: ★倉庫に当てる前の門番 (消す系・他の部屋・security_invoker抜けを止める)
+        run: node scripts/sql-guard.mjs supabase/schema.sql
+      - name: ★門番の自己確認 (わざと危ない物を食わせて止まるか・11通り)
+        run: node scripts/sql-guard.mjs --self-test
+
+      # ── 法律と計算（金と労務が動く所） ───────────────────────────
+      - name: ★法定の数値 (公式一次情報・実数リテラル・出典URLと確認日)
+        run: node tests/tc-law.test.mjs
+      - name: ★法定の数値 (わざと「超える」を「以上」にして赤になるかの自己確認)
+        run: node tests/tc-law.test.mjs --self-test
+      - name: ★計算の境界 (休憩6h/8hの等号・残業0分と1分・深夜の1分・日またぎ・打刻漏れ・空)
+        run: node tests/tc-calc.test.mjs
+      - name: ★計算の境界 (わざと混ぜて赤になるかの自己確認)
+        run: node tests/tc-calc.test.mjs --self-test
+      - name: ★丸めの保存則 (生 = 丸め後 + 切り捨て分 が none/month/daily30 の3つとも)
+        run: node tests/tc-round.test.mjs
+      - name: ★丸めの保存則 (わざと切り捨て分を捨てて赤になるかの自己確認)
+        run: node tests/tc-round.test.mjs --self-test
+
+      # ── 給与への出口（繋ぐ前に合格条件を確かめる） ─────────────────
+      - name: ★給与への受け口 (出したCSVを kintai-csv.js に実際に食わせる)
+        run: node tests/tc-csv.test.mjs
+      - name: ★給与への受け口 (見出しを変える/小数時にする/BOMを外すと赤になるかの自己確認)
+        run: node tests/tc-csv.test.mjs --self-test
+
+      # ── 従業員に嘘の数字を見せない ────────────────────────────────
+      - name: ★従業員の画面 (数えた結果が1語も出ていない・数える道具を読まない・RPCが時刻しか返さない)
+        run: node tests/employee-screen.test.mjs
+      - name: ★従業員の画面 (わざと「実労働は8時間」を混ぜて赤になるかの自己確認)
+        run: node tests/employee-screen.test.mjs --self-test
+
+      # ── 倉庫 ──────────────────────────────────────────────────────
+      - name: ★設計図とコードの契約 (表5つ・RLS・窓のsecurity_invoker・窓に無い列を読まない)
+        run: node tests/schema-contract.test.mjs
+      - name: ★設計図とコードの契約 (窓のalterを外す/表を増やして赤になるかの自己確認)
+        run: node tests/schema-contract.test.mjs --self-test
+      - name: ★倉庫の向き先 (supa-config.js 以外に書いていない＝0件を数字で出す)
+        run: node tests/no-hardcoded-supa.test.mjs
+      - name: ★倉庫の向き先 (直書き/裸の文字列/鍵の中に隠しても赤になるかの自己確認)
+        run: node tests/no-hardcoded-supa.test.mjs --self-test
+
+      # ── 見た目・端末 ──────────────────────────────────────────────
+      - name: ★テスト環境の帯 (本番には絶対 出さない・全画面に入っている・頭を隠さない・縦に割れない)
+        run: node tests/env-badge.test.mjs
+      - name: ★テスト環境の帯 (ホスト名で決める作りに戻すと赤になるかの自己確認)
+        run: node tests/env-badge.test.mjs --self-test
+      - name: ★配色 (色は文字で探さず値に直して数える・承認済み以外0件・禁止の濃い緑0件)
+        run: node tests/palette.test.mjs
+      - name: ★配色 (rgb()で書いても拾えるか・禁止色を書き方を変えて混ぜる自己確認)
+        run: node tests/palette.test.mjs --self-test
+      - name: ★iPhoneで動かない書き方 (octet-stream / Blob散在 / type=month / 後読み正規表現 / 16px)
+        run: node tests/ios-unsupported.test.mjs
+      - name: ★iPhoneで動かない書き方 (わざと混ぜて赤になるかの自己確認)
+        run: node tests/ios-unsupported.test.mjs --self-test
+
+      # ── 借り物 ────────────────────────────────────────────────────
+      - name: ★借りてきた物 (出どころと1バイトも違わない・VENDOR.md と一致)
+        run: node tests/vendor-integrity.test.mjs
+      - name: ★借りてきた物 (1バイト足したら印が変わるかの自己確認)
+        run: node tests/vendor-integrity.test.mjs --self-test
+
+      # ── 実UI（★押す物の一覧を先に出してから押す★） ─────────────────
+      - name: ★実UI (5画面のボタンを1つ残らず押す＋数える→紙→CSV→Excel を実際に通す)
+        run: node tests/ui-sweep.mjs
+
+      # ── 並べ忘れの見張り（★最後★） ───────────────────────────────
+      - name: ★CIに並んでいない検査が無いか (足したのに走っていない物を赤にする)
+        run: node tests/ci-coverage.test.mjs
+      - name: ★CIに並んでいない検査が無いか (1本抜いた作り物で赤になるかの自己確認)
+        run: node tests/ci-coverage.test.mjs --self-test

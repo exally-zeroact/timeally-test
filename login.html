@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Timeally — 会社の入口</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/timeally.css?v=0b752493" />
+  </head>
+  <body>
+    <div class="tc-appbar">
+      <h1>Timeally</h1>
+      <span class="tc-spacer"></span>
+      <span class="tc-sub">タイムカード</span>
+    </div>
+
+    <div class="tc-wrap">
+      <div class="tc-panel" style="max-width: 420px; margin: 0 auto">
+        <h2>会社の入口</h2>
+        <div class="tc-note">
+          ここは会社（社長・担当者）が入る画面です。従業員のみなさんは、会社から渡されたリンクを開いてください。
+        </div>
+        <div id="alert" class="tc-alert" hidden></div>
+
+        <label for="email">メールアドレス</label>
+        <input type="email" id="email" autocomplete="username" inputmode="email" />
+        <label for="pw">パスワード</label>
+        <input type="password" id="pw" autocomplete="current-password" />
+
+        <p><button class="tc-btn wide" id="b-in" type="button">入る</button></p>
+        <p><button class="tc-btn sub wide" id="b-new" type="button">はじめて使う（登録する）</button></p>
+        <p><button class="tc-btn sub wide" id="b-reset" type="button">パスワードを忘れた</button></p>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supa-config.js?v=0b752493"></script>
+    <script src="js/env-badge.js?v=0b752493"></script>
+    <script src="js/tc-ui.js?v=0b752493"></script>
+    <script src="js/tc-db.js?v=0b752493"></script>
+    <script src="js/owner-app.js?v=0b752493"></script>
+    <script>
+      OwnerApp.startLogin();
+    </script>
+  </body>
+</html>

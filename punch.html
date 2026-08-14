@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="format-detection" content="telephone=no" />
+    <title>Timeally — 打刻</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/timeally.css?v=0b752493" />
+  </head>
+  <body>
+    <div class="tc-appbar">
+      <h1>Timeally</h1>
+      <span class="tc-spacer"></span>
+      <span class="tc-sub" id="who"></span>
+    </div>
+
+    <div class="tc-wrap" id="main" hidden>
+      <div class="tc-note" id="hello"></div>
+
+      <label for="t">打った時刻（直せます）</label>
+      <input type="time" id="t" step="60" />
+
+      <div class="tc-punchgrid">
+        <button class="tc-btn" id="b-in" type="button">出勤</button>
+        <button class="tc-btn" id="b-out" type="button">退勤</button>
+        <button class="tc-btn sub" id="b-bin" type="button">休憩に入る</button>
+        <button class="tc-btn sub" id="b-bout" type="button">休憩から戻る</button>
+        <button class="tc-btn sub" id="b-ain" type="button">私用で外出</button>
+        <button class="tc-btn sub" id="b-aout" type="button">外出から戻る</button>
+      </div>
+
+      <div class="tc-note">
+        押すと、いま欄に入っている時刻がそのまま残ります。あとから見返せます。
+      </div>
+
+      <p><a class="tc-btn sub wide" id="to-kiroku" href="#">自分が打った記録を見る</a></p>
+      <p><button class="tc-btn sub wide" id="b-forget" type="button">この端末を忘れる</button></p>
+    </div>
+
+    <!-- 入口（暗証番号）。★被せ物なので、テスト環境の帯は これを下げない★ -->
+    <div class="tc-overlay" id="gate">
+      <div class="tc-panel">
+        <h2 id="gate-title">はじめての方</h2>
+        <div class="tc-note" id="gate-note"></div>
+        <div id="gate-alert" class="tc-alert" hidden></div>
+
+        <div id="gate-first">
+          <label for="init">会社から渡された 最初のあいことば</label>
+          <input type="text" id="init" autocomplete="off" autocapitalize="characters" />
+          <label for="pw1">これから使う あなたのあいことば（8文字以上）</label>
+          <input type="password" id="pw1" autocomplete="new-password" />
+          <label for="pw2">もう一度</label>
+          <input type="password" id="pw2" autocomplete="new-password" />
+          <p><button class="tc-btn wide" id="b-setpw" type="button">決める</button></p>
+        </div>
+
+        <div id="gate-again" hidden>
+          <label for="pw">あなたのあいことば</label>
+          <input type="password" id="pw" autocomplete="current-password" />
+          <p><button class="tc-btn wide" id="b-verify" type="button">入る</button></p>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supa-config.js?v=0b752493"></script>
+    <script src="js/env-badge.js?v=0b752493"></script>
+    <script src="js/tc-ui.js?v=0b752493"></script>
+    <script src="js/tc-db.js?v=0b752493"></script>
+    <script src="js/emp-app.js?v=0b752493"></script>
+    <script>
+      EmpApp.startPunch();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,129 @@
+/* tc-ui.js — 画面で何度も要る小道具（Timeally）
+ * =============================================================================
+ * ★同じ物を2か所に書かない★（トースト・日付の選び方・紙の刷り方・ファイルの渡し方）
+ *
+ * ここに入れた理由がある物:
+ *   ・★印刷は「紙だけの新しい窓」で刷る★
+ *     画面に @media print を当てて刷ると、画面の都合（sticky・スクロール・被せ物）が
+ *     そのまま紙に出る。★下絵が0枚のまま印刷ダイアログが開いて真っ白★という前科もある
+ *     ので、★中身が1枚も無い時は開かない★。
+ *   ・★ファイルは js/file-out.js が唯一の渡し口★（種類を正しく付けないと iPhone で開けない）
+ *   ・★保存名は中身から作って、押す前に画面に出す★（lib/tc-name.js）
+ *   ・日付は ★カレンダーで選ぶ・内部はISO・表示は M/D★（代行請求アプリと同じ形）
+ *
+ * 【利用】window.TcUi
+ */
+(function (global) {
+  'use strict';
+
+  var d = global.document;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /* ── トースト ─────────────────────────────────────────────── */
+  var _toastEl = null, _toastTimer = null;
+  function toast(msg) {
+    if (!d) return;
+    if (!_toastEl) {
+      _toastEl = d.createElement('div');
+      _toastEl.className = 'tc-toast';
+      _toastEl.setAttribute('role', 'status');
+      d.body.appendChild(_toastEl);
+    }
+    _toastEl.textContent = String(msg || '');
+    _toastEl.style.display = 'block';
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(function () { if (_toastEl) _toastEl.style.display = 'none'; }, 3200);
+  }
+
+  /* ── 日付：カレンダーで選ぶ・内部ISO・表示 M/D ──────────────── */
+  function mdShort(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+    return m ? (+m[2]) + '/' + (+m[3]) : '';
+  }
+  /** onchange には「値を受け取る関数名（文字列）」を渡す */
+  function dateField(iso, onchangeJs) {
+    var md = mdShort(iso);
+    return '<div class="tc-date-wrap">'
+      + '<span class="tc-date-show' + (md ? '' : ' empty') + '">' + (md ? esc(md) : '日付を選ぶ') + '</span>'
+      + '<input class="tc-date-input" type="date" value="' + esc(iso || '') + '"'
+      + ' onclick="try{this.showPicker()}catch(e){}"'
+      + ' onchange="TcUi.onDateChange(this);' + (onchangeJs || '') + '">'
+      + '</div>';
+  }
+  function onDateChange(el) {
+    var s = el.parentNode.querySelector('.tc-date-show');
+    if (!s) return;
+    var md = mdShort(el.value);
+    s.textContent = md || '日付を選ぶ';
+    s.className = 'tc-date-show' + (md ? '' : ' empty');
+  }
+
+  /* ── 時刻の見せ方 ─────────────────────────────────────────── */
+  function hm(wall) { return wall ? String(wall).slice(11, 16) : ''; }
+  function minToHm(min) {
+    if (min == null || min === '') return '';
+    var m = Math.round(Number(min) || 0), sign = m < 0 ? '-' : '';
+    m = Math.abs(m);
+    return sign + Math.floor(m / 60) + ':' + ('0' + (m % 60)).slice(-2);
+  }
+  var DOW = ['日', '月', '火', '水', '木', '金', '土'];
+  function dowOf(ymd) { return DOW[new Date(ymd + 'T00:00:00Z').getUTCDay()]; }
+
+  /* ── 紙：★紙だけの新しい窓で刷る★ ─────────────────────────── */
+  /**
+   * @param {string} title 窓の題（＝紙の名前）
+   * @param {string} bodyHtml 紙の中身。★空なら開かない（白紙のダイアログを出さない）★
+   */
+  function printPaper(title, bodyHtml) {
+    var body = String(bodyHtml || '').trim();
+    if (!body) { toast('刷る中身がありません（先に対象を選んでください）'); return false; }
+    var w = global.open('', '_blank');
+    if (!w) { toast('新しい窓が開けませんでした（ポップアップの許可が要ります）'); return false; }
+    w.document.open();
+    w.document.write(
+      '<!doctype html><html lang="ja"><head><meta charset="utf-8">'
+      + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+      + '<title>' + esc(title) + '</title><style>'
+      + "body{font-family:'Noto Sans JP',system-ui,sans-serif;color:#2B2418;margin:12mm;font-size:11px;}"
+      + 'h1{font-size:15px;color:#8F6200;margin:0 0 6px;}'
+      + '.sub{font-size:11px;color:#78705C;margin:0 0 10px;display:block;'
+      + 'white-space:normal;word-break:normal;overflow-wrap:break-word;}'
+      + 'table{border-collapse:collapse;width:100%;}'
+      + 'th,td{border:1px solid #F0E0B8;padding:3px 5px;text-align:right;white-space:nowrap;}'
+      + 'th{background:#FFE08A;}td.l,th.l{text-align:left;}td.warn{color:#B3261E;}'
+      + '@page{size:A4 landscape;margin:10mm;}'
+      + '</style></head><body>' + body + '</body></html>'
+    );
+    w.document.close();
+    w.focus();
+    setTimeout(function () { try { w.print(); } catch (e) { /* 端末が拒んでも窓は残す */ } }, 300);
+    return true;
+  }
+
+  /* ── ファイルを渡す（★渡し口は file-out.js だけ★） ─────────── */
+  function deliverText(text, filename) {
+    if (!global.FileOut) { toast('ファイルの渡し口が読み込まれていません'); return Promise.reject(new Error('no FileOut')); }
+    return global.FileOut.deliver(text, filename).then(function (r) {
+      toast('「' + filename + '」を保存しました');
+      return r;
+    }, function (e) { toast('保存できませんでした: ' + e.message); throw e; });
+  }
+
+  /** 押す前に「この名前で保存します」を出すための欄を作る */
+  function nameHint(el, filename) {
+    if (!el) return;
+    el.textContent = 'この名前で保存します: ' + filename;
+  }
+
+  global.TcUi = {
+    esc: esc, toast: toast,
+    mdShort: mdShort, dateField: dateField, onDateChange: onDateChange,
+    hm: hm, minToHm: minToHm, dowOf: dowOf, DOW: DOW,
+    printPaper: printPaper, deliverText: deliverText, nameHint: nameHint,
+  };
+})(typeof window !== 'undefined' ? window : globalThis);

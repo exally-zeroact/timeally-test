@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="format-detection" content="telephone=no" />
+    <title>Timeally — 自分の記録</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/timeally.css?v=0b752493" />
+  </head>
+  <body>
+    <div class="tc-appbar">
+      <h1>Timeally</h1>
+      <span class="tc-spacer"></span>
+      <span class="tc-sub" id="who"></span>
+    </div>
+
+    <div class="tc-wrap" id="main" hidden>
+      <div class="tc-note">あなたが打った時刻を、そのまま並べています。</div>
+
+      <div class="tc-tabs">
+        <button class="tc-btn sub" id="b-prev" type="button">前の月</button>
+        <span class="tc-btn sub" id="ymlabel" style="pointer-events: none"></span>
+        <button class="tc-btn sub" id="b-next" type="button">次の月</button>
+      </div>
+
+      <div id="list"></div>
+
+      <h2>あとから入れる</h2>
+      <div class="tc-note">
+        打ち忘れた日は、ここから入れられます。入れた分は
+        <span class="tc-tag pending">お願い中</span>
+        の札が付き、会社が見てから記録に入ります。
+      </div>
+      <label for="ad">日</label>
+      <div id="ad-wrap"></div>
+      <label for="at">時刻</label>
+      <input type="time" id="at" step="60" />
+      <label for="ak">どれ</label>
+      <select id="ak">
+        <option value="in">出勤</option>
+        <option value="out">退勤</option>
+        <option value="break_in">休憩に入る</option>
+        <option value="break_out">休憩から戻る</option>
+        <option value="away_in">私用で外出</option>
+        <option value="away_out">外出から戻る</option>
+      </select>
+      <label for="ar">ひとこと（打ち忘れた理由など）</label>
+      <input type="text" id="ar" />
+      <p><button class="tc-btn wide" id="b-add" type="button">お願いを出す</button></p>
+
+      <p><a class="tc-btn sub wide" id="to-punch" href="#">打つ画面にもどる</a></p>
+    </div>
+
+    <div class="tc-overlay" id="gate">
+      <div class="tc-panel">
+        <h2>あいことば</h2>
+        <div id="gate-alert" class="tc-alert" hidden></div>
+        <label for="pw">あなたのあいことば</label>
+        <input type="password" id="pw" autocomplete="current-password" />
+        <p><button class="tc-btn wide" id="b-verify" type="button">入る</button></p>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supa-config.js?v=0b752493"></script>
+    <script src="js/env-badge.js?v=0b752493"></script>
+    <script src="js/tc-ui.js?v=0b752493"></script>
+    <script src="js/tc-db.js?v=0b752493"></script>
+    <script src="js/emp-app.js?v=0b752493"></script>
+    <script>
+      EmpApp.startKiroku();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Timeally — 一覧</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/timeally.css?v=0b752493" />
+  </head>
+  <body>
+    <div class="tc-appbar">
+      <h1>Timeally</h1>
+      <span class="tc-sub" id="coname"></span>
+      <span class="tc-spacer"></span>
+      <a class="tc-btn sub" href="shukei.html?v=0b752493">集計・印刷</a>
+    </div>
+
+    <div class="tc-wrap" id="main" hidden>
+      <div class="tc-tabs" role="tablist">
+        <button class="tc-btn sub" id="tab-list" type="button" role="tab" aria-selected="true">一覧</button>
+        <button class="tc-btn sub" id="tab-people" type="button" role="tab" aria-selected="false">従業員</button>
+        <button class="tc-btn sub" id="tab-company" type="button" role="tab" aria-selected="false">会社情報</button>
+        <span class="tc-spacer"></span>
+        <button class="tc-btn sub" id="b-signout" type="button">出る</button>
+      </div>
+
+      <!-- ① 一覧（★未承認のお願いが上★） -->
+      <section id="pane-list">
+        <h2>直しのお願い（未承認が上）</h2>
+        <div id="fixes"></div>
+
+        <h2>今月の打刻</h2>
+        <div class="tc-tabs">
+          <button class="tc-btn sub" id="b-prev" type="button">前の月</button>
+          <span class="tc-btn sub" id="ymlabel" style="pointer-events: none"></span>
+          <button class="tc-btn sub" id="b-next" type="button">次の月</button>
+        </div>
+        <div id="people-summary"></div>
+      </section>
+
+      <!-- ② 従業員（入口の発行・QR） -->
+      <section id="pane-people" hidden>
+        <h2>従業員</h2>
+        <div class="tc-note">
+          1人ずつ「入口のリンク」を作ります。リンクとあいことば（最初のあいことば）を渡すと、
+          本人がスマホで打てるようになります。
+        </div>
+        <div id="people"></div>
+
+        <h3>追加する</h3>
+        <label for="p-name">氏名（給与に渡すときに使います）</label>
+        <input type="text" id="p-name" />
+        <label for="p-no">従業員番号（任意）</label>
+        <input type="text" id="p-no" />
+        <label for="p-hire">入社日（有給の判定に使います・任意）</label>
+        <div id="p-hire-wrap"></div>
+        <label for="p-yen">時給（切り捨てた金額を出すのに使います・任意）</label>
+        <input type="number" id="p-yen" inputmode="numeric" />
+        <p><button class="tc-btn wide" id="b-addperson" type="button">この人の入口を作る</button></p>
+      </section>
+
+      <!-- ③ 会社情報 -->
+      <section id="pane-company" hidden>
+        <h2>会社情報</h2>
+        <label for="c-name">会社名</label>
+        <input type="text" id="c-name" />
+        <label for="c-close">締め日（31 は末日締め）</label>
+        <input type="number" id="c-close" inputmode="numeric" min="1" max="31" />
+        <label for="c-daily">1日の所定（分）</label>
+        <input type="number" id="c-daily" inputmode="numeric" />
+        <label for="c-week">1週の所定（分）</label>
+        <input type="number" id="c-week" inputmode="numeric" />
+        <label for="c-break">休憩の既定（分）</label>
+        <input type="number" id="c-break" inputmode="numeric" />
+        <label for="c-holiday">法定休日の曜日</label>
+        <select id="c-holiday">
+          <option value="0">日</option><option value="1">月</option><option value="2">火</option>
+          <option value="3">水</option><option value="4">木</option><option value="5">金</option>
+          <option value="6">土</option>
+        </select>
+
+        <h3>時間の見せ方（丸め方）</h3>
+        <div class="tc-note" id="round-note"></div>
+        <select id="c-round">
+          <option value="none">1分単位のまま（おすすめ）</option>
+          <option value="month">1か月の合計の端数だけ整える</option>
+          <option value="daily30">日ごとに30分へ切り下げる</option>
+        </select>
+        <div class="tc-alert" id="round-warn" hidden></div>
+
+        <h3>気づき（警告）</h3>
+        <div class="tc-note">
+          既定では出しません。ただし中では常に数えているので、あとから入れても
+          過去のぶんまでさかのぼって出ます。
+        </div>
+        <label><input type="checkbox" id="c-warn" style="width: auto; min-height: 0" /> 気づきを出す</label>
+
+        <p><button class="tc-btn wide" id="b-savecompany" type="button">保存する</button></p>
+      </section>
+    </div>
+
+    <div class="tc-overlay" id="gate" hidden>
+      <div class="tc-panel">
+        <h2>会社の入口</h2>
+        <p><a class="tc-btn wide" href="login.html?v=0b752493">ログインへ</a></p>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supa-config.js?v=0b752493"></script>
+    <script src="js/env-badge.js?v=0b752493"></script>
+    <script src="lib/tc-law.js?v=0b752493"></script>
+    <script src="lib/tc-calc.js?v=0b752493"></script>
+    <script src="lib/tc-csv.js?v=0b752493"></script>
+    <script src="lib/tc-name.js?v=0b752493"></script>
+    <script src="lib/qr.js?v=0b752493"></script>
+    <script src="js/file-out.js?v=0b752493"></script>
+    <script src="js/tc-ui.js?v=0b752493"></script>
+    <script src="js/tc-db.js?v=0b752493"></script>
+    <script src="js/owner-app.js?v=0b752493"></script>
+    <script>
+      OwnerApp.startIndex();
+    </script>
+  </body>
+</html>

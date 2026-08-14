@@ -1,0 +1,16 @@
+{
+  "name": "timeally",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Timeally（タイマリー） — タイムカード。打刻の生データは1分単位で残す（丸めない・上書きしない・消さない）",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node tests/run.js",
+    "db:apply": "node scripts/apply-schema.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.0"
+  }
+}

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Timeally — 集計・印刷</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/timeally.css?v=0b752493" />
+  </head>
+  <body>
+    <div class="tc-appbar">
+      <h1>Timeally</h1>
+      <span class="tc-sub">集計・印刷</span>
+      <span class="tc-spacer"></span>
+      <a class="tc-btn sub" href="index.html?v=0b752493">一覧へ</a>
+    </div>
+
+    <div class="tc-wrap" id="main" hidden>
+      <div class="tc-tabs">
+        <button class="tc-btn sub" id="b-prev" type="button">前の月</button>
+        <span class="tc-btn sub" id="ymlabel" style="pointer-events: none"></span>
+        <button class="tc-btn sub" id="b-next" type="button">次の月</button>
+        <select id="who" style="width: auto; min-width: 160px"></select>
+      </div>
+
+      <div class="tc-note" id="period"></div>
+      <div class="tc-alert" id="cutbox" hidden></div>
+
+      <h2>日ごと</h2>
+      <div class="tc-tablewrap"><table class="tc" id="daily"></table></div>
+
+      <h2>月計</h2>
+      <div class="tc-tablewrap"><table class="tc" id="total"></table></div>
+
+      <h2>気づき</h2>
+      <div id="warns"></div>
+
+      <h2>渡す</h2>
+      <div class="tc-note" id="namehint"></div>
+      <div class="tc-tabs">
+        <button class="tc-btn" id="b-print" type="button">印刷</button>
+        <button class="tc-btn sub" id="b-csv" type="button">この人の日ごと（CSV）</button>
+        <button class="tc-btn sub" id="b-kyuyo" type="button">給与へ渡す（全員・CSV）</button>
+        <button class="tc-btn sub" id="b-xlsx" type="button">Excel（全員）</button>
+      </div>
+    </div>
+
+    <div class="tc-overlay" id="gate" hidden>
+      <div class="tc-panel">
+        <h2>会社の入口</h2>
+        <p><a class="tc-btn wide" href="login.html?v=0b752493">ログインへ</a></p>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supa-config.js?v=0b752493"></script>
+    <script src="js/env-badge.js?v=0b752493"></script>
+    <script src="lib/tc-law.js?v=0b752493"></script>
+    <script src="lib/tc-calc.js?v=0b752493"></script>
+    <script src="lib/tc-csv.js?v=0b752493"></script>
+    <script src="lib/tc-name.js?v=0b752493"></script>
+    <script src="js/file-out.js?v=0b752493"></script>
+    <script src="js/tc-ui.js?v=0b752493"></script>
+    <script src="js/tc-db.js?v=0b752493"></script>
+    <script src="js/owner-app.js?v=0b752493"></script>
+    <script>
+      OwnerApp.startShukei();
+    </script>
+  </body>
+</html>
