@@ -106,6 +106,54 @@ T('★端数（基発150号）1時間未満の端数だけ・30分未満切捨/3
   eq(LAW.roundMonthFraction(2700 + 30), 2760);
 });
 
+/* ★丸めの線（司さん 2026-08-14「パターンを増やす。ただし法律の線を先に引け」）★
+   出典（確認日 2026-08-14・どちらも mhlw.go.jp）:
+     静岡労働局 … 「1日ごとに、一定期間に満たない労働時間を一律に切り捨て、
+                    その分の賃金を支払わないことは、労働基準法違反となります。」
+       https://jsite.mhlw.go.jp/shizuoka-roudoukyoku/roudoukyoku/roudou/kantoku/newpage_00977.html
+       ★違反の例として「1日の時間外の15分未満を一律に切り捨て」「残業申請を30分単位」★
+     鹿児島労働局 … 認められるのは「1か月における時間外労働、休日労働および深夜業の
+                    おのおのの時間数の合計に1時間未満の端数がある場合に、
+                    30分未満の端数を切り捨て、それ以上を1時間に切り上げること」だけ
+       https://jsite.mhlw.go.jp/kagoshima-roudoukyoku/yokuaru_goshitsumon/kyushokuchu/0310.html */
+T('★丸めない（1分単位）は いつでも線の内', () => {
+  eq(LAW.roundingLegality({ unitMin: 1 }).code, 'no_round');
+  eq(LAW.roundingLegality({ unitMin: 1, dir: 'floor', scope: 'day' }).ok, true);
+});
+
+T('★★日ごとに削るのは線の外（15分でも30分でも）★★', () => {
+  [5, 10, 15, 30].forEach((u) => {
+    eq(LAW.roundingLegality({ unitMin: u, dir: 'floor', scope: 'day' }).ok, false, u + '分 切り捨て 日ごと');
+    eq(LAW.roundingLegality({ unitMin: u, dir: 'floor', scope: 'day' }).code, 'day_cut');
+    eq(LAW.roundingLegality({ unitMin: u, dir: 'round', scope: 'day' }).ok, false, u + '分 四捨五入 日ごと');
+  });
+});
+
+T('★切り上げだけは線の内（労働者に不利にならない＝多く払う側）', () => {
+  [5, 15, 30].forEach((u) => {
+    ['day', 'month'].forEach((s) => {
+      eq(LAW.roundingLegality({ unitMin: u, dir: 'ceil', scope: s }).code, 'favorable');
+    });
+  });
+});
+
+T('★★認められている形は1つだけ＝1か月の合計・1時間未満の端数・30分で分ける★★', () => {
+  eq(LAW.roundingLegality({ unitMin: 60, dir: 'round', scope: 'month' }).code, 'legal_month');
+  /* ★切り捨てだけ★ は通達の範囲外（セットで初めて認められる） */
+  eq(LAW.roundingLegality({ unitMin: 60, dir: 'floor', scope: 'month' }).code, 'month_other');
+  /* ★単位が1時間でない★ 物も範囲外 */
+  eq(LAW.roundingLegality({ unitMin: 30, dir: 'round', scope: 'month' }).code, 'month_other');
+  eq(LAW.roundingLegality({ unitMin: 15, dir: 'floor', scope: 'month' }).code, 'month_other');
+});
+
+T('★端数の分かれ目は30分・単位は1時間（数は lib に1か所）', () => {
+  eq(LAW.MONTH_FRACTION_HALF_MIN, 30);
+  eq(LAW.MONTH_FRACTION_UNIT_MIN, 60);
+  eq(LAW.ROUND_UNITS.join(','), '1,5,10,15,30');
+  eq(LAW.ROUND_DIRS.join(','), 'floor,ceil,round');
+  eq(LAW.ROUND_SCOPES.join(','), 'day,month');
+});
+
 T('記録の保存 5年（当分の間3年）', () => {
   eq(LAW.KEEP_YEARS, 5);
   eq(LAW.KEEP_YEARS_FOR_NOW, 3);
@@ -136,6 +184,18 @@ if (process.argv.includes('--self-test')) {
     const wrongOk = (m) => m <= 6000;
     eq(wrongOk(6000), true, '作り物が間違っていない＝この検査が空振り');
     eq(LAW.LIMIT.singleMonthUnderMin, 6000, '★本物の値が動いた★');
+  });
+  S('④「日ごとの切り捨ても認める」作り物は 線の外を内と言う（本物は外と言う）', () => {
+    const wrong = () => ({ ok: true, code: 'ok' });
+    eq(wrong().ok, true, '作り物が間違っていない＝この検査が空振り');
+    eq(LAW.roundingLegality({ unitMin: 15, dir: 'floor', scope: 'day' }).ok, false,
+      '★本物が「日ごとに15分切り捨て」を通している★');
+  });
+  S('⑤「1か月なら何でも良い」作り物は 切り捨てだけを通す（本物は通さない）', () => {
+    const wrong = (r) => ({ ok: r.scope === 'month' });
+    eq(wrong({ scope: 'month' }).ok, true, '作り物が間違っていない＝この検査が空振り');
+    eq(LAW.roundingLegality({ unitMin: 60, dir: 'floor', scope: 'month' }).ok, false,
+      '★本物が「1か月・切り捨てだけ」を通している★');
   });
   S('③ 有給を「1年ごとに1日ずつ」にした作り物は 3年6か月で13日（本物は14日）', () => {
     const wrong = (m) => (m < 6 ? 0 : Math.min(20, 10 + Math.floor((m - 6) / 12)));

@@ -57,14 +57,20 @@ export function check(sql) {
   const { outer, bodies } = splitBodies(clean);
   const flat = outer.replace(/\s+/g, ' ').toLowerCase();
 
-  /* ① 消す系 — ★policy と function の drop だけは許す（作り直しに要る）★ */
+  /* ① 消す系 — ★policy / function / constraint の drop だけは許す★
+       policy・function … 作り直し（create or replace の前）に要る
+       constraint       … ★決まりの付け替えに要る。★行もデータも1バイトも消えない★
+                          （選べる値を増やす時に必要。列を落とすのとは別物） */
   const drops = flat.match(/\bdrop\s+(\w+)/g) || [];
+  const DROPPABLE = ['policy', 'function', 'constraint'];
   for (const d of drops) {
     const what = d.split(/\s+/)[1];
-    if (what !== 'policy' && what !== 'function') bad.push(`消す系が混ざっている: ${d}`);
+    if (!DROPPABLE.includes(what)) bad.push(`消す系が混ざっている: ${d}`);
   }
   if (/\btruncate\b/.test(flat)) bad.push('truncate が混ざっている');
-  if (/\balter\s+table\b[^;]*\bdrop\b/.test(flat)) bad.push('alter table … drop（列を落とす）が混ざっている');
+  /* ★列を落とすのは今も禁止★（constraint の drop とは分けて見る） */
+  if (/\balter\s+table\b[^;]*\bdrop\s+column\b/.test(flat)) bad.push('alter table … drop column（列を落とす）が混ざっている');
+  if (/\balter\s+table\b[^;]*\bdrop\b(?!\s+(constraint|column))/.test(flat)) bad.push('alter table … drop（想定外）が混ざっている');
 
   /* ② 別のアプリの部屋 */
   for (const s of FOREIGN_SCHEMAS) {
@@ -123,6 +129,11 @@ begin update timeally.tc_x set id=id; end $$;`;
   T('drop table を混ぜたら止まる', () => must(OK + '\ndrop table timeally.tc_x;', 'drop table'));
   T('truncate を混ぜたら止まる', () => must(OK + '\ntruncate timeally.tc_x;', 'truncate'));
   T('alter table … drop column を混ぜたら止まる', () => must(OK + '\nalter table timeally.tc_x drop column id;', 'drop column'));
+  T('★決まりの付け替え（drop constraint）は通る（データは消えない）', () =>
+    pass(OK + '\nalter table timeally.tc_x drop constraint if exists tc_x_a_check;'
+      + '\nalter table timeally.tc_x add constraint tc_x_a_check check (a in (1,2));'));
+  T('★列を足すのは通る（add column if not exists）', () =>
+    pass(OK + '\nalter table timeally.tc_x add column if not exists b int not null default 1;'));
   T('★他のアプリの部屋に当てたら止まる', () => must(OK + '\nselect * from kyuyo.pay_employees;', '他の部屋'));
   T('★窓口の security_invoker が抜けたら止まる（with が無い）', () =>
     must('create table if not exists timeally.tc_y(id uuid);\ncreate or replace view public.tc_y as select * from timeally.tc_y;\nalter view public.tc_y set (security_invoker = true);', 'with 抜け'));

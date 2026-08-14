@@ -79,7 +79,9 @@
       q('b-next').onclick = function () { shiftYm(1); };
       q('b-addperson').onclick = addPerson;
       q('b-savecompany').onclick = saveCompany;
-      q('c-round').onchange = drawRoundNote;
+      ['c-round', 'c-runit', 'c-rdir', 'c-rscope'].forEach(function (id) {
+        var el = q(id); if (el) el.onchange = drawRoundNote;
+      });
       var hw = q('p-hire-wrap');
       if (hw) hw.innerHTML = U.dateField('', '');
       reload();
@@ -121,7 +123,8 @@
     var c = st.company || {};
     return {
       dailyStdMin: c.daily_std_min, weekLegalMin: c.week_legal_min, closeDay: c.close_day,
-      rounding: c.rounding, legalHolidayDow: c.legal_holiday_dow, weekStartDow: c.week_start_dow,
+      rounding: c.rounding, roundUnitMin: c.round_unit_min, roundDir: c.round_dir, roundScope: c.round_scope,
+      legalHolidayDow: c.legal_holiday_dow, weekStartDow: c.week_start_dow,
       sme: c.sme, warnOn: c.warn_on,
     };
   }
@@ -291,53 +294,138 @@
   }
 
   /* ── ③ 会社情報 ───────────────────────────────────────────── */
+  /* ★入れるのは「時間」・中で持つのは「分」★（司さん 2026-08-14）
+     欄の下に「＝◯分」を出す＝★入れた瞬間に、中でどう持つかが見える★ */
+  var HOUR_FIELDS = [
+    { id: 'c-daily', col: 'daily_std_min', def: 480, maxMin: 24 * 60, label: '1日の所定' },
+    { id: 'c-week', col: 'week_std_min', def: 2400, maxMin: 24 * 7 * 60, label: '1週の所定' },
+    { id: 'c-break', col: 'break_default_min', def: 60, maxMin: 24 * 60, label: '休憩の既定' },
+  ];
+  function drawHourHint(f) {
+    var el = q(f.id + '-hint');
+    if (!el) return;
+    var r = global.TcHours.read(q(f.id).value, { maxMin: f.maxMin });
+    if (r.error === 'empty') { el.textContent = f.label + 'を入れてください（例: 8 / 7.5 / 8:30）'; return; }
+    if (r.error === 'unreadable') { el.textContent = '読めません。数字で入れてください（例: 8 / 7.5 / 8:30）'; return; }
+    if (r.error === 'too_big') { el.textContent = '大きすぎます（' + global.TcHours.toText(f.maxMin) + '時間まで）'; return; }
+    el.textContent = '＝ ' + r.min + '分（中ではこの分数で数えます）';
+  }
+
   function fillCompany() {
     var c = st.company || {};
     var set = function (id, v) { var el = q(id); if (el) el.value = v == null ? '' : v; };
     set('c-name', c.name); set('c-close', c.close_day == null ? 31 : c.close_day);
-    set('c-daily', c.daily_std_min == null ? 480 : c.daily_std_min);
-    set('c-week', c.week_std_min == null ? 2400 : c.week_std_min);
-    set('c-break', c.break_default_min == null ? 60 : c.break_default_min);
+    HOUR_FIELDS.forEach(function (f) {
+      set(f.id, global.TcHours.toText(c[f.col] == null ? f.def : c[f.col]));
+      var el = q(f.id);
+      if (el && !el._wired) { el._wired = true; el.oninput = function () { drawHourHint(f); }; }
+      drawHourHint(f);
+    });
     set('c-holiday', c.legal_holiday_dow == null ? 0 : c.legal_holiday_dow);
-    set('c-round', c.rounding || 'none');
+
+    /* 単位の選択肢は lib から作る（画面に数字を書き並べない） */
+    var unitSel = q('c-runit');
+    if (unitSel && !unitSel.options.length) {
+      unitSel.innerHTML = global.TcLaw.ROUND_UNITS.map(function (u) {
+        return '<option value="' + u + '">' + (u === 1 ? '1分（丸めない）' : u + '分') + '</option>';
+      }).join('');
+    }
+    /* ★古い設定 daily30 は「自分で決める（30分・切り捨て・日ごと）」と同じ物★
+       画面ではそちらに寄せる（保存すると custom になる。数え方は1分も変わらない） */
+    var mode = c.rounding || 'none';
+    var r = global.TcCalc.normalizeRound(c ? {
+      rounding: mode, roundUnitMin: c.round_unit_min, roundDir: c.round_dir, roundScope: c.round_scope,
+    } : {});
+    set('c-round', mode === 'daily30' ? 'custom' : mode);
+    set('c-runit', r.unitMin); set('c-rdir', r.dir); set('c-rscope', r.scope);
+
     var w = q('c-warn'); if (w) w.checked = !!c.warn_on;
     var cn = q('coname'); if (cn) cn.textContent = c.name || '';
     drawRoundNote();
   }
-  /* ★率や分数を説明文に直書きしない★（lib/tc-law.js から作る＝年度で取り残されない） */
+
+  /** 画面で選んでいる丸め方 */
+  function pickedRound() {
+    var mode = (q('c-round') || {}).value || 'none';
+    return global.TcCalc.normalizeRound({
+      rounding: mode,
+      roundUnitMin: Number((q('c-runit') || {}).value || 1),
+      roundDir: (q('c-rdir') || {}).value || 'floor',
+      roundScope: (q('c-rscope') || {}).value || 'day',
+    });
+  }
+  /* ★率や分数を説明文に直書きしない★（lib/tc-law.js の数から作る＝年度で取り残されない）
+     ★止めない。選ばせる。ただし黙って選ばせない。★ */
   function drawRoundNote() {
     var LAW = global.TcLaw;
-    var v = (q('c-round') || {}).value || 'none';
-    var n = q('round-note'), a = q('round-warn');
+    var mode = (q('c-round') || {}).value || 'none';
+    var r = pickedRound();
+    var custom = q('round-custom');
+    if (custom) custom.hidden = mode !== 'custom';
+
+    var n = q('round-note');
     if (n) {
       n.textContent = '打った時刻そのもの（原本）は、どれを選んでも1分単位のまま残ります。'
         + '変わるのは 集計の見せ方だけです。';
     }
-    if (!a) return;
-    if (v === 'month') {
-      a.hidden = true;
-    } else if (v === 'daily30') {
-      a.hidden = false;
-      a.textContent = '日ごとに切り下げる決め方は、法律の考え方から外れます'
-        + '（時間は1分単位で払うのが原則）。選んだ場合は、切り捨てた時間と金額を'
-        + '集計の画面に必ず出します。';
-    } else {
-      a.hidden = true;
+
+    var law = LAW.roundingLegality(r);
+    var a = q('round-warn');
+    if (a) {
+      if (law.ok) { a.hidden = true; a.textContent = ''; } else {
+        a.hidden = false;
+        a.textContent = law.code === 'day_cut'
+          ? '★これは法律の上ではできない扱いです★　1日ごとに、一定時間に満たない労働時間を'
+            + '一律に切り捨てて その分の賃金を払わないのは 労働基準法違反になります'
+            + '（労働時間は1分単位が原則）。選ぶことはできますが、'
+            + '切り捨てた時間と金額を 集計の画面に必ず出します。'
+          : '★認められている形とは違います★　1か月の合計に当てる形で認められているのは、'
+            + '1時間未満の端数を ' + LAW.MONTH_FRACTION_HALF_MIN + '分で分ける物'
+            + '（' + LAW.MONTH_FRACTION_HALF_MIN + '分未満は切り捨て・'
+            + LAW.MONTH_FRACTION_HALF_MIN + '分以上は切り上げ）だけです。'
+            + '切り捨てだけ、単位が違う、はその形から外れます。';
+      }
+    }
+
+    /* ★言葉ではなく 実際の数で見せる★（同じ関数で数えた結果を出す） */
+    var ex = q('round-example');
+    if (ex) {
+      var C = global.TcCalc;
+      var samples = [29, 30, 31, 59, 60, 61];
+      var line = samples.map(function (m) { return m + '→' + C.adjust(m, r.unitMin, r.dir); }).join('分 / ') + '分';
+      ex.textContent = (law.code === 'legal_month' ? '★これは認められている形です★（' : '')
+        + (r.unitMin <= 1 ? '丸めません（1分単位のまま）'
+          : (r.scope === 'day' ? '日ごとの実労働' : '1か月の 時間外・深夜・休日 それぞれの合計')
+            + 'に当てます')
+        + (law.code === 'legal_month' ? '）' : '')
+        + (r.unitMin <= 1 ? '' : '　例: ' + line);
     }
   }
+
   function saveCompany() {
-    DB.saveCompany({
+    /* ★時間で入れて 分で持つ★。読めない欄が1つでもあれば ★保存しない★（黙って0にしない） */
+    var vals = {}, bad = [];
+    HOUR_FIELDS.forEach(function (f) {
+      var r = global.TcHours.read(q(f.id).value, { maxMin: f.maxMin });
+      if (r.error) bad.push(f.label);
+      else vals[f.col] = r.min;
+    });
+    if (bad.length) { U.toast(bad.join('・') + ' を読めません（例: 8 / 7.5 / 8:30）'); return; }
+
+    var mode = q('c-round').value;
+    var r2 = pickedRound();
+    DB.saveCompany(Object.assign({
       account_id: st.user.id,
       name: q('c-name').value.trim(),
       close_day: Number(q('c-close').value) || 31,
-      daily_std_min: Number(q('c-daily').value) || 480,
-      week_std_min: Number(q('c-week').value) || 2400,
-      break_default_min: Number(q('c-break').value) || 0,
       legal_holiday_dow: Number(q('c-holiday').value) || 0,
-      rounding: q('c-round').value,
+      rounding: mode,
+      round_unit_min: r2.unitMin,
+      round_dir: r2.dir,
+      round_scope: r2.scope,
       warn_on: !!q('c-warn').checked,
       updated_at: new Date().toISOString(),
-    }).then(function () { U.toast('保存しました'); reload(); })
+    }, vals)).then(function () { U.toast('保存しました'); reload(); })
       .catch(function (e) { U.toast('保存できませんでした（' + e.message + '）'); });
   }
 
@@ -427,7 +515,7 @@
     /* ★切り捨てた時間と金額は必ず出す（黙って消さない）★ */
     var box = q('cutbox');
     var cut = s.cut;
-    if (s.rounding === 'none' || (!cut.workedMin && !cut.otMin && !cut.nightMin && !cut.holidayMin)) {
+    if (s.round.unitMin <= 1 || (!cut.workedMin && !cut.otMin && !cut.nightMin && !cut.holidayMin)) {
       box.hidden = true;
     } else {
       box.hidden = false;

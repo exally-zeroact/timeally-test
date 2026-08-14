@@ -163,6 +163,92 @@ T('★none / month / daily30 の3つとも 保存則が成り立つ（同じ打�
   });
 });
 
+/* ── 丸めのパターンを増やした分（司さん 2026-08-14） ───────────────── */
+T('★単位に合わせる（切り捨て/切り上げ/四捨五入）の境界', () => {
+  [[29, 30, 0, 30, 30], [30, 30, 30, 30, 30], [31, 30, 30, 60, 30]].forEach(([m, u, fl, ce, ro]) => {
+    eq(C.adjust(m, u, 'floor'), fl, m + '分を' + u + '分で切り捨て');
+    eq(C.adjust(m, u, 'ceil'), ce, m + '分を' + u + '分で切り上げ');
+    eq(C.adjust(m, u, 'round'), ro, m + '分を' + u + '分で四捨五入');
+  });
+  eq(C.adjust(29, 60, 'round'), 0, '29分→0（通達）');
+  eq(C.adjust(30, 60, 'round'), 60, '★30分ちょうどは切り上げ（通達）★');
+  eq(C.adjust(31, 60, 'round'), 60);
+  eq(C.adjust(7, 1, 'floor'), 7, '単位1分は何もしない');
+});
+
+T('★★「1か月の合計の端数だけ整える」＝ 単位60分の四捨五入 と1分も違わない★★', () => {
+  const bad = [];
+  for (let m = 0; m <= 600; m++) {
+    if (C.adjust(m, 60, 'round') !== LAW.roundMonthFraction(m)) bad.push(m);
+  }
+  eq(bad.length, 0, 'ズレた分: ' + bad.slice(0, 8).join(','));
+  console.log('     実測: 0〜600分 の 601通りすべて 通達と一致');
+});
+
+T('★古い設定 daily30 は 自分で決める(30分・切り捨て・日ごと) と同じ物', () => {
+  eq(JSON.stringify(C.normalizeRound({ rounding: 'daily30' })),
+    JSON.stringify({ unitMin: 30, dir: 'floor', scope: 'day' }));
+  const ps = dayOf('2026-08-03', 489);
+  const a = run(ps, 'daily30');
+  const b = C.summarize({ ym: '2026-08', punches: ps, shifts: [], fixes: [],
+    company: { rounding: 'custom', roundUnitMin: 30, roundDir: 'floor', roundScope: 'day', hourlyYen: 1200 } });
+  eq(a.month.workedMin, b.month.workedMin);
+  eq(a.cut.workedMin, b.cut.workedMin);
+  eq(a.cut.yen, b.cut.yen);
+});
+
+T('★★増やしたパターン 全部で 保存則が成り立つ（単位×向き×かける先）★★', () => {
+  let ps = [];
+  ['2026-08-03', '2026-08-04', '2026-08-05'].forEach((d) => { ps = ps.concat(dayOf(d, 507)); });
+  ps = ps.concat([P('2026-08-08T21:00', 'in'), P('2026-08-09T02:00', 'out')]);   // 深夜あり
+  ps = ps.concat([P('2026-08-09T09:00', 'in'), P('2026-08-09T15:00', 'out')]);   // 日曜=法定休日
+  let n = 0;
+  [1, 5, 10, 15, 30].forEach((unit) => {
+    ['floor', 'ceil', 'round'].forEach((dir) => {
+      ['day', 'month'].forEach((scope) => {
+        const s = C.summarize({ ym: '2026-08', punches: ps, shifts: [], fixes: [],
+          company: { rounding: 'custom', roundUnitMin: unit, roundDir: dir, roundScope: scope, hourlyYen: 1200 } });
+        try { conserved(s); } catch (e) {
+          throw new Error(unit + '分/' + dir + '/' + scope + ': ' + e.message);
+        }
+        n++;
+      });
+    });
+  });
+  console.log('     実測: ' + n + '通りすべて 生 ＝ 丸め後 ＋ 切り捨て分');
+});
+
+T('★切り上げは「切り捨て分」がマイナスになる（増えた分を隠さない）', () => {
+  const s = C.summarize({ ym: '2026-08', punches: dayOf('2026-08-03', 489), shifts: [], fixes: [],
+    company: { rounding: 'custom', roundUnitMin: 30, roundDir: 'ceil', roundScope: 'day', hourlyYen: 1200 } });
+  eq(s.raw.workedMin, 489);
+  eq(s.month.workedMin, 510, '30分単位に切り上げ');
+  eq(s.cut.workedMin, -21, '増えた21分をマイナスで持つ');
+  conserved(s);
+});
+
+T('★切り上げでも 深夜を勝手に増やさない（働いていない時間帯を作らない）', () => {
+  const ps = [P('2026-08-03T21:00', 'in'), P('2026-08-03T23:49', 'out')];   // 深夜 109分
+  const raw = C.summarize({ ym: '2026-08', punches: ps, shifts: [], fixes: [], company: {} });
+  const up = C.summarize({ ym: '2026-08', punches: ps, shifts: [], fixes: [],
+    company: { rounding: 'custom', roundUnitMin: 30, roundDir: 'ceil', roundScope: 'day' } });
+  eq(raw.month.nightMin, 109);
+  eq(up.month.workedMin, 180, '169分→180分に切り上げ');
+  eq(up.month.nightMin, 109, '★深夜は増やさない★');
+});
+
+T('★法律の線を summarize が持って返す（画面はこれを見る）', () => {
+  const mk = (co) => C.summarize({ ym: '2026-08', punches: [], shifts: [], fixes: [], company: co });
+  eq(mk({}).legality.code, 'no_round');
+  eq(mk({ rounding: 'month' }).legality.code, 'legal_month');
+  eq(mk({ rounding: 'daily30' }).legality.code, 'day_cut');
+  eq(mk({ rounding: 'daily30' }).legality.ok, false);
+  eq(mk({ rounding: 'custom', roundUnitMin: 15, roundDir: 'floor', roundScope: 'day' }).legality.code, 'day_cut');
+  eq(mk({ rounding: 'custom', roundUnitMin: 15, roundDir: 'ceil', roundScope: 'day' }).legality.code, 'favorable');
+  eq(mk({ rounding: 'custom', roundUnitMin: 30, roundDir: 'floor', roundScope: 'month' }).legality.code, 'month_other');
+  eq(mk({ rounding: 'custom', roundUnitMin: 60, roundDir: 'round', roundScope: 'month' }).legality.code, 'legal_month');
+});
+
 /* ── self-test：わざと壊して赤になるか ───────────────────────────── */
 if (process.argv.includes('--self-test')) {
   console.log('\n[tc-round --self-test] わざと壊して赤になるか');

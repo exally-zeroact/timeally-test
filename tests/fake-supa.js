@@ -16,7 +16,9 @@ function rowsFor(table, seed) {
     return [{
       account_id: 'u1', name: 'テスト商事', close_day: 31, daily_std_min: 480,
       week_std_min: 2400, week_legal_min: 2400, break_default_min: 60,
-      legal_holiday_dow: 0, week_start_dow: 0, rounding: s.rounding || 'none',
+      legal_holiday_dow: 0, week_start_dow: 0,
+      rounding: s.rounding || 'none',
+      round_unit_min: s.roundUnitMin || 1, round_dir: s.roundDir || 'floor', round_scope: s.roundScope || 'day',
       warn_on: !!s.warnOn, sme: true,
       created_at: '2026-08-01T00:00:00Z', updated_at: '2026-08-01T00:00:00Z',
     }];
@@ -48,14 +50,16 @@ function rowsFor(table, seed) {
   return [];
 }
 
-function makeQuery(table, calls, seed) {
+function makeQuery(table, calls, seed, saved) {
   var q = {};
+  /* ★何を送ったかを取っておく★（押しただけで終わっていないか・中身が正しいかを見る） */
+  var keep = function (kind, v) { [].concat(v).forEach(function (row) { saved.push({ table: table, kind: kind, row: row }); }); };
   var chain = ['select', 'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'is', 'not', 'in', 'order', 'limit'];
   chain.forEach(function (m) { q[m] = function () { calls.push(table + '.' + m); return q; }; });
   q.range = function () { calls.push(table + '.range'); return q; };
-  q.insert = function (v) { calls.push(table + '.insert'); q._data = [].concat(v); return q; };
-  q.update = function (v) { calls.push(table + '.update'); q._data = [Object.assign({}, rowsFor(table, seed)[0], v)]; return q; };
-  q.upsert = function (v) { calls.push(table + '.upsert'); q._data = [].concat(v); return q; };
+  q.insert = function (v) { calls.push(table + '.insert'); keep('insert', v); q._data = [].concat(v); return q; };
+  q.update = function (v) { calls.push(table + '.update'); keep('update', v); q._data = [Object.assign({}, rowsFor(table, seed)[0], v)]; return q; };
+  q.upsert = function (v) { calls.push(table + '.upsert'); keep('upsert', v); q._data = [].concat(v); return q; };
   q.then = function (res, rej) {
     var data = q._data || rowsFor(table, seed);
     return Promise.resolve({ data: data, error: null }).then(res, rej);
@@ -65,11 +69,12 @@ function makeQuery(table, calls, seed) {
 }
 
 function createFake(seed) {
-  var calls = [];
+  var calls = [], saved = [];
   seed = seed || {};
   return {
     _calls: calls,
-    from: function (t) { calls.push('from:' + t); return makeQuery(t, calls, seed); },
+    _saved: saved,
+    from: function (t) { calls.push('from:' + t); return makeQuery(t, calls, seed, saved); },
     rpc: function (name, args) {
       calls.push('rpc:' + name);
       var out = { ok: true };

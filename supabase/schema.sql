@@ -37,9 +37,17 @@ create table if not exists timeally.tc_companies (
   break_default_min int  not null default 60,      -- 休憩の既定（分）
   legal_holiday_dow int  not null default 0,       -- 法定休日の曜日（0=日）
   week_start_dow    int  not null default 0,       -- 週の起算（0=日）
-  -- ★丸め方。none=1分単位(既定・適法) / month=月合計の端数(適法) / daily30=日ごと30分切下(客の希望)★
-  --   ★daily30 は適法ではない。だから「切り捨てた時間と金額」を必ず記録して社長に見せる★
-  rounding          text not null default 'none' check (rounding in ('none','month','daily30')),
+  -- ★丸め方★
+  --   none    = 1分単位（既定・適法）
+  --   month   = ★通達そのもの★（1か月の合計・1時間未満の端数を30分で分ける／基発150号・適法）
+  --   daily30 = 日ごと30分切り下げ（古い設定。custom(30/floor/day) と同じ・★適法ではない★）
+  --   custom  = 単位 × 向き × かける先 を会社が選ぶ（下の3列）
+  -- ★どれを選んでも 打った時刻(tc_punch)は1分単位のまま★。変わるのは見せ方だけ。
+  -- ★労働者に不利になる組み合わせは画面で注意を出す（止めない・黙って選ばせない）★
+  rounding          text not null default 'none' check (rounding in ('none','month','daily30','custom')),
+  round_unit_min    int  not null default 1  check (round_unit_min in (1,5,10,15,30,60)),
+  round_dir         text not null default 'floor' check (round_dir in ('floor','ceil','round')),
+  round_scope       text not null default 'day'   check (round_scope in ('day','month')),
   -- ★警告は既定=切。ただし中では常に数えている（入れた瞬間に過去の分も出る）★
   warn_on           boolean not null default false,
   sme               boolean not null default true, -- 中小企業か（60時間超50%は2023-04-01から）
@@ -78,6 +86,28 @@ create table if not exists timeally.tc_pub (
   created_at    timestamptz not null default now()
 );
 create index if not exists idx_tc_pub_account on timeally.tc_pub(account_id);
+
+-- ★もう作ってある倉庫にも足す（作り直さない）★
+--   `create table if not exists` は ★既に在る表には何もしない★ので、
+--   列と決まりは ここで明示的に足す。★行は1行も動かない★。
+--   ・丸めの列3つ（無ければ足す）
+--   ・rounding の決まりを 'custom' も通す形に付け替える
+--     （★中身は消えない★。制約の名前を差し替えるだけ。列は落とさない）
+alter table timeally.tc_companies add column if not exists round_unit_min int  not null default 1;
+alter table timeally.tc_companies add column if not exists round_dir      text not null default 'floor';
+alter table timeally.tc_companies add column if not exists round_scope    text not null default 'day';
+alter table timeally.tc_companies drop constraint if exists tc_companies_rounding_check;
+alter table timeally.tc_companies add  constraint tc_companies_rounding_check
+  check (rounding in ('none','month','daily30','custom'));
+alter table timeally.tc_companies drop constraint if exists tc_companies_round_unit_min_check;
+alter table timeally.tc_companies add  constraint tc_companies_round_unit_min_check
+  check (round_unit_min in (1,5,10,15,30,60));
+alter table timeally.tc_companies drop constraint if exists tc_companies_round_dir_check;
+alter table timeally.tc_companies add  constraint tc_companies_round_dir_check
+  check (round_dir in ('floor','ceil','round'));
+alter table timeally.tc_companies drop constraint if exists tc_companies_round_scope_check;
+alter table timeally.tc_companies add  constraint tc_companies_round_scope_check
+  check (round_scope in ('day','month'));
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- ③ tc_punch … ★打刻の生データ＝原本★

@@ -51,6 +51,10 @@ jobs:
         run: node tests/tc-round.test.mjs
       - name: ★丸めの保存則 (わざと切り捨て分を捨てて赤になるかの自己確認)
         run: node tests/tc-round.test.mjs --self-test
+      - name: ★時間で入れて分で持つ (0/0.5/7.5/8/24・8:30・全角・空欄・★往復で1分もズレない★)
+        run: node tests/tc-hours.test.mjs
+      - name: ★時間で入れて分で持つ (「8時間30分」を830時間にする作り物で赤になるかの自己確認)
+        run: node tests/tc-hours.test.mjs --self-test
 
       # ── 給与への出口（繋ぐ前に合格条件を確かめる） ─────────────────
       - name: ★給与への受け口 (出したCSVを kintai-csv.js に実際に食わせる)

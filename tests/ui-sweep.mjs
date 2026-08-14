@@ -123,7 +123,9 @@ function openPage(file, search, seed) {
    実際に人がやる手順（入れてから押す）に合わせる。 */
 const PREFILL = {
   'login.html': { email: 'a@example.com', pw: 'password123' },
-  'index.html': { 'p-name': 'テスト 太郎', 'p-no': 'A02', 'p-yen': '1100', 'c-name': 'テスト商事' },
+  /* ★設定は「時間」で入れる★（分ではない。8 / 40 / 1） */
+  'index.html': { 'p-name': 'テスト 太郎', 'p-no': 'A02', 'p-yen': '1100', 'c-name': 'テスト商事',
+    'c-daily': '8', 'c-week': '40', 'c-break': '1' },
   'kiroku.html': { at: '09:00', ar: '打ち忘れ' },
 };
 
@@ -217,6 +219,44 @@ T('★従業員の追加・会社情報の保存が 実際に倉庫へ書きに�
   const c = r.page.fake._calls;
   ok(c.indexOf('tc_pub.insert') >= 0, '従業員の追加が書きに行っていない');
   ok(c.indexOf('tc_companies.upsert') >= 0, '会社情報の保存が書きに行っていない');
+});
+
+T('★★「時間」で入れた設定が「分」で倉庫へ行く（8→480 / 40→2400 / 1→60）★★', () => {
+  const r = results.filter((x) => x.file === 'index.html')[0];
+  const w = r.page.w;
+  ok(w.TcHours, 'lib/tc-hours.js を読み込んでいない');
+  /* 画面の欄が ★時間★ で出ている（分ではない） */
+  ok(/（時間）/.test(w.document.querySelector('label[for="c-daily"]').textContent), '欄が「分」のまま');
+  /* 押した時に何を送ったか（保存の中身）を実際に見る */
+  const sent = r.page.fake._saved.filter((x) => x.table === 'tc_companies').pop();
+  ok(sent, '会社情報を送っていない');
+  ok(sent.row.daily_std_min === 480, '1日の所定が ' + sent.row.daily_std_min + '（480のはず）');
+  ok(sent.row.week_std_min === 2400, '1週の所定が ' + sent.row.week_std_min + '（2400のはず）');
+  ok(sent.row.break_default_min === 60, '休憩の既定が ' + sent.row.break_default_min + '（60のはず）');
+  console.log('     実測: 8→' + sent.row.daily_std_min + ' / 40→' + sent.row.week_std_min + ' / 1→' + sent.row.break_default_min);
+});
+
+T('★丸めの選び方が画面に出ていて、法律の外なら注意が出る', () => {
+  const r = results.filter((x) => x.file === 'index.html')[0];
+  const w = r.page.w, d = w.document;
+  ok(d.getElementById('c-runit').options.length >= 4, '単位の選択肢が無い');
+  ok(d.getElementById('c-rdir').options.length === 3, '向きの選択肢が3つでない');
+  ok(d.getElementById('c-rscope').options.length === 2, 'かける先の選択肢が2つでない');
+  /* ★日ごと・切り捨て★ を選んだら 注意が出るか（実際に選んで確かめる） */
+  d.getElementById('c-round').value = 'custom';
+  d.getElementById('c-runit').value = '15';
+  d.getElementById('c-rdir').value = 'floor';
+  d.getElementById('c-rscope').value = 'day';
+  d.getElementById('c-round').onchange();
+  const warn = d.getElementById('round-warn');
+  ok(!warn.hidden, '★日ごとに15分切り捨て を選んでも注意が出ない★');
+  ok(/法律の上ではできない/.test(warn.textContent), '注意の中身が違う: ' + warn.textContent);
+  ok(!d.getElementById('round-custom').hidden, '細かい選択肢が出ていない');
+  /* ★認められている形★ を選んだら 注意は消える */
+  d.getElementById('c-round').value = 'month';
+  d.getElementById('c-round').onchange();
+  ok(d.getElementById('round-warn').hidden, '認められている形なのに注意が出ている');
+  ok(/認められている形です/.test(d.getElementById('round-example').textContent), '「認められている形」と言っていない');
 });
 
 T('★ログインの3つのボタンが それぞれ違う所を呼ぶ', () => {
