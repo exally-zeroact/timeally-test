@@ -34,6 +34,10 @@ function ours() {
   return out.sort();
 }
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+/** ★CSSはコメントを落としてから見る★
+ *  説明文に「`.tc-alert { display: block }` と書くと hidden が効かない」のような
+ *  ★実物そっくりの例★を書いた瞬間、素朴な正規表現は ★説明文の方を先に拾う★（実際に踏んだ）。 */
+const readCss = (f) => read(f).replace(/\/\*[\s\S]*?\*\//g, ' ');
 function strip(src) {
   return src.replace(/<!--[\s\S]*?-->/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^[ \t]*\/\/[^\n]*/gm, ' ');
 }
@@ -88,7 +92,7 @@ T('★後読み正規表現 (?<=…) を使っていない（古いiOSで丸ご�
 });
 
 T('★入力欄が16px以上（小さいと iPhone が拡大してスクロールが壊れる）', () => {
-  const css = read('css/timeally.css');
+  const css = readCss('css/timeally.css');
   const blocks = css.split('}');
   const bad = blocks.filter((b) => /input|select|textarea/.test(b) && /font-size:\s*(\d+)px/.test(b)
     && Number(/font-size:\s*(\d+)px/.exec(b)[1]) < 16);
@@ -100,13 +104,13 @@ T('★ホーム画面アプリで戻れなくならない（渡し口が target=
 });
 
 T('★上に隙間/スクロール崩れを作らない（safe-area を見ている）', () => {
-  const css = read('css/timeally.css');
+  const css = readCss('css/timeally.css');
   ok(/env\(safe-area-inset-top\)/.test(css), '上の safe-area を見ていない');
   ok(/env\(safe-area-inset-bottom\)/.test(css), '下の safe-area を見ていない');
 });
 
 T('★注意書きを flex/grid の箱に直接入れていない（1文字ずつ縦に割れる・前科3回）', () => {
-  const css = read('css/timeally.css');
+  const css = readCss('css/timeally.css');
   ['tc-note', 'tc-alert', 'tc-toast'].forEach((cls) => {
     const m = new RegExp('\\.' + cls + '\\s*\\{([^}]*)\\}').exec(css);
     ok(m, '.' + cls + ' が無い');
@@ -118,7 +122,7 @@ T('★注意書きを flex/grid の箱に直接入れていない（1文字ず�
 });
 
 T('★ボタンの文字が折り返さない（スマホ幅で2行に割れない）', () => {
-  const css = read('css/timeally.css');
+  const css = readCss('css/timeally.css');
   const m = /\.tc-btn\s*\{([^}]*)\}/.exec(css);
   ok(m && /white-space\s*:\s*nowrap/.test(m[1]), 'ボタンが折り返す');
   ok(/min-height:\s*44px/.test(m[1]), '指で押せる大きさ(44px)が無い');

@@ -21,6 +21,14 @@
 
 * { box-sizing: border-box; }
 
+/* ★hidden を必ず効かせる★（2026-08-14 司さんの実機で見つかった）
+   `.tc-alert { display: block }` のように class で display を書くと、
+   ★HTMLの hidden 属性（＝display:none）を打ち消してしまう★。
+   結果、中身が空のまま ★赤い枠だけが出る★（実機で出た）。
+   ⇒ 空の箱を人に見せないため、ここで最優先に潰す。
+   （tests/hidden-works.test.mjs が、この1行が消えたら赤にする） */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   padding: 0;

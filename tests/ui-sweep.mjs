@@ -18,8 +18,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require_ = createRequire(path.join(ROOT, 'package.json'));
 
-let JSDOM;
-try { ({ JSDOM } = require_('jsdom')); } catch (_) {
+let JSDOM, VirtualConsole;
+try { ({ JSDOM, VirtualConsole } = require_('jsdom')); } catch (_) {
   console.log('\n✗ jsdom がありません。★SKIPを緑と呼ばない★ので赤で止めます（npm install してください）');
   process.exit(1);
 }
@@ -66,22 +66,28 @@ const PLAN = {
 };
 
 /** HTMLを開いて、外のCDNは読まず、うちのファイルだけを順に実行する */
-function openPage(file, search) {
+function openPage(file, search, seed) {
   const html = fs.readFileSync(path.join(ROOT, file), 'utf8');
   const locals = [...html.matchAll(/<script src="((?!https?:)[^"]+)"/g)].map((m) => m[1].split('?')[0]);
   const inline = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
   const stripped = html.replace(/<script[\s\S]*?<\/script>/g, '');
 
+  /* ★jsdom は画面遷移を実装していない★ので、遷移しようとした事は
+     「jsdomError」として受け取る（実際にどこへ行くかは 本物のブラウザで測る）。 */
+  const navTried = [];
+  const vc = new VirtualConsole();
+  vc.on('jsdomError', (e) => { if (/navigation/i.test(String(e && e.message))) navTried.push(String(e.message)); });
   const dom = new JSDOM(stripped, {
     url: 'https://example.test/' + file + (search || ''),
     pretendToBeVisual: true,
+    virtualConsole: vc,
   });
   const w = dom.window;
   const errors = [];
   w.addEventListener('error', (e) => errors.push(String(e.message || e)));
   w.onerror = (m) => { errors.push(String(m)); };
   /* 倉庫の代わり（★本物は叩かない★） */
-  const fake = createFake({});
+  const fake = createFake(seed || {});
   w.supabase = { createClient: () => fake };
   /* 印刷は「新しい窓」を開くので、開けたかどうかだけ見えるようにする */
   const opened = [];
@@ -109,7 +115,7 @@ function openPage(file, search) {
     vm.runInContext(fs.readFileSync(p, 'utf8'), ctx, { filename: rel });
   }
   for (const code of inline) vm.runInContext(code, ctx, { filename: file + '#inline' });
-  return { w, errors, opened, delivered, fake, locals };
+  return { w, errors, opened, delivered, fake, locals, navTried };
 }
 
 /* ★押す前に入れておく値★
@@ -217,6 +223,23 @@ T('★ログインの3つのボタンが それぞれ違う所を呼ぶ', () => 
   const c = results.filter((x) => x.file === 'login.html')[0].page.fake._calls;
   ['auth.signIn', 'auth.signUp', 'auth.reset'].forEach((k) => ok(c.indexOf(k) >= 0, k + ' を呼んでいない'));
 });
+
+/* ★社長が覚えるURLは1つだけ★ … ログインしていなければ そのまま入口へ送る
+   （「ログインへ」をもう1回押させる作りだと、login.html も覚えるURLになってしまう） */
+for (const file of ['index.html', 'shukei.html']) {
+  const p = openPage(file, '', { noUser: true });
+  await wait(); await wait();
+  T(file + ' … ★ログインしていなければ そのまま入口へ送る（押させない）', () => {
+    ok(p.fake._calls.indexOf('auth.getUser') >= 0, 'ログインを見に行っていない');
+    ok(p.navTried.length > 0, '入口へ送っていない（画面を移そうとしていない）');
+    ok(p.w.document.getElementById('main').hidden, '中身を出したままにしている');
+    ok(!p.w.document.getElementById('gate'), '★「ログインへ」の被せ物が残っている＝URLが増える★');
+    /* 送り先が login.html である事は ★本物のブラウザで実測する★（jsdom は遷移しない）。
+       ここでは「コードが login.html を指している」ことだけ固定する。 */
+    const src = fs.readFileSync(path.join(ROOT, 'js/owner-app.js'), 'utf8');
+    ok(/location\.replace\('login\.html'\)/.test(src), '送り先が login.html になっていない');
+  });
+}
 
 T('★1000件で切れない道を通っている（range を呼んでいる）', () => {
   const r = results.filter((x) => x.file === 'index.html')[0];

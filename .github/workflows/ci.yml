@@ -87,6 +87,10 @@ jobs:
         run: node tests/ios-unsupported.test.mjs
       - name: ★iPhoneで動かない書き方 (わざと混ぜて赤になるかの自己確認)
         run: node tests/ios-unsupported.test.mjs --self-test
+      - name: ★空の箱を見せない (class の display が hidden を打ち消していないか)
+        run: node tests/hidden-works.test.mjs
+      - name: ★空の箱を見せない (打ち消しを外す/!importantを外して赤になるかの自己確認)
+        run: node tests/hidden-works.test.mjs --self-test
 
       # ── 借り物 ────────────────────────────────────────────────────
       - name: ★借りてきた物 (出どころと1バイトも違わない・VENDOR.md と一致)

@@ -57,12 +57,13 @@
     };
   }
 
-  /** ログインしていなければ入口を出す。していれば after() */
+  /** ログインしていなければ ★そのままログイン画面へ送る★。していれば after()
+   *  ★「ログインへ」をもう1回押させない★＝社長が覚えるURLは
+   *    https://…/（root）の1つだけで済む。押す物が増えると URL も増えて見える。 */
   function needUser(after) {
     DB.Auth.user().then(function (u) {
-      if (!u) { q('gate').hidden = false; return; }
+      if (!u) { global.location.replace('login.html'); return; }
       st.user = u;
-      q('gate').hidden = true;
       q('main').hidden = false;
       after();
     }).catch(function (e) { U.toast('つながりませんでした（' + e.message + '）'); });

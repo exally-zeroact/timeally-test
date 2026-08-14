@@ -66,6 +66,7 @@ function makeQuery(table, calls, seed) {
 
 function createFake(seed) {
   var calls = [];
+  seed = seed || {};
   return {
     _calls: calls,
     from: function (t) { calls.push('from:' + t); return makeQuery(t, calls, seed); },
@@ -91,7 +92,11 @@ function createFake(seed) {
       return Promise.resolve({ data: out, error: null });
     },
     auth: {
-      getUser: function () { return Promise.resolve({ data: { user: { id: 'u1', email: 'a@example.com' } }, error: null }); },
+      /* seed.noUser=true で「まだログインしていない」を作れる（入口へ送るかの検査に使う） */
+      getUser: function () {
+        calls.push('auth.getUser');
+        return Promise.resolve({ data: { user: seed.noUser ? null : { id: 'u1', email: 'a@example.com' } }, error: null });
+      },
       signInWithPassword: function () { calls.push('auth.signIn'); return Promise.resolve({ data: {}, error: null }); },
       signUp: function () { calls.push('auth.signUp'); return Promise.resolve({ data: {}, error: null }); },
       signOut: function () { calls.push('auth.signOut'); return Promise.resolve({ error: null }); },
