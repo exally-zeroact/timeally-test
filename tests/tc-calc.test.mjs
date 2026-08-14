@@ -158,7 +158,7 @@ T('★週40時間を超えた分は法定外残業（日ごとの残業と二重
 });
 T('★法定休日（日曜）の労働は休日労働。時間外にも週40時間にも入れない', () => {
   // ★法定休日を「日」と決めている会社★（既定は「決めていない」なので明示する）
-  const s = run([P('2026-08-09T09:00', 'in'), P('2026-08-09T19:00', 'out')], { legalHolidayDow: 0 });
+  const s = run([P('2026-08-09T09:00', 'in'), P('2026-08-09T19:00', 'out')], { holidayMode: 'dow', legalHolidayDow: 0 });
   const d = s.days.find((x) => x.d === '2026-08-09');
   eq(d.holidayMin, 600); eq(d.otMin, 0); eq(d.stdMin, 0);
   eq(s.month.holidayMin, 600); eq(s.month.otMin, 0);
@@ -178,7 +178,118 @@ T('★★法定休日を決めていない会社には 休日の割増を付け�
   // ★既定では出さないが、中では常に数えている★
   eq(s.warnings.filter((w) => w.code === 'holiday_not_set').length, 1);
   // 決めた会社では その気づきは出ない
-  eq(run(ps, { legalHolidayDow: 0 }).warnings.filter((w) => w.code === 'holiday_not_set').length, 0);
+  eq(run(ps, { holidayMode: 'dow', legalHolidayDow: 0 }).warnings.filter((w) => w.code === 'holiday_not_set').length, 0);
+});
+
+/* ── 法定休日の決め方4つ（労基法35条：毎週1日 または 4週4日） ──────── */
+T('★①決めていない … 休日の割増は付かない（勝手に曜日を決めない）', () => {
+  const s = run([P('2026-08-09T09:00', 'in'), P('2026-08-09T19:00', 'out')], { holidayMode: 'none' });
+  eq(s.month.holidayMin, 0);
+  eq(s.warnings.filter((w) => w.code === 'holiday_not_set').length, 1);
+});
+
+T('★②曜日で決める（会社ぜんぶ同じ）', () => {
+  const s = run([P('2026-08-09T09:00', 'in'), P('2026-08-09T19:00', 'out')], { holidayMode: 'dow', legalHolidayDow: 0 });
+  eq(s.month.holidayMin, 600);
+  eq(s.warnings.filter((w) => w.code === 'holiday_not_set').length, 0);
+});
+
+T('★★③従業員ごとに曜日（会社は日・この人だけ火）★★', () => {
+  const ps = [P('2026-08-09T09:00', 'in'), P('2026-08-09T17:00', 'out'),   // 日曜 8時間
+    P('2026-08-04T09:00', 'in'), P('2026-08-04T17:00', 'out')];            // 火曜 8時間
+  // 会社の決まりに従う人 … 日曜が休日
+  const a = run(ps, { holidayMode: 'per_person', legalHolidayDow: 0 });
+  eq(a.days.find((x) => x.d === '2026-08-09').holidayMin, 480, '会社の決まり（日）が効いていない');
+  eq(a.days.find((x) => x.d === '2026-08-04').holidayMin, 0);
+  // ★この人だけ火曜★（上書き）
+  const b = run(ps, { holidayMode: 'per_person', legalHolidayDow: 0, personHolidayDow: 2 });
+  eq(b.days.find((x) => x.d === '2026-08-04').holidayMin, 480, '★人ごとの上書きが効いていない★');
+  eq(b.days.find((x) => x.d === '2026-08-09').holidayMin, 0, '★上書きしたのに会社の曜日も休日になっている★');
+  eq(b.month.holidayMin, 480);
+});
+
+T('★★④4週4日制 … 4日が確保できなくなった日から先が休日労働★★', () => {
+  // 起算日 2026-08-03（月）から4週間＝08-03〜08-30
+  // ★毎日 働く★と、休みは0日 → どこかで「残り全部 休んでも4日に届かない」日が来る
+  const ps = [];
+  for (let i = 0; i < 28; i++) {
+    const d = C.addDays('2026-08-03', i);
+    ps.push(P(d + 'T09:00', 'in'), P(d + 'T17:00', 'out'));   // 8時間
+  }
+  const s = C.summarize({ ym: '2026-08', punches: ps, shifts: [], fixes: [],
+    company: { holidayMode: 'w4d4', holidayCycleStart: '2026-08-03', closeDay: 31 } });
+  const hol = s.days.filter((x) => x.isLegalHoliday).map((x) => x.d);
+  // 位置 pos で「rest(0) + (27 - pos) < 4」＝ pos > 23 … つまり 25日目(pos24)から
+  eq(hol[0], C.addDays('2026-08-03', 24), '★壊れ始める日が違う★: ' + hol[0]);
+  eq(hol.length, 4, '★その日から先の4日が休日労働★: ' + hol.length);
+  ok(s.month.holidayMin > 0, '休日労働が0');
+  eq(s.warnings.filter((w) => w.code === 'cycle_short').length, 1, '4週に4日足りない気づきが出ていない');
+});
+
+T('★④は起算日が無ければ何もしない（空のまま使わせない）', () => {
+  const ps = [];
+  for (let i = 0; i < 28; i++) {
+    const d = C.addDays('2026-08-03', i);
+    ps.push(P(d + 'T09:00', 'in'), P(d + 'T17:00', 'out'));
+  }
+  const s = C.summarize({ ym: '2026-08', punches: ps, shifts: [], fixes: [],
+    company: { holidayMode: 'w4d4', closeDay: 31 } });
+  eq(s.month.holidayMin, 0, '起算日が無いのに休日を決めている');
+  eq(s.warnings.filter((w) => w.code === 'holiday_cycle_missing').length, 1);
+});
+
+T('★毎週1日の休みが無い週を数える（止めない。数えて出すだけ）', () => {
+  const ps = [];
+  for (let i = 0; i < 14; i++) {
+    const d = C.addDays('2026-08-02', i);   // 日曜起算で2週間 まるまる出勤
+    ps.push(P(d + 'T09:00', 'in'), P(d + 'T17:00', 'out'));
+  }
+  const s = C.summarize({ ym: '2026-08', punches: ps, shifts: [], fixes: [], company: { closeDay: 31 } });
+  eq(s.warnings.filter((w) => w.code === 'no_weekly_holiday').length, 2, '2週とも数えていない');
+});
+
+/* ── 割増の内訳（社長が説明できるように） ───────────────────────── */
+T('★★足し算が合う：総労働 ＝ 所定内 ＋ 所定超 ＋ 時間外 ＋ 休日★★', () => {
+  const ps = [];
+  ['2026-08-03', '2026-08-04', '2026-08-05', '2026-08-06', '2026-08-07'].forEach((d) => {
+    ps.push(P(d + 'T09:00', 'in'), P(d + 'T12:00', 'break_in'), P(d + 'T13:00', 'break_out'), P(d + 'T20:00', 'out'));
+  });
+  ps.push(P('2026-08-09T09:00', 'in'), P('2026-08-09T15:00', 'out'));            // 日曜（法定休日）
+  ps.push(P('2026-08-08T21:00', 'in'), P('2026-08-09T01:00', 'out'));            // 深夜あり
+  [{ dailyStdMin: 480 }, { dailyStdMin: 420 }].forEach((co) => {
+    const s = run(ps, Object.assign({ holidayMode: 'dow', legalHolidayDow: 0 }, co));
+    const m = s.month;
+    eq(m.stdMin + m.overStdMin + m.otMin + m.holidayMin, m.workedMin,
+      '所定' + co.dailyStdMin + '分: 内訳の合計が総労働と違う');
+    ok(m.otMin >= m.ot60Min, '時間外 < うち60超');
+    ok(m.holidayMin >= m.holidayNightMin, '休日 < うち休日の深夜');
+  });
+});
+
+T('★★実数1件：時間外70時間・深夜10時間・法定休日8時間 が3か所で1分も違わない★★', () => {
+  /* 所定8時間・週40時間の会社。★実際に打刻を作って summarize に通す★ */
+  const ps = [];
+  // 平日 22日 × 各 11時間10分（実労働）＝ 8h所定 + 3h10m 残業 → 残業 22*190分 = 4180分
+  const wd = [];
+  for (let i = 0; i < 31; i++) {
+    const d = C.addDays('2026-08-01', i);
+    if (C.dowOf(d) !== 0) wd.push(d);   // 日曜以外
+  }
+  wd.slice(0, 22).forEach((d) => {
+    ps.push(P(d + 'T08:00', 'in'), P(d + 'T12:00', 'break_in'), P(d + 'T13:00', 'break_out'), P(d + 'T20:10', 'out'));
+  });
+  const s = run(ps, { holidayMode: 'dow', legalHolidayDow: 0 });
+  const m = s.month;
+  ok(m.otMin > LAW.OT60_THRESHOLD_MIN, '時間外が60時間を超えていない: ' + m.otMin);
+  eq(m.ot60Min, m.otMin - LAW.OT60_THRESHOLD_MIN, 'うち60超の出し方が違う');
+  /* ★同じ数が CSV でも出る（2か所で別々に数えない）★ */
+  const CSV = require_(path.join(ROOT, 'lib/tc-csv.js'));
+  const line = CSV.monthlyCsv([{ name: 'A', month: m }]).split('\r\n')[1].split(',');
+  eq(line[6], CSV.hhmm(m.otMin), 'CSVの時間外が月計と違う');
+  eq(line[7], CSV.hhmm(m.ot60Min), 'CSVの60超が月計と違う');
+  eq(line[10], CSV.hhmm(m.holidayNightMin), 'CSVの休日深夜が月計と違う');
+  console.log('     実測: 時間外 ' + CSV.hhmm(m.otMin) + ' / うち60超 ' + CSV.hhmm(m.ot60Min)
+    + ' / 深夜 ' + CSV.hhmm(m.nightMin) + ' / 休日 ' + CSV.hhmm(m.holidayMin));
 });
 
 /* ── 締め期間 ───────────────────────────────────────────────────── */

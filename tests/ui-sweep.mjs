@@ -228,8 +228,14 @@ T('★★「時間」で入れた設定が「分」で倉庫へ行く（8→480 
   const r = results.filter((x) => x.file === 'index.html')[0];
   const w = r.page.w;
   ok(w.TcHours, 'lib/tc-hours.js を読み込んでいない');
-  /* 画面の欄が ★時間★ で出ている（分ではない） */
-  ok(/（時間）/.test(w.document.querySelector('label[for="c-daily"]').textContent), '欄が「分」のまま');
+  /* ★単位は打たせず 押させる★（スマホの数字キーボードでは「分」が打てない）
+     見出しに単位は書かない（ボタンと二重になる） */
+  const lab = w.document.querySelector('label[for="c-daily"]').textContent;
+  ok(!/（時間）|（分）/.test(lab), '見出しに単位が残っている: ' + lab);
+  ['c-daily', 'c-week', 'c-break'].forEach((id) => {
+    ok(w.document.getElementById(id + '-h'), id + ' に「時間」のボタンが無い');
+    ok(w.document.getElementById(id + '-m'), id + ' に「分」のボタンが無い');
+  });
   /* 押した時に何を送ったか（保存の中身）を実際に見る */
   const sent = r.page.fake._saved.filter((x) => x.table === 'tc_companies').pop();
   ok(sent, '会社情報を送っていない');
@@ -237,6 +243,35 @@ T('★★「時間」で入れた設定が「分」で倉庫へ行く（8→480 
   ok(sent.row.week_std_min === 2400, '1週の所定が ' + sent.row.week_std_min + '（2400のはず）');
   ok(sent.row.break_default_min === 60, '休憩の既定が ' + sent.row.break_default_min + '（60のはず）');
   console.log('     実測: 8→' + sent.row.daily_std_min + ' / 40→' + sent.row.week_std_min + ' / 1→' + sent.row.break_default_min);
+});
+
+T('★★「分」を押して 45 と入れたら 45分で保存される（スマホで単位が打てない件）★★', () => {
+  const r = results.filter((x) => x.file === 'index.html')[0];
+  const d = r.page.w.document;
+  d.getElementById('tab-company').click();
+  d.getElementById('c-break').value = '45';
+  d.getElementById('c-break-m').click();                    // ★「分」を押す★
+  const hint = d.getElementById('c-break-hint').textContent;
+  ok(/＝ 45分/.test(hint), '欄の下が「＝45分」になっていない: ' + hint);
+  ok(d.getElementById('c-break-m').getAttribute('aria-selected') === 'true', '「分」が選ばれていない');
+  ok(d.getElementById('c-break-h').getAttribute('aria-selected') === 'false', '「時間」も選ばれたまま');
+  d.getElementById('b-savecompany').click();
+  const sent = r.page.fake._saved.filter((x) => x.table === 'tc_companies').pop();
+  ok(sent.row.break_default_min === 45, '★倉庫へ ' + sent.row.break_default_min + ' が行った（45のはず）★');
+  /* ★「時間」に戻すと 45時間＝長すぎで止まる（理由も本当の事を言う）★ */
+  d.getElementById('c-break-h').click();
+  const h2 = d.getElementById('c-break-hint').textContent;
+  ok(/45時間/.test(h2) && /「分」を押して/.test(h2), '止めた理由が本当の事になっていない: ' + h2);
+  console.log('     実測: 「分」→45→倉庫 45分 ／「時間」→45→止まる（理由つき）');
+});
+
+T('★単位ボタンも「選ばれている1つだけ黄」（タブと同じ決まり）', () => {
+  const r = results.filter((x) => x.file === 'index.html')[0];
+  const d = r.page.w.document;
+  ['c-daily', 'c-week', 'c-break'].forEach((id) => {
+    const on = [id + '-h', id + '-m'].filter((x) => d.getElementById(x).getAttribute('aria-selected') === 'true');
+    ok(on.length === 1, id + ' で選ばれている単位が ' + on.length + '個');
+  });
 });
 
 T('★★「出る」はタブと同じ形にしない・押しても1回 確認する★★', () => {

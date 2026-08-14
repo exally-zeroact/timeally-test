@@ -4,17 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <title>Timeally — 一覧</title>
-    <link rel="icon" href="icons/favicon-32.png?v=12ccfa24" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=12ccfa24" />
+    <link rel="icon" href="icons/favicon-32.png?v=2af93a5c" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=2af93a5c" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
     <meta name="theme-color" content="#FFC72C" />
-    <link rel="manifest" href="manifest.json?v=12ccfa24" />
+    <link rel="manifest" href="manifest.json?v=2af93a5c" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=12ccfa24" />
+    <link rel="stylesheet" href="css/timeally.css?v=2af93a5c" />
   </head>
   <body>
     <div class="tc-appbar">
@@ -32,7 +32,7 @@
         <button class="tc-btn sub" id="tab-company" type="button" role="tab" aria-selected="false">会社</button>
         <button class="tc-btn sub" id="tab-people" type="button" role="tab" aria-selected="false">従業員</button>
         <button class="tc-btn sub" id="tab-list" type="button" role="tab" aria-selected="true">一覧</button>
-        <a class="tc-btn go" id="go-shukei" href="shukei.html?v=12ccfa24">集計 →</a>
+        <a class="tc-btn go" id="go-shukei" href="shukei.html?v=2af93a5c">集計 →</a>
       </div>
 
       <!-- 出るを押した時の確認（★白紙のダイアログを開かない・画面の中で聞く★） -->
@@ -74,6 +74,13 @@
         <input type="text" id="p-no" />
         <label for="p-hire">入社日（有給の判定に使います・任意）</label>
         <div id="p-hire-wrap"></div>
+        <label for="p-hol">法定休日（この人だけ別にする時）</label>
+        <select id="p-hol">
+          <option value="">会社の決まりに従う</option>
+          <option value="0">日</option><option value="1">月</option><option value="2">火</option>
+          <option value="3">水</option><option value="4">木</option><option value="5">金</option>
+          <option value="6">土</option>
+        </select>
         <label for="p-yen">時給（切り捨てた金額を出すのに使います・任意）</label>
         <input type="number" id="p-yen" inputmode="numeric" />
         <p><button class="tc-btn wide" id="b-addperson" type="button">この人の入口を作る</button></p>
@@ -86,22 +93,48 @@
         <input type="text" id="c-name" />
         <label for="c-close">締め日（31 は末日締め）</label>
         <input type="number" id="c-close" inputmode="numeric" min="1" max="31" />
-        <label for="c-daily">1日の所定（時間）</label>
-        <input type="text" id="c-daily" inputmode="decimal" placeholder="8" autocomplete="off" />
+        <label for="c-daily">1日の所定</label>
+        <span class="tc-unitrow">
+          <input type="text" id="c-daily" inputmode="decimal" placeholder="8" autocomplete="off" />
+          <button class="tc-btn unit" type="button" id="c-daily-h" data-unit="hour" aria-selected="true">時間</button>
+          <button class="tc-btn unit" type="button" id="c-daily-m" data-unit="minute" aria-selected="false">分</button>
+        </span>
         <span class="tc-note" id="c-daily-hint"></span>
-        <label for="c-week">1週の所定（時間）</label>
-        <input type="text" id="c-week" inputmode="decimal" placeholder="40" autocomplete="off" />
+        <label for="c-week">1週の所定</label>
+        <span class="tc-unitrow">
+          <input type="text" id="c-week" inputmode="decimal" placeholder="40" autocomplete="off" />
+          <button class="tc-btn unit" type="button" id="c-week-h" data-unit="hour" aria-selected="true">時間</button>
+          <button class="tc-btn unit" type="button" id="c-week-m" data-unit="minute" aria-selected="false">分</button>
+        </span>
         <span class="tc-note" id="c-week-hint"></span>
-        <label for="c-break">休憩の既定（時間）</label>
-        <input type="text" id="c-break" inputmode="decimal" placeholder="1" autocomplete="off" />
+        <label for="c-break">休憩の既定</label>
+        <span class="tc-unitrow">
+          <input type="text" id="c-break" inputmode="decimal" placeholder="1" autocomplete="off" />
+          <button class="tc-btn unit" type="button" id="c-break-h" data-unit="hour" aria-selected="true">時間</button>
+          <button class="tc-btn unit" type="button" id="c-break-m" data-unit="minute" aria-selected="false">分</button>
+        </span>
         <span class="tc-note" id="c-break-hint"></span>
-        <label for="c-holiday">法定休日の曜日</label>
-        <select id="c-holiday">
-          <option value="-1">決めていない（就業規則で特定していない）</option>
-          <option value="0">日</option><option value="1">月</option><option value="2">火</option>
-          <option value="3">水</option><option value="4">木</option><option value="5">金</option>
-          <option value="6">土</option>
+        <label for="c-holmode">法定休日の決め方</label>
+        <select id="c-holmode">
+          <option value="none">決めていない（就業規則で特定していない）</option>
+          <option value="dow">曜日で決める（会社ぜんぶ同じ）</option>
+          <option value="per_person">従業員ごとに曜日で決める</option>
+          <option value="w4d4">4週4日制（変形休日制）</option>
         </select>
+        <div id="hol-dow" hidden>
+          <label for="c-holiday">曜日（会社の決まり）</label>
+          <select id="c-holiday">
+            <option value="-1">未選択</option>
+            <option value="0">日</option><option value="1">月</option><option value="2">火</option>
+            <option value="3">水</option><option value="4">木</option><option value="5">金</option>
+            <option value="6">土</option>
+          </select>
+          <span class="tc-note" id="hol-override"></span>
+        </div>
+        <div id="hol-cycle" hidden>
+          <label for="c-holcycle">4週間の起算日（就業規則で決めた日）</label>
+          <div id="c-holcycle-wrap"></div>
+        </div>
         <div class="tc-note" id="holiday-note"></div>
         <div class="tc-alert" id="holiday-warn" hidden></div>
 
@@ -142,18 +175,18 @@
       </section>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=12ccfa24"></script>
-    <script src="js/env-badge.js?v=12ccfa24"></script>
-    <script src="lib/tc-law.js?v=12ccfa24"></script>
-    <script src="lib/tc-calc.js?v=12ccfa24"></script>
-    <script src="lib/tc-csv.js?v=12ccfa24"></script>
-    <script src="lib/tc-name.js?v=12ccfa24"></script>
-    <script src="lib/tc-hours.js?v=12ccfa24"></script>
-    <script src="lib/qr.js?v=12ccfa24"></script>
-    <script src="js/file-out.js?v=12ccfa24"></script>
-    <script src="js/tc-ui.js?v=12ccfa24"></script>
-    <script src="js/tc-db.js?v=12ccfa24"></script>
-    <script src="js/owner-app.js?v=12ccfa24"></script>
+    <script src="js/supa-config.js?v=2af93a5c"></script>
+    <script src="js/env-badge.js?v=2af93a5c"></script>
+    <script src="lib/tc-law.js?v=2af93a5c"></script>
+    <script src="lib/tc-calc.js?v=2af93a5c"></script>
+    <script src="lib/tc-csv.js?v=2af93a5c"></script>
+    <script src="lib/tc-name.js?v=2af93a5c"></script>
+    <script src="lib/tc-hours.js?v=2af93a5c"></script>
+    <script src="lib/qr.js?v=2af93a5c"></script>
+    <script src="js/file-out.js?v=2af93a5c"></script>
+    <script src="js/tc-ui.js?v=2af93a5c"></script>
+    <script src="js/tc-db.js?v=2af93a5c"></script>
+    <script src="js/owner-app.js?v=2af93a5c"></script>
     <script>
       OwnerApp.startIndex();
     </script>

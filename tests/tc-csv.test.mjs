@@ -79,11 +79,44 @@ T('★半端な分（1分・59分）も往復して同じ数になる', () => {
   });
 });
 
+T('★★月60時間超・休日深夜の列を足しても 元の9列の割り当てが1つも動かない★★', () => {
+  const m = { shukkin: 20, kekkin: 0, yukyu: 1, workedMin: 12000, otMin: 4200,
+    ot60Min: 600, nightMin: 600, holidayMin: 480, holidayNightMin: 120 };
+  const r = KINTAI.parse(CSV.monthlyCsv([{ no: 'E1', name: '山田 太郎', month: m }]));
+  eq(r.warnings.length, 0, '受け取る側が文句を出した: ' + r.warnings.join(' / '));
+  eq(JSON.stringify(r.map), JSON.stringify({ no: 0, name: 1, shukkin: 2, kekkin: 3, yukyu: 4, worked: 5, ot: 6, night: 8, holiday: 9 }),
+    '★列を足したせいで 元の割り当てがズレた★: ' + JSON.stringify(r.map));
+  const row = r.rows[0];
+  eq(row.workedMin, 12000); eq(row.otMin, 4200); eq(row.nightMin, 600); eq(row.holidayMin, 480);
+});
+
+T('★★今の給与は「時間外60時間超」「休日深夜」を読まない（列は渡るが捨てられる）★★', () => {
+  /* ★これは「壊れている」のではなく「まだ受け取る側に置き場が無い」★
+     ・列が無ければ そもそも渡せないので、こちらは先に足してある
+     ・★給与(Kyually)に「この列を読む」を足すのは 指示役が出す★（片方だけにしない）
+     ★給与側が読めるようになった日、この検査は赤くなる★
+       → その時は tests/vendor/kintai-csv.js を取り直して、ここを「読める」に書き換える。
+         ★赤くなる事が 合図★（黙って通り過ぎない） */
+  const heads = CSV.MONTHLY_HEADERS;
+  eq(heads.indexOf('時間外60時間超'), 7, '列の位置が変わった');
+  eq(heads.indexOf('休日深夜'), 10, '列の位置が変わった');
+  const m = { workedMin: 12000, otMin: 4200, ot60Min: 600, holidayMin: 480, holidayNightMin: 120 };
+  const r = KINTAI.parse(CSV.monthlyCsv([{ name: 'A', month: m }]));
+  const used = Object.values(r.map);
+  ok(!used.includes(7), '★給与が60超の列を読めるようになった＝この検査を書き換える時★');
+  ok(!used.includes(10), '★給与が休日深夜の列を読めるようになった＝この検査を書き換える時★');
+  /* ただし ★中身は出ている★（人とExcelは読める） */
+  const line = CSV.monthlyCsv([{ name: 'A', month: m }]).split('\r\n')[1].split(',');
+  eq(line[7], '10:00', '60超の中身が出ていない');
+  eq(line[10], '2:00', '休日深夜の中身が出ていない');
+  console.log('     実測: 60超と休日深夜は ★CSVに出ているが 今の給与は読まない★');
+});
+
 T('★深夜・休日・有給・欠勤も そのまま渡る', () => {
   const m = realMonth([
     P('2026-08-03T21:00', 'in'), P('2026-08-04T02:00', 'out'),   // 深夜4時間
     P('2026-08-09T09:00', 'in'), P('2026-08-09T15:00', 'out'),   // 日曜=法定休日6時間
-  ], { legalHolidayDow: 0 });   // ★法定休日を「日」と決めている会社★（既定は「決めていない」）
+  ], { holidayMode: 'dow', legalHolidayDow: 0 });   // ★法定休日を「日」と決めている会社★（既定は「決めていない」）
   const row = KINTAI.parse(CSV.monthlyCsv([{ name: 'B', month: m }])).rows[0];
   eq(row.nightMin, 240); eq(row.holidayMin, 360);
 });

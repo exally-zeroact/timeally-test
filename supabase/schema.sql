@@ -40,6 +40,11 @@ create table if not exists timeally.tc_companies (
   --   ★決めていない会社に アプリが勝手に曜日を決めない★＝休日の割増を付けない。
   --   だから ★新しい会社の既定は -1★。
   legal_holiday_dow int  not null default -1 check (legal_holiday_dow between -1 and 6),
+  -- ★法定休日の決め方（労基法35条：毎週1日 または 4週4日）★
+  --   none=決めていない（既定）／dow=曜日で決める／per_person=従業員ごとに曜日／w4d4=4週4日制
+  --   ★w4d4 は 4週間の起算日が要る★（就業規則等で明らかにする）。空のままでは選べない
+  holiday_mode        text not null default 'none' check (holiday_mode in ('none','dow','per_person','w4d4')),
+  holiday_cycle_start date,
   week_start_dow    int  not null default 0,       -- 週の起算（0=日）
   -- ★丸め方★
   --   none    = 1分単位（既定・適法）
@@ -87,6 +92,9 @@ create table if not exists timeally.tc_pub (
   fail_count    int not null default 0,
   locked_until  timestamptz,
   active        boolean not null default true,
+  -- ★法定休日の人ごとの上書き★（null = 会社の決まりに従う／0=日 … 6=土）
+  --   シフト制（運転代行・飲食・建設）は曜日を固定できない会社が多いので、人ごとに決められる
+  legal_holiday_dow int check (legal_holiday_dow between 0 and 6),
   created_at    timestamptz not null default now()
 );
 create index if not exists idx_tc_pub_account on timeally.tc_pub(account_id);
@@ -112,6 +120,17 @@ alter table timeally.tc_companies add  constraint tc_companies_round_dir_check
 alter table timeally.tc_companies drop constraint if exists tc_companies_round_scope_check;
 alter table timeally.tc_companies add  constraint tc_companies_round_scope_check
   check (round_scope in ('day','month'));
+-- ★法定休日の決め方を4つにする★（既に在る行の値は動かさない）
+alter table timeally.tc_companies add column if not exists holiday_mode        text not null default 'none';
+alter table timeally.tc_companies add column if not exists holiday_cycle_start date;
+alter table timeally.tc_companies drop constraint if exists tc_companies_holiday_mode_check;
+alter table timeally.tc_companies add  constraint tc_companies_holiday_mode_check
+  check (holiday_mode in ('none','dow','per_person','w4d4'));
+-- ★人ごとの上書き★（null = 会社の決まりに従う）
+alter table timeally.tc_pub add column if not exists legal_holiday_dow int;
+alter table timeally.tc_pub drop constraint if exists tc_pub_legal_holiday_dow_check;
+alter table timeally.tc_pub add  constraint tc_pub_legal_holiday_dow_check
+  check (legal_holiday_dow is null or legal_holiday_dow between 0 and 6);
 -- ★法定休日に「決めていない(-1)」を足す★（既に在る行の値は動かさない）
 alter table timeally.tc_companies alter column legal_holiday_dow set default -1;
 alter table timeally.tc_companies drop constraint if exists tc_companies_legal_holiday_dow_check;

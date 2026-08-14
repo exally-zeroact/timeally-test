@@ -119,6 +119,16 @@ h3 { font-size: 14px; color: #8F6200; margin: 14px 0 6px; }
   background: #FFFFFF; border-color: #F0B400; color: #8F6200; text-decoration: none;
 }
 .tc-btn.go:active { background: #F0B400; }
+/* ★単位は打たせず 押させる★（スマホの数字キーボードでは「分」の字が打てない。実機で踏んだ）
+   欄と単位ボタンを1行に。★選ばれている方だけ黄★（[aria-selected='true'] の共通の決まり） */
+.tc-unitrow { display: flex; gap: 6px; align-items: stretch; }
+.tc-unitrow input { flex: 1 1 auto; min-width: 0; }
+.tc-btn.unit {
+  flex: 0 0 auto; background: #FFFFFF; border-color: #F0E0B8; color: #8F6200;
+  min-width: 56px; padding: 10px 12px; font-size: 14px;
+}
+.tc-btn.unit:active { background: #F0B400; }
+
 /* 確認の中の「出る／やめる」を横に並べる（★注意書きの箱そのものは block のまま★） */
 .tc-askrow { display: block; margin-top: 8px; }
 .tc-askrow .tc-btn { margin-right: 8px; }
@@ -189,7 +199,9 @@ table.tc td.warn { color: #B3261E; }
 /* ── タブ ───────────────────────────────────────────────────── */
 .tc-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0; }
 .tc-tabs .tc-btn { flex: 0 0 auto; }
-.tc-tabs .tc-btn[aria-selected='true'] { background: #FFE08A; border-color: #F0B400; }
+/* ★黄(#FFE08A)を塗ってよいのは「選ばれている1つ」だけ★
+   タブでも 単位ボタンでも 同じ決まりにする（規則は1本だけ＝tests/palette.test.mjs が数える） */
+.tc-btn[aria-selected='true'] { background: #FFE08A; border-color: #F0B400; }
 
 /* ── 被せ物（ログイン・小窓）★fixed は帯で下げない★ ──────────── */
 .tc-overlay {

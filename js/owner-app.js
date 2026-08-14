@@ -109,7 +109,9 @@
       ['c-round', 'c-runit', 'c-rdir', 'c-rscope'].forEach(function (id) {
         var el = q(id); if (el) el.onchange = drawRoundNote;
       });
-      var hol = q('c-holiday'); if (hol) hol.onchange = drawHolidayNote;
+      ['c-holmode', 'c-holiday'].forEach(function (id) {
+        var el = q(id); if (el) el.onchange = drawHolidayNote;
+      });
       var hw = q('p-hire-wrap');
       if (hw) hw.innerHTML = U.dateField('', '');
       reload();
@@ -152,7 +154,9 @@
     return {
       dailyStdMin: c.daily_std_min, weekLegalMin: c.week_legal_min, closeDay: c.close_day,
       rounding: c.rounding, roundUnitMin: c.round_unit_min, roundDir: c.round_dir, roundScope: c.round_scope,
-      legalHolidayDow: c.legal_holiday_dow, weekStartDow: c.week_start_dow,
+      holidayMode: c.holiday_mode, legalHolidayDow: c.legal_holiday_dow,
+      holidayCycleStart: c.holiday_cycle_start,
+      weekStartDow: c.week_start_dow,
       sme: c.sme, warnOn: c.warn_on,
     };
   }
@@ -240,20 +244,27 @@
       ]).then(function (r) {
         var s = global.TcCalc.summarize({
           ym: st.ym, punches: r[0], shifts: r[1], fixes: [],
-          company: Object.assign(coOpts(), { hourlyYen: p.hourly_yen }),
+          company: Object.assign(coOpts(), { hourlyYen: p.hourly_yen, personHolidayDow: p.legal_holiday_dow }),
         });
         return { p: p, s: s };
       });
     })).then(function (rows) {
+      /* ★割増が要る時数を 一覧にも出す★（うち60超＝50%・うち休日の深夜＝60%）
+         ★0の人は空欄★（出ている人だけ目立たせる） */
       box.innerHTML = '<div class="tc-tablewrap"><table class="tc"><tr>'
-        + '<th class="l">氏名</th><th>出勤</th><th>実労働</th><th>法定外残業</th><th>深夜</th><th>休日</th><th>気づき</th></tr>'
+        + '<th class="l">氏名</th><th>出勤</th><th>実労働</th><th>時間外</th><th>うち60超</th>'
+        + '<th>深夜</th><th>休日</th><th>うち休日の深夜</th><th>気づき</th></tr>'
         + rows.map(function (x) {
+          var m = x.s.month;
+          var z = function (v) { return v ? U.minToHm(v) : ''; };
           return '<tr><td class="l">' + U.esc(x.p.name || x.p.employee_id) + '</td>'
-            + '<td class="num">' + x.s.month.shukkin + '</td>'
-            + '<td class="num">' + U.minToHm(x.s.month.workedMin) + '</td>'
-            + '<td class="num">' + U.minToHm(x.s.month.otMin) + '</td>'
-            + '<td class="num">' + U.minToHm(x.s.month.nightMin) + '</td>'
-            + '<td class="num">' + U.minToHm(x.s.month.holidayMin) + '</td>'
+            + '<td class="num">' + m.shukkin + '</td>'
+            + '<td class="num">' + U.minToHm(m.workedMin) + '</td>'
+            + '<td class="num">' + U.minToHm(m.otMin) + '</td>'
+            + '<td class="num' + (m.ot60Min ? ' warn' : '') + '">' + z(m.ot60Min) + '</td>'
+            + '<td class="num">' + U.minToHm(m.nightMin) + '</td>'
+            + '<td class="num">' + U.minToHm(m.holidayMin) + '</td>'
+            + '<td class="num">' + z(m.holidayNightMin) + '</td>'
             + '<td class="num' + (x.s.warnings.length ? ' warn' : '') + '">' + x.s.warnings.length + '</td></tr>';
         }).join('') + '</table></div>';
     }).catch(failed('数えられませんでした'));
@@ -307,11 +318,14 @@
     if (!name) { U.toast('氏名を入れてください（給与に渡すときに要ります）'); return; }
     var hire = (d.querySelector('#p-hire-wrap .tc-date-input') || {}).value || null;
     var yen = q('p-yen').value === '' ? null : Number(q('p-yen').value);
+    var pHol = (q('p-hol') || {}).value;
     DB.addPerson({
       account_id: st.user.id,
       employee_id: 'E' + Date.now().toString(36),
       name: name, emp_no: q('p-no').value.trim() || null,
       hire_date: hire, hourly_yen: yen, init_code: newCode(),
+      /* ★人ごとの法定休日★（空なら会社の決まりに従う） */
+      legal_holiday_dow: pHol === '' || pHol == null ? null : Number(pHol),
     }).then(function () { U.toast('入口を作りました'); q('p-name').value = ''; q('p-no').value = ''; q('p-yen').value = ''; reload(); })
       .catch(failed('作れませんでした'));
   }
@@ -329,22 +343,53 @@
     { id: 'c-week', col: 'week_std_min', def: 2400, maxMin: 24 * 7 * 60, label: '1週の所定' },
     { id: 'c-break', col: 'break_default_min', def: 60, maxMin: 24 * 60, label: '休憩の既定' },
   ];
-  var HOUR_EXAMPLE = '例: 8 ／ 7.5 ／ 8:30 ／ 45分';
+  /* ★単位は打たせず 押させる★（2026-08-15 実機）
+     スマホの数字キーボードでは ★「分」も「時」も打てない★。
+     前の案内「単位を付けてください」は ★その画面で実行できない指示★だった。
+     ⇒ 欄の横に「時間」「分」のボタン。数字だけ打てばよい。★既定は「時間」★
+     ⇒ 文字で単位を書く道は残す（PCで "45分" "8:30"）。★人に要求はしない★ */
+  function unitOf(f) {
+    var m = q(f.id + '-m');
+    return m && m.getAttribute('aria-selected') === 'true' ? 'minute' : 'hour';
+  }
+  function setUnit(f, unit) {
+    var h = q(f.id + '-h'), m = q(f.id + '-m');
+    if (h) h.setAttribute('aria-selected', String(unit !== 'minute'));
+    if (m) m.setAttribute('aria-selected', String(unit === 'minute'));
+  }
+  /** 欄の中身を ★選んでいる単位で★ 読む。
+   *  ただし ★文字で単位が書いてあれば そちらが勝つ★（"45分" "8:30" "8時間30分"） */
+  function readField(f) {
+    var Hs = global.TcHours;
+    var text = String((q(f.id) || {}).value || '');
+    var written = Hs.unitOf(text);                 // hour / minute / hm / null
+    var unit = unitOf(f);
+    if (written === 'hour' && unit === 'minute') text = text + '分';   // 数字だけ＋「分」ボタン
+    return Hs.read(text, { maxMin: f.maxMin });
+  }
+  var HOUR_EXAMPLE = '数字だけ入れて、右の「時間」か「分」を押してください';
   function drawHourHint(f) {
     var el = q(f.id + '-hint');
     if (!el) return;
     var Hs = global.TcHours;
-    var r = Hs.read(q(f.id).value, { maxMin: f.maxMin });
+    var r = readField(f);
     if (r.error === 'empty') { el.textContent = f.label + 'を入れてください（' + HOUR_EXAMPLE + '）'; return; }
-    if (r.error === 'unreadable') { el.textContent = '読めません（' + HOUR_EXAMPLE + '）'; return; }
+    if (r.error === 'unreadable') { el.textContent = '読めません。' + HOUR_EXAMPLE; return; }
     if (r.error === 'too_big') {
       /* ★止めた本当の理由を言う★（「大きすぎます」だけだと 何が長いのか分からない） */
       el.textContent = Hs.toText(r.read) + '時間（' + r.read + '分）と読みました。'
         + f.label + 'は ' + Hs.toText(f.maxMin) + '時間までです。'
-        + '分で入れたい時は「45分」のように単位を付けてください。';
+        + '★分で入れたい時は 右の「分」を押してください★';
       return;
     }
-    el.textContent = '＝ ' + r.min + '分（中ではこの分数で数えます）';
+    var extra = '';
+    /* ★軽く1つ★ 休憩が1日の所定を超えていたら赤くする */
+    if (f.id === 'c-break') {
+      var day = readField(HOUR_FIELDS[0]);
+      if (day.min != null && r.min > day.min) extra = '　★1日の所定より長いです★';
+    }
+    el.textContent = '＝ ' + r.min + '分（中ではこの分数で数えます）' + extra;
+    el.className = extra ? 'tc-alert' : 'tc-note';
   }
 
   function fillCompany() {
@@ -352,13 +397,27 @@
     var set = function (id, v) { var el = q(id); if (el) el.value = v == null ? '' : v; };
     set('c-name', c.name); set('c-close', c.close_day == null ? 31 : c.close_day);
     HOUR_FIELDS.forEach(function (f) {
-      set(f.id, global.TcHours.toText(c[f.col] == null ? f.def : c[f.col]));
+      var min = c[f.col] == null ? f.def : c[f.col];
+      /* ★読みやすい方の単位で出す★（ちょうどの時間は「時間」／端数は「分」）
+         45分を "0:45" と出すより「45」＋「分」の方が読める */
+      if (min % 60 === 0) { set(f.id, String(min / 60)); setUnit(f, 'hour'); }
+      else { set(f.id, String(min)); setUnit(f, 'minute'); }
       var el = q(f.id);
       if (el && !el._wired) { el._wired = true; el.oninput = function () { drawHourHint(f); }; }
+      ['h', 'm'].forEach(function (k) {
+        var b = q(f.id + '-' + k);
+        if (b && !b._wired) {
+          b._wired = true;
+          b.onclick = function () { setUnit(f, b.getAttribute('data-unit')); drawHourHint(f); };
+        }
+      });
       drawHourHint(f);
     });
     /* ★新しい会社の既定は「決めていない」★（勝手に日曜を法定休日にしない） */
+    set('c-holmode', c.holiday_mode || 'none');
     set('c-holiday', c.legal_holiday_dow == null ? -1 : c.legal_holiday_dow);
+    var cw = q('c-holcycle-wrap');
+    if (cw && !cw._wired) { cw._wired = true; cw.innerHTML = U.dateField(c.holiday_cycle_start || '', 'OwnerApp._holNote()'); }
     drawHolidayNote();
 
     /* 単位の選択肢は lib から作る（画面に数字を書き並べない） */
@@ -386,23 +445,48 @@
      土日休みでも ★法定休日は1日／もう1日は所定休日（法定外）★＝割増が違う。
      ★特定する義務は無い★（「明確にするのが望ましい」まで）ので、
      ★決めていない会社に アプリが勝手に日曜を決めない★。決めていない間は休日の割増を付けない。 */
+  function holCycleValue() {
+    var el = d.querySelector('#c-holcycle-wrap .tc-date-input');
+    return el ? el.value : '';
+  }
   function drawHolidayNote() {
     var n = q('holiday-note'), a = q('holiday-warn');
-    var v = Number((q('c-holiday') || {}).value);
+    var mode = (q('c-holmode') || {}).value || 'none';
+    var dow = Number((q('c-holiday') || {}).value);
+    if (q('hol-dow')) q('hol-dow').hidden = !(mode === 'dow' || mode === 'per_person');
+    if (q('hol-cycle')) q('hol-cycle').hidden = mode !== 'w4d4';
+
     if (n) {
-      n.textContent = '法定休日は「週に1日」です。週休2日の会社でも、'
-        + 'もう1日は所定休日（法定外）になります。'
-        + '今は「毎週1日」の会社向けです（4週4日の決め方はまだ入れていません）。';
+      n.textContent = '法定休日は「毎週 少なくとも1日」または「4週間を通じて4日以上」です。'
+        + '週休2日の会社でも、もう1日は所定休日（法定外）になります。'
+        + '★祝日は法定休日ではありません★（会社が決める所定休日です）。';
+    }
+    /* 人ごとに上書きしている人が何人 居るか（★黙って散らからせない★） */
+    var ov = q('hol-override');
+    if (ov) {
+      var n2 = (st.people || []).filter(function (p) { return p.legal_holiday_dow != null; }).length;
+      ov.textContent = mode === 'per_person'
+        ? '会社の決まりを ★' + n2 + '人★ が上書きしています（従業員の欄で決めます）'
+        : (n2 ? '※ ' + n2 + '人に人ごとの指定が残っています（この決め方では使いません）' : '');
     }
     if (!a) return;
-    if (v < 0) {
+    a.hidden = true;
+    if (mode === 'none') {
       a.hidden = false;
       a.textContent = '★法定休日を決めていないので、休日の割増は付けていません★　'
         + '就業規則で決めて、ここで選んでください。'
         + '（決めていない状態でこちらが勝手に曜日を決めると、会社が決めていない事を'
         + 'アプリが決めてしまうため、付けていません）';
-    } else {
-      a.hidden = true;
+    } else if ((mode === 'dow' || mode === 'per_person') && dow < 0) {
+      a.hidden = false;
+      a.textContent = '★曜日が未選択です★　選ぶまで 休日の割増は付きません。';
+    } else if (mode === 'w4d4') {
+      a.hidden = false;
+      a.textContent = holCycleValue()
+        ? '★割増になる日が 働き方で動きます★　4週に4日の休みが確保できなくなった日から先の'
+          + '休日労働が 法定休日労働になります。36協定と割増の管理にご注意ください。'
+        : '★4週間の起算日を入れてください★　入れるまで この決め方では保存できません'
+          + '（就業規則等で起算日を明らかにする必要があります）。';
     }
   }
 
@@ -468,21 +552,30 @@
     /* ★時間で入れて 分で持つ★。読めない欄が1つでもあれば ★保存しない★（黙って0にしない） */
     var vals = {}, bad = [];
     HOUR_FIELDS.forEach(function (f) {
-      var r = global.TcHours.read(q(f.id).value, { maxMin: f.maxMin });
+      var r = readField(f);
       if (r.error) bad.push(f.label);
       else vals[f.col] = r.min;
     });
-    if (bad.length) { U.toast(bad.join('・') + ' を読めません（例: 8 / 7.5 / 8:30）'); return; }
+    if (bad.length) { U.toast(bad.join('・') + ' を読めません（' + HOUR_EXAMPLE + '）'); return; }
 
-    var mode = q('c-round').value;
+    /* ★4週4日制は 起算日が無いと保存させない★（空のまま使わせない） */
+    var mode = q('c-holmode').value;
+    if (mode === 'w4d4' && !holCycleValue()) {
+      U.toast('4週4日制は ★4週間の起算日★ が要ります（就業規則で決めた日を入れてください）');
+      return;
+    }
+
+    var rmode = q('c-round').value;
     var r2 = pickedRound();
     DB.saveCompany(Object.assign({
       account_id: st.user.id,
       name: q('c-name').value.trim(),
       close_day: Number(q('c-close').value) || 31,
+      holiday_mode: mode,
+      holiday_cycle_start: holCycleValue() || null,
       /* ★-1（決めていない）を 0（日）に落とさない★（|| だと -1 も 0 も消える） */
       legal_holiday_dow: Number(q('c-holiday').value),
-      rounding: mode,
+      rounding: rmode,
       round_unit_min: r2.unitMin,
       round_dir: r2.dir,
       round_scope: r2.scope,
@@ -542,7 +635,9 @@
         ym: st.ym, punches: r[0], shifts: r[1],
         fixes: (r[2] || []).filter(function (f) { return f.employee_id === p.employee_id; })
           .map(function (f) { return { d: f.d, beforeMin: f.before_min, afterMin: f.after_min, reason: f.reason, status: f.status }; }),
-        company: Object.assign(coOpts(), { hourlyYen: p.hourly_yen, grantDays: grantDaysOf(p) }),
+        company: Object.assign(coOpts(), {
+          hourlyYen: p.hourly_yen, grantDays: grantDaysOf(p), personHolidayDow: p.legal_holiday_dow,
+        }),
       });
       renderTables(p);
     }).catch(failed('数えられませんでした'));
@@ -569,11 +664,22 @@
         }).join('') + '</tr>';
       }).join('');
 
+    /* ★割増の内訳を全部 出す★（社長が「なぜこれが残業でないのか」を説明できるように）
+       ★総労働 ＝ 所定内 ＋ 所定超 ＋ 時間外 ＋ 休日★（深夜は上乗せなので足さない）
+       率は ★LAW の数から作る★（説明文に直書きしない） */
+    var LAW = global.TcLaw, pc = function (r) { return Math.round(r * 100) + '%'; };
+    var m2 = s.month;
     q('total').innerHTML = ''
-      + tr('出勤日数', s.month.shukkin) + tr('総労働', U.minToHm(s.month.workedMin))
-      + tr('時間外合計', U.minToHm(s.month.otMin)) + tr('うち月60時間超', U.minToHm(s.month.ot60Min))
-      + tr('深夜', U.minToHm(s.month.nightMin)) + tr('休日', U.minToHm(s.month.holidayMin))
-      + tr('有給消化', s.month.yukyu) + tr('有給残', yukyuLeft(p, s)) + tr('欠勤', s.month.kekkin);
+      + tr('出勤日数', m2.shukkin)
+      + tr('総労働', U.minToHm(m2.workedMin))
+      + tr('　所定内', U.minToHm(m2.stdMin))
+      + tr('　所定超（割増なし）', U.minToHm(m2.overStdMin))
+      + tr('　時間外（' + pc(LAW.rateOf('ot')) + '）', U.minToHm(m2.otMin))
+      + tr('　　うち月60時間超（' + pc(LAW.rateOf('ot60')) + '）', U.minToHm(m2.ot60Min))
+      + tr('　休日（' + pc(LAW.rateOf('holiday')) + '）', U.minToHm(m2.holidayMin))
+      + tr('深夜（' + pc(LAW.rateOf('night')) + '・上乗せ）', U.minToHm(m2.nightMin))
+      + tr('　うち休日の深夜（' + pc(LAW.rateOf('holiday_night')) + '）', U.minToHm(m2.holidayNightMin))
+      + tr('有給消化', m2.yukyu) + tr('有給残', yukyuLeft(p, s)) + tr('欠勤', m2.kekkin);
 
     /* ★切り捨てた時間と金額は必ず出す（黙って消さない）★ */
     var box = q('cutbox');
@@ -650,7 +756,7 @@
       ]).then(function (r) {
         var s = global.TcCalc.summarize({
           ym: st.ym, punches: r[0], shifts: r[1], fixes: [],
-          company: Object.assign(coOpts(), { hourlyYen: p.hourly_yen }),
+          company: Object.assign(coOpts(), { hourlyYen: p.hourly_yen, personHolidayDow: p.legal_holiday_dow }),
         });
         return { no: p.emp_no || '', name: p.name, month: s.month };
       });
@@ -673,7 +779,7 @@
         ]).then(function (r) {
           var s = global.TcCalc.summarize({
             ym: st.ym, punches: r[0], shifts: r[1], fixes: [],
-            company: Object.assign(coOpts(), { hourlyYen: p.hourly_yen }),
+            company: Object.assign(coOpts(), { hourlyYen: p.hourly_yen, personHolidayDow: p.legal_holiday_dow }),
           });
           return { p: p, s: s };
         });
@@ -685,12 +791,12 @@
       var aoa = [head].concat(rows.map(function (x) {
         var m = x.s.month;
         return [x.p.emp_no || '', x.p.name || '', m.shukkin, m.kekkin, m.yukyu,
-          global.TcCsv.hhmm(m.workedMin), global.TcCsv.hhmm(m.otMin),
-          global.TcCsv.hhmm(m.nightMin), global.TcCsv.hhmm(m.holidayMin)];
+          global.TcCsv.hhmm(m.workedMin), global.TcCsv.hhmm(m.otMin), global.TcCsv.hhmm(m.ot60Min || 0),
+          global.TcCsv.hhmm(m.nightMin), global.TcCsv.hhmm(m.holidayMin), global.TcCsv.hhmm(m.holidayNightMin || 0)];
       }));
       var ws = X.utils.aoa_to_sheet(aoa);
-      /* ★列幅を付けないと 相手の画面で ######## になる★（前科あり） */
-      ws['!cols'] = [{ wch: 12 }, { wch: 18 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 10 }];
+      /* ★列幅を付けないと 相手の画面で ######## になる★（前科あり）＝見出しの数だけ用意する */
+      ws['!cols'] = head.map(function (h) { return { wch: Math.max(10, h.length * 2 + 2) }; });
       X.utils.book_append_sheet(wb, ws, '月計');
       rows.forEach(function (x) {
         var d2 = X.utils.aoa_to_sheet(global.TcCsv.dailyAoa(x.s));
@@ -721,5 +827,6 @@
   global.OwnerApp = {
     startLogin: startLogin, startIndex: startIndex, startShukei: startShukei,
     _st: st, _newCode: newCode, _grantDaysOf: grantDaysOf, _fileName: fileName,
+    _holNote: drawHolidayNote,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
