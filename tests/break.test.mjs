@@ -130,33 +130,25 @@ T('★直した値は 打刻より強い（打刻が在っても 直した方を
 });
 
 /* ── ⑤ 法定を下回る既定（黙って直さない） ───────────────────── */
-T('★★既定が法定を下回っても 黙って引き上げない（赤で知らせる）★★', () => {
+T('★★既定が法定を下回っても 黙って引き上げない★★', () => {
   /* 拘束9時間 → 法定は45分ではなく60分（労基法34条・8時間超）。既定30分の会社 */
-  const r = oneDay(day('2026-08-03', [['09:00', 'in'], ['18:00', 'out']]),
-    { breakDefaultMin: 30, warnOn: true });
+  const r = oneDay(day('2026-08-03', [['09:00', 'in'], ['18:00', 'out']]), { breakDefaultMin: 30 });
   eq(LAW.requiredBreakMin(540), 60, '法定の前提が違う');
   eq(r.day.breakMin, 30, '★黙って60分に引き上げている（違法な設定が見えなくなる）★');
   eq(r.day.workMin, 510);
-  const w = r.sum.warnings.filter(function (x) { return x.code === 'break_default_short'; });
-  ok(w.length > 0, '★赤で知らせていない★');
-  ok(/法律/.test(w[0].detail), '理由が法律の話になっていない: ' + w[0].detail);
 });
 
-T('★★気づきは「引いた後の休憩」で見る（打刻だけで見ない）★★', () => {
-  /* 既定60分を引けば法定を満たす日 → ★休憩が足りない とは出ない★ */
-  const r = oneDay(day('2026-08-03', [['09:00', 'in'], ['18:00', 'out']]), { warnOn: true });
-  const w = r.sum.warnings.filter(function (x) { return x.code === 'break_short' && x.d === '2026-08-03'; });
-  eq(w.length, 0, '★引いた後は足りているのに「休憩が足りません」と出ている★');
-});
-
-T('★引いた後でも足りない日は ちゃんと出る', () => {
-  /* 拘束13時間 → 法定60分。既定は60分だが 8時間超なので足りている…
-     ここでは既定を30分にして 足りない事を出す */
-  const r = oneDay(day('2026-08-03', [['08:00', 'in'], ['21:00', 'out']]),
-    { breakDefaultMin: 30, warnOn: true });
-  const w = r.sum.warnings.filter(function (x) { return x.code === 'break_short' && x.d === '2026-08-03'; });
-  ok(w.length > 0, '足りないのに出ていない');
-  eq(w[0].got, 30, '出している数字が「引いた後の休憩」でない');
+T('★★法定を下回る既定は 会社情報で赤にする（気づきの箱ではなく その場で言う）★★', () => {
+  /* 2026-08-15 気づきの箱を外したので、この知らせは ★会社情報の休憩の欄★へ移した。
+     線は lib/tc-law.js が持つ（画面に数字を直書きしない）。 */
+  const r = LAW.breakDefaultCheck(480, 30);      // 所定8時間＋休憩30分＝拘束510分
+  eq(r.short, true, '★足りないのに 赤にならない★');
+  eq(r.need, 60); eq(r.spanMin, 510);
+  eq(LAW.breakDefaultCheck(480, 60).short, false, '足りているのに赤にしている');
+  eq(LAW.breakDefaultCheck(300, 0).short, false, '拘束5時間なら休憩は要らない');
+  /* ★等号の境目★（拘束6時間ちょうどは要らない／6時間1分から要る） */
+  eq(LAW.breakDefaultCheck(360, 0).short, false, '拘束6時間ちょうど');
+  eq(LAW.breakDefaultCheck(361, 0).short, true, '拘束6時間1分');
 });
 
 /* ── ⑥ 原本と恒等式 ─────────────────────────────────────────── */
@@ -194,23 +186,24 @@ T('★★深夜が 実労働を超えない（休憩を引いた後）★★', (
 });
 
 /* ── ⑦ 働いた日に「休み」が立っていたら知らせる ───────────────── */
-T('★★欠勤・有給になっている日に打刻が在ったら 赤で知らせる（勝手に消さない）★★', () => {
-  /* 2026-08-15 指示役の指摘。★見本が雑でも通る＝本物でも通る★ので、見張りを入れる。 */
+T('★★欠勤・有給になっている日に打刻が在ったら 備考に出す（勝手に消さない）★★', () => {
+  /* 2026-08-15 気づきの箱を外したので、この知らせは ★その日の備考★へ移した
+     （★その日に何が起きたか★は備考に残す＝指示役の線引き）。 */
+  const CSV = require_(path.join(ROOT, 'lib/tc-csv.js'));
   const ps = day('2026-08-03', [['09:00', 'in'], ['18:00', 'out']]);
-  ['absent', 'paid_leave'].forEach(function (kind) {
-    const r = oneDay(ps, { warnOn: true }, [{ d: '2026-08-03', dayKind: kind }]);
-    const w = r.sum.warnings.filter(function (x) { return x.code === 'day_conflict'; });
-    ok(w.length === 1, '★' + kind + ' なのに打刻が在る日を知らせていない★');
-    ok(/どちらかが違います/.test(w[0].detail), '理由が弱い: ' + w[0].detail);
+  [['absent', '欠勤なのに打刻があります'], ['paid_leave', '有給なのに打刻があります']].forEach(function (x) {
+    const r = oneDay(ps, null, [{ d: '2026-08-03', dayKind: x[0] }]);
+    ok(CSV.note(r.day).indexOf(x[1]) >= 0, '★' + x[0] + ' なのに打刻が在る日を出していない★: ' + CSV.note(r.day));
     /* ★勝手に片方を消さない★（どちらが本当かは人にしか決められない） */
     eq(r.day.workMin, 480, '★働いた時間を勝手に消している★');
-    eq(r.day.dayKind, kind, '★休みの印を勝手に消している★');
+    eq(r.day.dayKind, x[0], '★休みの印を勝手に消している★');
   });
 });
 
-T('★働いていない日の欠勤・有給は 知らせない（誤警告を出さない）', () => {
-  const r = oneDay([], { warnOn: true }, [{ d: '2026-08-03', dayKind: 'absent' }]);
-  eq(r.sum.warnings.filter(function (x) { return x.code === 'day_conflict'; }).length, 0);
+T('★働いていない日の欠勤・有給は 何も出さない（誤警告を作らない）', () => {
+  const CSV = require_(path.join(ROOT, 'lib/tc-csv.js'));
+  const r = oneDay([], null, [{ d: '2026-08-03', dayKind: 'absent' }]);
+  eq(CSV.note(r.day).indexOf('打刻があります'), -1, '働いていないのに出している');
 });
 
 /* ── ⑧ 押す画面から休憩のボタンが消えている ─────────────────── */
@@ -245,18 +238,18 @@ if (process.argv.includes('--self-test')) {
       ['12:45', 'break_out'], ['18:00', 'out']]));
     eq(r.day.breakMin, 45, '★本物が打った45分を上書きしている★');
   });
-  S('④「働いた日の欠勤」を見ない作り物は 見本が雑でも通る（本物は赤にする）', () => {
-    const wrong = function () { return []; };
-    eq(wrong().length, 0, '作り物が壊れていない＝この検査が空振り');
+  S('④「働いた日の欠勤」を備考に出さない作り物は 見本が雑でも通る（本物は出す）', () => {
+    const CSV = require_(path.join(ROOT, 'lib/tc-csv.js'));
+    const wrong = function () { return ''; };
+    eq(wrong(), '', '作り物が壊れていない＝この検査が空振り');
     const r = oneDay(day('2026-08-03', [['09:00', 'in'], ['18:00', 'out']]),
-      { warnOn: true }, [{ d: '2026-08-03', dayKind: 'absent' }]);
-    ok(r.sum.warnings.some(function (x) { return x.code === 'day_conflict'; }), '★本物が知らせていない★');
+      null, [{ d: '2026-08-03', dayKind: 'absent' }]);
+    ok(CSV.note(r.day).indexOf('欠勤なのに打刻があります') >= 0, '★本物が出していない★');
   });
   S('③ 法定に足りない既定を黙って引き上げる作り物は 違法な設定を隠す（本物は隠さない）', () => {
-    const r = oneDay(day('2026-08-03', [['09:00', 'in'], ['18:00', 'out']]),
-      { breakDefaultMin: 30, warnOn: true });
+    const r = oneDay(day('2026-08-03', [['09:00', 'in'], ['18:00', 'out']]), { breakDefaultMin: 30 });
     eq(r.day.breakMin, 30, '★本物が黙って引き上げている★');
-    ok(r.sum.warnings.some(function (x) { return x.code === 'break_default_short'; }), '★本物が知らせていない★');
+    ok(LAW.breakDefaultCheck(480, 30).short, '★本物が知らせていない★');
   });
   console.log('\n[self-test] ' + sp + ' passed, ' + sf + ' failed');
   if (sf) process.exit(1);

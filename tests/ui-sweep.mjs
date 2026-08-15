@@ -717,6 +717,21 @@ T('★★中身が空なのに 枠だけ出ている箱が無い（空の箱を�
   console.log('     実測: ' + opened_pages.length + '枚の 見えている箱を数えて 空は 0件');
 });
 
+T('★★画面に「気づき」が1文字も無い（2026-08-15 に丸ごと外した）★★', () => {
+  /* ★書いた物ではなく 出た物を見る★。列も箱も設定も 全部 消えている事を数える。 */
+  const bad = [];
+  for (const p of opened_pages) {
+    const t = p.w.document.body.textContent || '';
+    if (t.indexOf('気づき') >= 0) bad.push(p.file);
+  }
+  ok(bad.length === 0, '★「気づき」が出ている画面: ' + [...new Set(bad)].join(', '));
+  /* ★一覧の列が1つ減っている★（氏名＋7列＝8列。前は「気づき」を入れて9列だった） */
+  const idx = results.filter((x) => x.file === 'index.html')[0];
+  const cols = idx.page.w.document.querySelectorAll('#people-summary thead th').length;
+  ok(cols === 8, '★一覧の列が ' + cols + '個（8個のはず＝気づきを外した後）★');
+  console.log('     実測: ' + opened_pages.length + '枚を見て「気づき」0件／一覧の列 ' + cols + '個');
+});
+
 T('★★画面に出た文に「あいことば」が無い（言葉は「暗証番号」1つ）★★', () => {
   /* 言葉が2つある物は必ず食い違う（司さん 2026-08-15）。 */
   const bad = [], withPin = [];

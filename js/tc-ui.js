@@ -79,7 +79,11 @@
    * @param {string} title 窓の題（＝紙の名前）
    * @param {string} bodyHtml 紙の中身。★空なら開かない（白紙のダイアログを出さない）★
    */
-  function printPaper(title, bodyHtml) {
+  /** ★綴じ代の余白★（上 右 下 左）。★綴じる側だけ20mm★・他は10mm */
+  var BIND_MM = { left: '10mm 10mm 10mm 20mm', top: '20mm 10mm 10mm 10mm', none: '10mm' };
+  function pageMargin(bind) { return BIND_MM[bind] || BIND_MM.left; }
+
+  function printPaper(title, bodyHtml, opts) {
     var body = String(bodyHtml || '').trim();
     if (!body) { toast('刷る中身がありません（先に対象を選んでください）'); return false; }
     var w = global.open('', '_blank');
@@ -123,7 +127,11 @@
       + '.paper-sum{display:flex;gap:12px;align-items:flex-start;margin-top:6px;}'
       + '.paper-sum table{width:auto;}'
       + '.paper-foot{display:block;margin-top:6px;font-size:9px;color:#78705C;}'
-      + '@page{size:A4 landscape;margin:10mm;}'
+      /* ★綴じ代★（2026-08-15 司さんの質問）
+         2穴パンチの中心は ★紙の端からおよそ12mm★。★左10mmでは 穴が日付の列にかかる★。
+         ⇒ ★綴じる側だけ20mm★・他の3辺は10mm。★どちら綴じかは会社が選ぶ★（左＝ふつう／上／綴じない）。
+         ★プリンタの拡大縮小で余白が変わる★ので、画面に「実際のサイズ（100%）で」と出している。 */
+      + '@page{size:A4 landscape;margin:' + pageMargin(opts && opts.bind) + ';}'
       + '</style></head><body>' + body + '</body></html>'
     );
     w.document.close();
@@ -148,7 +156,7 @@
   }
 
   global.TcUi = {
-    esc: esc, toast: toast,
+    esc: esc, toast: toast, pageMargin: pageMargin, BIND_MM: BIND_MM,
     mdShort: mdShort, dateField: dateField, onDateChange: onDateChange,
     hm: hm, minToHm: minToHm, dowOf: dowOf, DOW: DOW,
     printPaper: printPaper, deliverText: deliverText, nameHint: nameHint,

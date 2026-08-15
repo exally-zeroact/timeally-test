@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
+import zlib from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -182,6 +183,48 @@ function measureHeights(htmlPath) {
   catch (e) { return null; }
 }
 
+/** ★PDFの四辺の余白を 出た物から測る★（2026-08-15 司さんの質問）
+    ★計算やCSSの字ではなく、刷り上がったPDFの中の 文字の位置★を読む。
+    Chrome のPDFは 中身が Flate で圧縮されているので ほどいてから
+    テキストを置く命令（Tm / Td / TJ・Tj）の x,y を拾い、紙の端からの距離を出す。
+    @returns {{top:number,right:number,bottom:number,left:number,w:number,h:number}} ミリ */
+function pdfMargins(buf) {
+  const s = buf.toString('latin1');
+  const mb = /\/MediaBox\s*\[\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\]/.exec(s);
+  if (!mb) return null;
+  const W = +mb[3], H = +mb[4];                     // pt
+  /* ★Chrome の紙は こう始まる★（実物を開いて確かめた 2026-08-15）:
+       .24 0 0 -.24 0 594.96 cm     ← 縮尺と 上下ひっくり返し（原点が紙の左上になる）
+       q
+       237.5 118.75 3153.6 2244.2 re   ← ★中身を入れてよい四角＝余白そのもの★
+       W* n
+     ⇒ ★この四角を読めば 四辺の余白が そのまま出る★。
+     （最初は文字の位置(Tm/Td)を拾おうとしたが、Td は前の行からの相対なので
+       ★余白が常に0に見えた★。★出た物を読む時も 読み方を間違えれば嘘が出る★） */
+  const re = /stream\r?\n/g;
+  let m;
+  while ((m = re.exec(s))) {
+    const start = m.index + m[0].length;
+    const end = s.indexOf('endstream', start);
+    if (end < 0) continue;
+    let txt = null;
+    try { txt = zlib.inflateSync(Buffer.from(s.slice(start, end), 'latin1')).toString('latin1'); }
+    catch (e) { continue; }
+    const cm = /^\s*([-\d.]+)\s+0\s+0\s+([-\d.]+)\s+[-\d.]+\s+[-\d.]+\s+cm/.exec(txt);
+    const clip = /([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+re\s*\r?\n?\s*W\*?\s+n/.exec(txt);
+    if (!cm || !clip) continue;
+    const k = Math.abs(+cm[1]);                       // 縮尺
+    const x = +clip[1] * k, y = +clip[2] * k, w = +clip[3] * k, h = +clip[4] * k;
+    const pt2mm = (v) => Math.round(v / 72 * 25.4 * 10) / 10;
+    return {
+      left: pt2mm(x), top: pt2mm(y),
+      right: pt2mm(W - (x + w)), bottom: pt2mm(H - (y + h)),
+      w: pt2mm(W), h: pt2mm(H),
+    };
+  }
+  return null;
+}
+
 /** PDF の枚数を数える（Chrome が作るPDFは /Type /Page が1枚に1つ） */
 function pageCount(buf) {
   const s = buf.toString('latin1');
@@ -226,6 +269,7 @@ for (const c of CASES) {
     '--print-to-pdf=' + pdfPath, '--print-to-pdf-no-header', 'file:///' + htmlPath.replace(/\\/g, '/')],
   { stdio: 'ignore', timeout: 60000 });
   const n = pageCount(fs.readFileSync(pdfPath));
+  const mg = pdfMargins(fs.readFileSync(pdfPath));
   const rows = (paper.match(/<tr/g) || []).length;
   const okOne = n === 1;
   if (!okOne) ng++;
@@ -267,6 +311,15 @@ for (const c of CASES) {
     + (missing.length ? '　／★入っているはずが 無い: ' + missing.join('・') + '★' : ''));
   /* ★またがない月に 月を出していないか★ も見る（出したら余計な2文字） */
   if (!c.crossMonth && has['月をまたぐ日付']) { ng++; console.log('      ★またがない月なのに 日付に月が出ている★'); }
+  if (mg) {
+    /* ★綴じる側だけ広い★（左綴じ＝左20mm・他10mm）。★出た物で測る★ */
+    const okM = Math.abs(mg.left - 20) <= 1.5 && Math.abs(mg.right - 10) <= 1.5
+      && Math.abs(mg.top - 10) <= 1.5 && Math.abs(mg.bottom - 10) <= 1.5;
+    if (!okM) ng++;
+    console.log('      ' + (okM ? '' : '★') + '余白の実測: 上' + mg.top + ' 右' + mg.right
+      + ' 下' + mg.bottom + ' 左' + mg.left + 'mm （紙 ' + mg.w + '×' + mg.h + 'mm・左綴じ20mm）'
+      + (okM ? '' : '★'));
+  }
   console.log(`      ${pdfPath}`);
   if (!keep) { /* PDFは残す（渡す物を見てもらうため）。HTMLだけ消す */ fs.unlinkSync(htmlPath); }
 }

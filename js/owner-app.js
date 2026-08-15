@@ -161,7 +161,8 @@
       holidayMode: c.holiday_mode, legalHolidayDow: c.legal_holiday_dow,
       holidayCycleStart: c.holiday_cycle_start,
       weekStartDow: c.week_start_dow,
-      sme: c.sme, warnOn: c.warn_on,
+      sme: c.sme,
+      bindSide: c.bind_side,
     };
   }
 
@@ -255,9 +256,11 @@
     })).then(function (rows) {
       /* ★割増が要る時数を 一覧にも出す★（うち60超＝50%・うち休日の深夜＝60%）
          ★0の人は空欄★（出ている人だけ目立たせる） */
-      box.innerHTML = '<div class="tc-tablewrap"><table class="tc"><tr>'
+      /* ★「気づき」の列は 2026-08-15 に外した★（司さんの決定）
+         ＝★列が1つ減って 1画面に入る件数が増える★ */
+      box.innerHTML = '<div class="tc-tablewrap"><table class="tc"><thead><tr>'
         + '<th class="l">氏名</th><th>出勤</th><th>実労働</th><th>時間外</th><th>うち60超</th>'
-        + '<th>深夜</th><th>休日</th><th>うち休日の深夜</th><th>気づき</th></tr>'
+        + '<th>深夜</th><th>休日</th><th>うち休日の深夜</th></tr></thead><tbody>'
         + rows.map(function (x) {
           var m = x.s.month;
           var z = function (v) { return v ? U.minToHm(v) : ''; };
@@ -268,9 +271,8 @@
             + '<td class="num' + (m.ot60Min ? ' warn' : '') + '">' + z(m.ot60Min) + '</td>'
             + '<td class="num">' + U.minToHm(m.nightMin) + '</td>'
             + '<td class="num">' + U.minToHm(m.holidayMin) + '</td>'
-            + '<td class="num">' + z(m.holidayNightMin) + '</td>'
-            + '<td class="num' + (x.s.warnings.length ? ' warn' : '') + '">' + x.s.warnings.length + '</td></tr>';
-        }).join('') + '</table></div>';
+            + '<td class="num">' + z(m.holidayNightMin) + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
     }).catch(failed('数えられませんでした'));
   }
 
@@ -440,12 +442,31 @@
     }
     el.textContent = '＝ ' + r.min + '分（中ではこの分数で数えます）' + extra;
     el.className = extra ? 'tc-alert' : 'tc-note';
+    if (f.id === 'c-break' || f.id === 'c-daily') drawBreakLaw();
+  }
+
+  /** ★休憩の既定が 法律で必要な分を下回っていないか★（会社情報のその場で言う・2026-08-15）
+      ★黙って引き上げない★＝数字は会社が入れた物のまま使う。ここは言うだけ。
+      法定の線は lib/tc-law.js が持つ（説明文に数字を直書きしない）。 */
+  function drawBreakLaw() {
+    var box = q('c-break-law');
+    if (!box) return;
+    var std = readField(HOUR_FIELDS[0]), brk = readField(HOUR_FIELDS[2]);
+    if (std.min == null || brk.min == null) { box.hidden = true; box.textContent = ''; return; }
+    var r = global.TcLaw.breakDefaultCheck(std.min, brk.min);
+    box.hidden = !r.short;
+    box.textContent = r.short
+      ? '休憩の既定（' + brk.min + '分）が、法律で必要な分（' + r.need + '分）を下回っています。'
+        + '1日の所定どおり働くと拘束 ' + U.minToHm(r.spanMin) + ' になるためです。'
+        + '会社の決まりを直してください（数字は勝手に変えていません）'
+      : '';
   }
 
   function fillCompany() {
     var c = st.company || {};
     var set = function (id, v) { var el = q(id); if (el) el.value = v == null ? '' : v; };
     set('c-name', c.name); set('c-close', c.close_day == null ? 31 : c.close_day);
+    set('c-bind', c.bind_side || 'left');            // 紙の綴じ代（左／上／綴じない）
     HOUR_FIELDS.forEach(function (f) {
       var min = c[f.col] == null ? f.def : c[f.col];
       /* ★読みやすい方の単位で出す★（ちょうどの時間は「時間」／端数は「分」）
@@ -486,7 +507,6 @@
     set('c-round', mode === 'daily30' ? 'custom' : mode);
     set('c-runit', r.unitMin); set('c-rdir', r.dir); set('c-rscope', r.scope);
 
-    var w = q('c-warn'); if (w) w.checked = !!c.warn_on;
     var cn = q('coname'); if (cn) cn.textContent = c.name || '';
     drawRoundNote();
   }
@@ -621,6 +641,7 @@
       account_id: st.user.id,
       name: q('c-name').value.trim(),
       close_day: Number(q('c-close').value) || 31,
+      bind_side: (q('c-bind') || {}).value || 'left',
       holiday_mode: mode,
       holiday_cycle_start: holCycleValue() || null,
       /* ★-1（決めていない）を 0（日）に落とさない★（|| だと -1 も 0 も消える） */
@@ -629,7 +650,6 @@
       round_unit_min: r2.unitMin,
       round_dir: r2.dir,
       round_scope: r2.scope,
-      warn_on: !!q('c-warn').checked,
       updated_at: new Date().toISOString(),
     }, vals)).then(function () { U.toast('保存しました'); reload(); })
       .catch(failed('保存できませんでした'));
@@ -1050,7 +1070,6 @@
     st.totalRows = totalRowsOf(p, s);
     q('total').innerHTML = st.totalRows.map(function (r) { return tr(r[0], r[1]); }).join('');
     drawCutBox(s);
-    drawWarns(s);
     U.nameHint(q('namehint'), fileName(p, 'csv'));
   }
 
@@ -1098,20 +1117,10 @@
     }
   }
 
-  function drawWarns(s) {
-    var w = q('warns');
-    var on = st.company && st.company.warn_on;
-    if (!s.warnings.length) {
-      w.innerHTML = '<div class="tc-note">気づきはありません。</div>';
-    } else if (!on) {
-      w.innerHTML = '<div class="tc-note">気づきが ' + s.warnings.length
-        + ' 件あります（会社情報で「気づきを出す」を入れると中身が出ます）。</div>';
-    } else {
-      w.innerHTML = s.warnings.map(function (x) {
-        return '<div class="tc-alert">' + U.esc(x.detail) + '</div>';
-      }).join('');
-    }
-  }
+  /* ★「気づき」の箱は 2026-08-15 に丸ごと外した★（司さんの決定）
+     ＝★誰も見ない物になっていた★。lib/tc-calc.js の countWarnings ごと消してある。
+     ★残した物★: 紙の備考（その日に何が起きたか）／休憩の既定が法定を下回る赤（会社情報）／
+                 丸めの適法性・法定休日の説明（会社情報）。 */
   function tr(k, v) { return '<tr><th class="l">' + U.esc(k) + '</th><td class="num">' + U.esc(v) + '</td></tr>'; }
   function yukyuLeft(p, s) {
     var g = grantDaysOf(p);
@@ -1159,8 +1168,11 @@
     /* ★紙にも状態を刷る★（確定前の紙が「確定」の顔で回ると、後で数字が動いた時に食い違う）
        ★これは「どう絞り込んだか」ではなく「この数字が動くかどうか」なので刷ってよい★ */
     var body = paperOf(p, s, q('daily').outerHTML, st.totalRows);
-    U.printPaper(fileName(p, 'pdf').replace(/\.pdf$/, ''), body);
+    U.printPaper(fileName(p, 'pdf').replace(/\.pdf$/, ''), body, { bind: bindSide() });
   }
+
+  /** ★紙の綴じ代★ … 会社の設定（左＝ふつう／上／綴じない） */
+  function bindSide() { return (st.company && st.company.bind_side) || 'left'; }
 
   /** ★全員ぶんを1回で刷る★（月末に10人ぶん10回 押さなくてよい）
       ★1人1枚で続けて出る／1人が2枚に割れない★（人の頭で改ページする） */
@@ -1173,7 +1185,7 @@
       var name = global.TcName.build({
         kind: '勤務表', company: (st.company || {}).name, ym: st.ym, count: rows.length, stamp: stamp(),
       }, 'pdf').replace(/\.pdf$/, '');
-      U.printPaper(name, body);
+      U.printPaper(name, body, { bind: bindSide() });
     }).catch(failed('作れませんでした'));
   }
 

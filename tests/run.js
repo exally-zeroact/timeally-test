@@ -34,7 +34,9 @@ for (const cmd of [['scripts/sql-guard.mjs', '--self-test'], ['scripts/sql-guard
   ['scripts/print-check.mjs'],
   /* ★揃えは「描き終わった物」から数える★（ソースの grep ではない）。
      紙（A4横）と 画面（375/390/412）の両方。これも刷るブラウザが要るので手元だけ。 */
-  ['scripts/align-check.mjs']]) {
+  ['scripts/align-check.mjs'],
+  /* ★数えるだけで誰も呼ばない物を残さない★（src= だけで判定しない） */
+  ['scripts/dead-check.mjs']]) {
   total++;
   const r = spawnSync(process.execPath, cmd, { cwd: ROOT, stdio: 'inherit' });
   if (r.status !== 0) { ng++; console.log('★赤★ ' + cmd.join(' ')); }

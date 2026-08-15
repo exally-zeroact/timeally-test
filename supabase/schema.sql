@@ -129,6 +129,14 @@ alter table timeally.tc_companies add  constraint tc_companies_holiday_mode_chec
 -- ★人ごとの上書き★（null = 会社の決まりに従う）
 alter table timeally.tc_pub add column if not exists legal_holiday_dow int;
 
+-- ★紙の綴じ代（2026-08-15 司さんの質問）★
+--   2穴パンチの中心は ★紙の端からおよそ12mm★。★左10mmでは 穴が日付の列にかかる★。
+--   ⇒ ★綴じる側だけ20mm★。どちら綴じかは会社ごと（left=ふつう / top / none=綴じない）。
+alter table timeally.tc_companies add column if not exists bind_side text not null default 'left';
+alter table timeally.tc_companies drop constraint if exists tc_companies_bind_side_check;
+alter table timeally.tc_companies add  constraint tc_companies_bind_side_check
+  check (bind_side in ('left','top','none'));
+
 -- ★同じ人を2行 作らせない（指示役の裁定 2026-08-15）★
 --   ★人が入ってからでは剥がせない★ので、まだ0行/4行のうちに入れる。
 --   実測（2026-08-15 両方の倉庫を読むだけで数えた）:

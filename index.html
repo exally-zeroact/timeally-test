@@ -4,17 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <title>Timeally — 一覧</title>
-    <link rel="icon" href="icons/favicon-32.png?v=38606a0e" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=38606a0e" />
+    <link rel="icon" href="icons/favicon-32.png?v=e8209cb7" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=e8209cb7" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
     <meta name="theme-color" content="#FFC72C" />
-    <link rel="manifest" href="manifest.json?v=38606a0e" />
+    <link rel="manifest" href="manifest.json?v=e8209cb7" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=38606a0e" />
+    <link rel="stylesheet" href="css/timeally.css?v=e8209cb7" />
   </head>
   <body>
     <div class="tc-appbar">
@@ -32,7 +32,7 @@
         <button class="tc-btn sub" id="tab-company" type="button" role="tab" aria-selected="false">会社</button>
         <button class="tc-btn sub" id="tab-people" type="button" role="tab" aria-selected="false">従業員</button>
         <button class="tc-btn sub" id="tab-list" type="button" role="tab" aria-selected="true">一覧</button>
-        <a class="tc-btn go" id="go-shukei" href="shukei.html?v=38606a0e">集計 →</a>
+        <a class="tc-btn go" id="go-shukei" href="shukei.html?v=e8209cb7">集計 →</a>
       </div>
 
       <!-- 出るを押した時の確認（★白紙のダイアログを開かない・画面の中で聞く★） -->
@@ -114,6 +114,9 @@
           <button class="tc-btn unit" type="button" id="c-break-m" data-unit="minute" aria-selected="false">分</button>
         </span>
         <span class="tc-note" id="c-break-hint"></span>
+        <!-- ★休憩の既定が 法律で必要な分を下回っている時の赤★（設定の間違いは その場で言う）
+             ★黙って引き上げない★＝数字は会社が入れた物のまま使う -->
+        <div class="tc-alert" id="c-break-law" hidden></div>
         <label for="c-holmode">法定休日の決め方</label>
         <select id="c-holmode">
           <option value="none">決めていない（就業規則で特定していない）</option>
@@ -164,29 +167,37 @@
         <div class="tc-alert" id="round-warn" hidden></div>
         <div class="tc-note" id="round-example"></div>
 
-        <h3>気づき（警告）</h3>
+        <h3>紙の綴じ代</h3>
         <div class="tc-note">
-          既定では出しません。ただし中では常に数えているので、あとから入れても
-          過去のぶんまでさかのぼって出ます。
+          2穴パンチの中心は紙の端からおよそ12mmです。綴じる側だけ余白を広くします。
+          刷るときは「実際のサイズ（100%）」で刷ってください（拡大縮小すると余白が変わります）。
         </div>
-        <label><input type="checkbox" id="c-warn" style="width: auto; min-height: 0" /> 気づきを出す</label>
+        <label for="c-bind">どちらを綴じますか</label>
+        <select id="c-bind">
+          <option value="left">左（ふつう）</option>
+          <option value="top">上</option>
+          <option value="none">綴じない</option>
+        </select>
 
+        <!-- ★「気づき（警告）」は 2026-08-15 に丸ごと外した★（司さんの決定）。
+             ★休憩の既定が法定を下回る赤★は 休憩の欄のすぐ下に移した（設定の間違いは その場で言う）。
+             ★丸めの適法性★と★法定休日の決め方★の説明は 今までどおり それぞれの欄に出る。 -->
         <p><button class="tc-btn wide" id="b-savecompany" type="button">保存する</button></p>
       </section>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=38606a0e"></script>
-    <script src="js/env-badge.js?v=38606a0e"></script>
-    <script src="lib/tc-law.js?v=38606a0e"></script>
-    <script src="lib/tc-calc.js?v=38606a0e"></script>
-    <script src="lib/tc-csv.js?v=38606a0e"></script>
-    <script src="lib/tc-name.js?v=38606a0e"></script>
-    <script src="lib/tc-hours.js?v=38606a0e"></script>
-    <script src="lib/qr.js?v=38606a0e"></script>
-    <script src="js/file-out.js?v=38606a0e"></script>
-    <script src="js/tc-ui.js?v=38606a0e"></script>
-    <script src="js/tc-db.js?v=38606a0e"></script>
-    <script src="js/owner-app.js?v=38606a0e"></script>
+    <script src="js/supa-config.js?v=e8209cb7"></script>
+    <script src="js/env-badge.js?v=e8209cb7"></script>
+    <script src="lib/tc-law.js?v=e8209cb7"></script>
+    <script src="lib/tc-calc.js?v=e8209cb7"></script>
+    <script src="lib/tc-csv.js?v=e8209cb7"></script>
+    <script src="lib/tc-name.js?v=e8209cb7"></script>
+    <script src="lib/tc-hours.js?v=e8209cb7"></script>
+    <script src="lib/qr.js?v=e8209cb7"></script>
+    <script src="js/file-out.js?v=e8209cb7"></script>
+    <script src="js/tc-ui.js?v=e8209cb7"></script>
+    <script src="js/tc-db.js?v=e8209cb7"></script>
+    <script src="js/owner-app.js?v=e8209cb7"></script>
     <script>
       OwnerApp.startIndex();
     </script>
