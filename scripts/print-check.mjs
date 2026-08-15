@@ -44,18 +44,60 @@ let lastWin = null;
     ★中の値・描いた文字・月計 の3つを突き合わせる★ので、
     数える所の穴も 描く所の穴も どちらも捕まる。 */
 function checkColumns(w) {
-  const HEAD = ['休憩', '中抜け', '実労働', '所定内', '所定超', '法定外残業', '深夜', '休日'];
-  const KEY = ['breakMin', 'awayMin', 'workMin', 'stdMin', 'overStdMin', 'otMin', 'nightMin', 'holidayMin'];
-  const MKEY = [null, null, 'workedMin', 'stdMin', 'overStdMin', 'otMin', 'nightMin', 'holidayMin'];
+  /* ★12列★（2026-08-15 指示役の指摘で 8列→12列）
+     ★遅刻・早退・有給・欠勤は 誰も突き合わせていなかった★＝8列で潰したやり方が
+     残り4列に効いていなかった。★有給・欠勤は 時間ではなく件数★で突き合わせる。 */
+  const HEAD = ['休憩', '中抜け', '実労働', '所定内', '所定超', '法定外残業', '深夜', '休日',
+    '遅刻', '早退', '有給', '欠勤'];
+  const KEY = ['breakMin', 'awayMin', 'workMin', 'stdMin', 'overStdMin', 'otMin', 'nightMin', 'holidayMin',
+    'lateMin', 'earlyMin', null, null];
+  const MKEY = [null, null, 'workedMin', 'stdMin', 'overStdMin', 'otMin', 'nightMin', 'holidayMin',
+    'lateMin', 'earlyMin', 'yukyu', 'kekkin'];
+  const COUNT = { 有給: 'paid_leave', 欠勤: 'absent' };
   const hhmm = (m) => Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0');
   const st = w.OwnerApp._st;
   const foot = [...w.document.querySelectorAll('#daily tfoot td')].map((c) => c.textContent);
-  const bad = [];
+  /* ★描いた文字を1行ずつ足す★（2026-08-15）
+     ★中の値と合計行だけを比べても、1マスの表示が違う穴は捕まらない★
+     （わざと1行の表示だけ変えて 赤にならない事を実測して分かった）。
+     ＝指示役が手でやった「紙の数字を足す」を そのまま機械にやらせる。 */
+  const toMin = (t) => {
+    const m = /^(\d+):(\d\d)$/.exec(String(t).trim());
+    return m ? +m[1] * 60 + +m[2] : (String(t).trim() === '' ? 0 : NaN);
+  };
+  const drawn = HEAD.map(() => 0);
+  const drawnBad = [];
+  [...w.document.querySelectorAll('#daily tbody tr')].forEach((tr) => {
+    const td = [...tr.querySelectorAll('td')].map((c) => c.textContent);
+    HEAD.forEach((label, i) => {
+      const cell = td[i + 4];                       // 先頭4列（日付/曜日/出勤/退勤）は数えない
+      if (COUNT[label]) { drawn[i] += cell.trim() === '' ? 0 : 1; return; }
+      const v = toMin(cell);
+      if (isNaN(v)) { drawnBad.push(label + '「' + cell + '」が時刻の形でない'); return; }
+      drawn[i] += v;
+    });
+  });
+  const bad = drawnBad;
   HEAD.forEach((label, i) => {
-    const sum = st.sum.days.reduce((a, x) => a + x[KEY[i]], 0);
-    if (hhmm(sum) !== foot[i]) bad.push(label + '（日ごと ' + hhmm(sum) + ' ≠ 合計行「' + foot[i] + '」）');
+    if (COUNT[label]) {
+      /* ★件数で数える★（日ごとの印の数 ＝ 合計行 ＝ 月計） */
+      const n = st.sum.days.filter((x) => x.dayKind === COUNT[label]).length;
+      const shown = foot[i] === '' ? 0 : Number(foot[i]);
+      if (n !== shown) bad.push(label + '（中の値 ' + n + '件 ≠ 合計行「' + foot[i] + '」）');
+      if (st.sum.month[MKEY[i]] !== n) bad.push(label + '（中の値 ' + n + '件 ≠ 月計 ' + st.sum.month[MKEY[i]] + '）');
+      if (drawn[i] !== n) bad.push(label + '（★描いた印 ' + drawn[i] + '件 ≠ 中の値 ' + n + '件★）');
+      return;
+    }
+    const sum = st.sum.days.reduce((a, x) => a + (x[KEY[i]] || 0), 0);
+    /* 0の列は空欄で出す決まりなので、空欄は0として比べる */
+    const shown = foot[i] === '' ? '0:00' : foot[i];
+    if (hhmm(sum) !== shown) bad.push(label + '（中の値 ' + hhmm(sum) + ' ≠ 合計行「' + foot[i] + '」）');
     if (MKEY[i] != null && st.sum.month[MKEY[i]] !== sum) {
-      bad.push(label + '（日ごと ' + hhmm(sum) + ' ≠ 月計 ' + hhmm(st.sum.month[MKEY[i]]) + '）');
+      bad.push(label + '（中の値 ' + hhmm(sum) + ' ≠ 月計 ' + hhmm(st.sum.month[MKEY[i]]) + '）');
+    }
+    /* ★描いた文字を足した物とも比べる★（1マスの表示違いはここでしか捕まらない） */
+    if (drawn[i] !== sum) {
+      bad.push(label + '（★描いた文字の合計 ' + hhmm(drawn[i]) + ' ≠ 中の値 ' + hhmm(sum) + '★）');
     }
   });
   /* ★働いた日に「休み」が立っていないか★（見本が雑でも通る＝本物でも通る） */
@@ -197,7 +239,7 @@ for (const c of CASES) {
     if (h.tall && h.tall.n > 0) { ng++; console.log('      ★縦に割れているマスが ' + h.tall.n + '個★'); }
     if (h.over > 0) { ng++; console.log('      ★横に ' + h.over + 'px はみ出している★'); }
     console.log('      縦に割れたマス ' + (h.tall ? h.tall.n : '?') + '個 ／ 横のはみ出し ' + h.over + 'px'
-      + ' ／ ★列ごとの突き合わせ 8本 一致★');
+      + ' ／ ★列ごとの突き合わせ 12本 一致★');
   }
   /* ★入れたつもりの物が 本当に紙に出ているか数える★（入っていなければ「試した」と言えない） */
   const has = {

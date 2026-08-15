@@ -962,12 +962,14 @@
   function dailyInner(s) {
     var CSV = global.TcCsv;
     var crossMonth = s.period.from.slice(0, 7) !== s.period.to.slice(0, 7);
-    var sum = { 休憩: 0, 中抜け: 0, 実労働: 0, 所定内: 0, 所定超: 0, 法定外残業: 0, 深夜: 0, 休日: 0 };
+    var sum = { 休憩: 0, 中抜け: 0, 実労働: 0, 所定内: 0, 所定超: 0, 法定外残業: 0, 深夜: 0, 休日: 0,
+      遅刻: 0, 早退: 0 };
 
     var body = (s.days || []).map(function (d) {
       sum['休憩'] += d.breakMin; sum['中抜け'] += d.awayMin; sum['実労働'] += d.workMin;
       sum['所定内'] += d.stdMin; sum['所定超'] += d.overStdMin; sum['法定外残業'] += d.otMin;
       sum['深夜'] += d.nightMin; sum['休日'] += d.holidayMin;
+      sum['遅刻'] += (d.lateMin || 0); sum['早退'] += (d.earlyMin || 0);
       var v = [
         dayLabel(d.d, crossMonth), U.DOW[d.dow],
         d.inAt ? d.inAt.slice(11) : '', d.outAt ? d.outAt.slice(11) : '',
@@ -979,10 +981,17 @@
         d.dayKind === 'paid_leave' ? '1' : '', d.dayKind === 'absent' ? '1' : '',
         CSV.note(d),
       ];
+      /* ★打刻が1つも無い日は 数字を全部 空欄にする★（2026-08-15 指示役の指摘）
+         ＝有給・欠勤の日に 0:00 が4つ並んで読みにくかった。印（有給1／欠勤1）だけ残す。
+         ★打刻が在って結果が0の日は 0:00 のまま★（＝★数えた結果の0★。
+         空欄にすると「まだ数えていない」に見える）。 */
+      var noPunch = !d.inAt && !d.outAt;
       /* ★土日と法定休日は薄い網★（紙で見分けが付く。画面のCSSには足さない） */
       var cls = d.isLegalHoliday || d.dow === 0 || d.dow === 6 ? ' class="rest"' : '';
       return '<tr' + cls + '>' + DAILY_COLS.map(function (c, i) {
-        return '<td class="' + (c.l ? 'l' : 'num') + '">' + U.esc(c.z ? blank(v[i]) : v[i]) + '</td>';
+        var t = v[i];
+        if (noPunch && c.k !== '日付' && c.k !== '曜日' && c.k !== '有給' && c.k !== '欠勤' && c.k !== '備考') t = '';
+        return '<td class="' + (c.l ? 'l' : 'num') + '">' + U.esc(c.z ? blank(t) : t) + '</td>';
       }).join('') + '</tr>';
     }).join('');
 
@@ -999,9 +1008,14 @@
       }).join('') + '</tr>'
       + '</thead><tbody>' + body + '</tbody>'
       /* ★合計行★（日ごとの表だけで 月計と突き合わせられる） */
+      /* ★遅刻・早退も足す★（給与で控除に使う数字なのに、どこにも合計が無かった）
+         ★有給・欠勤は「日数」＝件数で数える★（時間ではない） */
       + '<tfoot><tr><th class="l" colspan="4">合計</th>'
       + DAILY_COLS.slice(4).map(function (c) {
-        return '<td class="num">' + U.esc(sum[c.k] == null ? '' : CSV.hhmm(sum[c.k])) + '</td>';
+        if (c.k === '有給') return '<td class="num">' + U.esc(s.month.yukyu || '') + '</td>';
+        if (c.k === '欠勤') return '<td class="num">' + U.esc(s.month.kekkin || '') + '</td>';
+        if (sum[c.k] == null) return '<td class="num"></td>';
+        return '<td class="num">' + U.esc(c.z && !sum[c.k] ? '' : CSV.hhmm(sum[c.k])) + '</td>';
       }).join('') + '</tr></tfoot>';
   }
 
@@ -1034,6 +1048,10 @@
       ['　休日（' + pc(LAW.rateOf('holiday')) + '）', U.minToHm(m2.holidayMin)],
       ['深夜（' + pc(LAW.rateOf('night')) + '・上乗せ）', U.minToHm(m2.nightMin)],
       ['　うち休日の深夜（' + pc(LAW.rateOf('holiday_night')) + '）', U.minToHm(m2.holidayNightMin)],
+      /* ★遅刻・早退は 割増の箱と分けて置く★（率の話ではないので混ぜない）
+         ★給与で控除に使う数字★なので、月の合計をここで出す（2026-08-15） */
+      ['遅刻', U.minToHm(m2.lateMin)],
+      ['早退', U.minToHm(m2.earlyMin)],
       ['有給消化', String(m2.yukyu)],
       ['有給残', String(yukyuLeft(p, s))],
       ['欠勤', String(m2.kekkin)],
