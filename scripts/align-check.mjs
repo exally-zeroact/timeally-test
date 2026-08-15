@@ -26,7 +26,11 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require_ = createRequire(path.join(ROOT, 'package.json'));
 const { createFake } = require_(path.join(ROOT, 'tests/fake-supa.js'));
 
-/** ★列ごとに どちらへ寄せるか（合格の線）★ … 名前で決める。ここが唯一の正 */
+/** ★見出し（列の名前）は 全部 中央★（2026-08-15 司さんの指摘で訂正）
+    ＝★表の見出しは中央が普通★。またがる見出しも中央なので 2段とも揃う。 */
+const HEAD_WANT = 'center';
+
+/** ★中身の揃え（合格の線）★ … 名前で決める。ここが唯一の正 */
 const WANT = {
   日付: 'right', 曜日: 'center', 出勤: 'right', 退勤: 'right',
   休憩: 'right', 中抜け: 'right', 実労働: 'right',
@@ -91,6 +95,12 @@ function measure(htmlPath, width) {
     + 'var all=heads.concat(solo);'
     + 'all.forEach(function(th){out.head.push({k:th.textContent.trim(),a:getComputedStyle(th).textAlign});});'
     + 'out.grp=t.querySelectorAll("thead th.grp").length;'
+    + 'out.grpAlign=[].slice.call(t.querySelectorAll("thead th.grp")).map(function(th){return getComputedStyle(th).textAlign;});'
+    /* ★月計の箱★ … ラベルは左・値は右・★頭に空白を入れない★（3列とも左端からそろう） */
+    + 'out.sum=[].slice.call(document.querySelectorAll(".paper-sum table tr, table#total tr")).map(function(tr){'
+    + 'var th=tr.querySelector("th"),td=tr.querySelector("td");if(!th||!td)return null;'
+    + 'return {k:th.textContent,ka:getComputedStyle(th).textAlign,va:getComputedStyle(td).textAlign,'
+    + 'x:Math.round(th.getBoundingClientRect().left)};}).filter(Boolean);'
     + 'var body=t.querySelector("tbody tr");'
     + 'if(body)[].slice.call(body.querySelectorAll("td")).forEach(function(td,i){'
     + 'out.cols.push({i:i,a:getComputedStyle(td).textAlign});});'
@@ -111,7 +121,7 @@ function measure(htmlPath, width) {
 
 const NAMES = Object.keys(WANT);
 let ng = 0;
-const { screenTable, paper } = await build();
+const { screenTable, totalTable, paper } = await build();
 
 /* ── ①紙 ─────────────────────────────────────────────────────── */
 const paperPath = path.join(outDir, 'paper.html');
@@ -124,8 +134,9 @@ const screenPath = path.join(outDir, 'screen.html');
 fs.writeFileSync(screenPath,
   '<!doctype html><html lang="ja"><head><meta charset="utf-8">'
   + '<link rel="stylesheet" href="file:///' + cssPath + '">'
+  /* ★月計も一緒に測る★（画面でもラベルが左・値が右かを見る。入れないと0行で素通りする） */
   + '</head><body><div class="tc-wrap"><div class="tc-tablewrap">'
-  + screenTable + '</div></div></body></html>', 'utf8');
+  + screenTable + '</div><div class="tc-tablewrap">' + totalTable + '</div></div></body></html>', 'utf8');
 [375, 390, 412].forEach((w) => check('画面 ' + w + 'px', measure(screenPath, w)));
 
 function check(where, r) {
@@ -135,12 +146,14 @@ function check(where, r) {
     const want = WANT[NAMES[i]];
     if (c.a !== want) bad.push(NAMES[i] + ' の中身が ' + c.a + '（' + want + ' のはず）');
   });
-  /* 見出しの揃え（★中身と同じか★） */
+  /* ★見出しは 全部 中央★（またがる見出しも含めて） */
   r.head.forEach((h) => {
-    const want = WANT[h.k];
-    if (!want) return;
-    if (h.a !== want) bad.push(h.k + ' の見出しが ' + h.a + '（中身と同じ ' + want + ' のはず）');
+    if (!WANT[h.k]) return;
+    if (h.a !== HEAD_WANT) bad.push(h.k + ' の見出しが ' + h.a + '（見出しは ' + HEAD_WANT + ' のはず）');
   });
+  if (r.grpAlign && r.grpAlign.some((a) => a !== HEAD_WANT)) {
+    bad.push('またがる見出しに ' + r.grpAlign.filter((a) => a !== HEAD_WANT).join('/') + ' がある');
+  }
   /* ★中央は「1文字の列」だけ★ */
   r.cols.forEach((c, i) => {
     if (c.a === 'center' && WANT[NAMES[i]] !== 'center') bad.push(NAMES[i] + ' に中央を使っている');
@@ -154,10 +167,18 @@ function check(where, r) {
     }
   });
   if (off.length) bad.push('合計行の桁が縦に揃っていない: ' + off.join(' '));
+
+  /* ★月計の箱★ … ラベル＝左／値＝右／★頭に空白が無い（3列とも左端からそろう）★ */
+  (r.sum || []).forEach((s) => {
+    if (s.ka !== 'left') bad.push('月計「' + s.k.trim() + '」のラベルが ' + s.ka + '（left のはず）');
+    if (s.va !== 'right') bad.push('月計「' + s.k.trim() + '」の値が ' + s.va + '（right のはず）');
+    if (/^[\s　]/.test(s.k)) bad.push('★月計「' + s.k.trim() + '」のラベルの頭に空白がある（内側に寄って見える）★');
+  });
   if (bad.length) { ng++; bad.forEach((b) => console.log('  ✗ ' + where + ' … ' + b)); }
   else {
-    console.log('  ✓ ' + where + ' … 列 ' + r.cols.length + '個・見出し ' + r.head.length + '個 すべて決まりどおり'
-      + '／中央は曜日だけ／またがる見出し ' + r.grp + '個は数えない'
+    console.log('  ✓ ' + where + ' … 中身 ' + r.cols.length + '列（中央は曜日だけ）'
+      + '／★見出し ' + (r.head.length + r.grp) + '個 全部 中央★'
+      + '／月計 ' + (r.sum || []).length + '行（ラベル左・値右・頭の空白0）'
       + '／★合計行の桁が 上の行と縦に一致★');
   }
 }

@@ -954,8 +954,12 @@
     { k: '有給', w: 4, z: true }, { k: '欠勤', w: 4, z: true },
     { k: '備考', w: 15, a: 'l' },
   ];
-  /** ★列の揃えを決めるのは この1本だけ★（見出しも中身も合計行も ここから取る＝食い違わない） */
+  /** ★中身の揃えを決めるのは この1本だけ★（中身も合計行も ここから取る＝食い違わない） */
   function alignOf(c) { return c.a === 'l' ? 'l' : c.a === 'c' ? 'c' : 'num'; }
+  /** ★見出し（列の名前）は 中身に関係なく 中央★（2026-08-15 司さんの指摘で訂正）
+      ＝★表の見出しは中央が普通★。★またがる見出しも中央★なので 2段とも揃う。
+      ※数字の列は ★等幅のまま★（見出しの字も同じ書体で並ぶ） */
+  function headAlignOf(c) { return alignOf(c) === 'num' ? 'c num' : 'c'; }
   /* 1段目の見出し（何の仲間か）。colspan の合計は 17 */
   var DAILY_GROUPS = [['日', 2], ['打刻', 2], ['引いた分', 2], ['実労働', 1],
     ['内訳', 3], ['割増', 2], ['その他', 4], ['備考', 1]];
@@ -1015,11 +1019,11 @@
       + '<tr>' + DAILY_GROUPS.map(function (g) {
         if (g[1] !== 1) return '<th colspan="' + g[1] + '" class="grp">' + U.esc(g[0]) + '</th>';
         var col = DAILY_COLS.filter(function (c) { return c.k === g[0]; })[0] || {};
-        return '<th rowspan="2" class="' + alignOf(col) + '">' + U.esc(g[0]) + '</th>';
+        return '<th rowspan="2" class="' + headAlignOf(col) + '">' + U.esc(g[0]) + '</th>';
       }).join('') + '</tr>'
-      /* ★見出しは 中身と同じ揃え★（同じ alignOf から取る） */
+      /* ★見出しは中央★（表の見出しは中央が普通・2026-08-15 訂正） */
       + '<tr>' + DAILY_COLS.filter(function (c) { return SOLO.indexOf(c.k) < 0; }).map(function (c) {
-        return '<th class="' + alignOf(c) + '">' + U.esc(c.k) + '</th>';
+        return '<th class="' + headAlignOf(c) + '">' + U.esc(c.k) + '</th>';
       }).join('') + '</tr>'
       + '</thead><tbody>' + body + '</tbody>'
       /* ★合計行★（日ごとの表だけで 月計と突き合わせられる） */
@@ -1055,16 +1059,19 @@
   function totalRowsOf(p, s) {
     var LAW = global.TcLaw, pc = function (r) { return Math.round(r * 100) + '%'; };
     var m2 = s.month;
+    /* ★ラベルの頭に空白を入れない★（2026-08-15 司さんの指摘）
+       ＝紙では月計を3列に並べるので、★字下げした列だけ内側に寄って見える★。
+       ★頭がそろうと目で追える★。上下の関係は「うち…」という言葉で分かる。 */
     return [
       ['出勤日数', String(m2.shukkin)],
       ['総労働', U.minToHm(m2.workedMin)],
-      ['　所定内', U.minToHm(m2.stdMin)],
-      ['　所定超（割増なし）', U.minToHm(m2.overStdMin)],
-      ['　時間外（' + pc(LAW.rateOf('ot')) + '）', U.minToHm(m2.otMin)],
-      ['　　うち月60時間超（' + pc(LAW.rateOf('ot60')) + '）', U.minToHm(m2.ot60Min)],
-      ['　休日（' + pc(LAW.rateOf('holiday')) + '）', U.minToHm(m2.holidayMin)],
+      ['所定内', U.minToHm(m2.stdMin)],
+      ['所定超（割増なし）', U.minToHm(m2.overStdMin)],
+      ['時間外（' + pc(LAW.rateOf('ot')) + '）', U.minToHm(m2.otMin)],
+      ['うち月60時間超（' + pc(LAW.rateOf('ot60')) + '）', U.minToHm(m2.ot60Min)],
+      ['休日（' + pc(LAW.rateOf('holiday')) + '）', U.minToHm(m2.holidayMin)],
       ['深夜（' + pc(LAW.rateOf('night')) + '・上乗せ）', U.minToHm(m2.nightMin)],
-      ['　うち休日の深夜（' + pc(LAW.rateOf('holiday_night')) + '）', U.minToHm(m2.holidayNightMin)],
+      ['うち休日の深夜（' + pc(LAW.rateOf('holiday_night')) + '）', U.minToHm(m2.holidayNightMin)],
       /* ★遅刻・早退は 割増の箱と分けて置く★（率の話ではないので混ぜない）
          ★給与で控除に使う数字★なので、月の合計をここで出す（2026-08-15） */
       ['遅刻', U.minToHm(m2.lateMin)],
