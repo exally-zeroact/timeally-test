@@ -925,21 +925,84 @@
     return global.TcLaw.yukyuGrantDays(months);
   }
 
+  /* ★日ごとの表の作り（2026-08-15 司さんの指摘で作り直した）★
+     ・★日付に年は要らない★（期間は見出しに1回 出る）。★月をまたぐ締めの時だけ 月を出す★
+     ・★列ごとに幅を決める★（%で合計100）＝17列が中身に関係なく並ぶのをやめる
+     ・★見出しは2段★（何の仲間か 一目で分かる）
+     ・★0なら空欄★（遅刻・早退・有給・欠勤・深夜・休日・中抜け）。★実労働は0でも出す★
+     ・★土日と法定休日に薄い網★（紙のCSSだけ。画面の色は増やさない）
+     ・★一番下に合計行★（月計と突き合わせられる）
+     ※ ★CSVは触っていない★（機械が読む物なので 年つきの日付・0は0のまま） */
+  var DAILY_COLS = [
+    { k: '日付', w: 4, l: true }, { k: '曜日', w: 3, l: true },
+    { k: '出勤', w: 6 }, { k: '退勤', w: 6 },
+    { k: '休憩', w: 5 }, { k: '中抜け', w: 5, z: true },
+    { k: '実労働', w: 7 },
+    /* ★所定超は0が並びやすい★ので0なら空欄（所定内と法定外残業は 0にも意味がある＝出す） */
+    { k: '所定内', w: 6 }, { k: '所定超', w: 6, z: true }, { k: '法定外残業', w: 7 },
+    { k: '深夜', w: 6, z: true }, { k: '休日', w: 6, z: true },
+    { k: '遅刻', w: 5, z: true }, { k: '早退', w: 5, z: true },
+    { k: '有給', w: 4, z: true }, { k: '欠勤', w: 4, z: true },
+    { k: '備考', w: 15, l: true },
+  ];
+  /* 1段目の見出し（何の仲間か）。colspan の合計は 17 */
+  var DAILY_GROUPS = [['日', 2], ['打刻', 2], ['引いた分', 2], ['実労働', 1],
+    ['内訳', 3], ['割増', 2], ['その他', 4], ['備考', 1]];
+  /* 1列だけの仲間（1段目に縦2行で置くので、2段目には出さない） */
+  var SOLO = DAILY_GROUPS.filter(function (g) { return g[1] === 1; }).map(function (g) { return g[0]; });
+
+  /** ★日付は年を出さない★。月をまたぐ締めの時だけ 月を出す（またがない月に月は出さない） */
+  function dayLabel(d, crossMonth) {
+    return crossMonth ? (+d.slice(5, 7)) + '/' + (+d.slice(8, 10)) : String(+d.slice(8, 10));
+  }
+  var blank = function (v) { return v === '0:00' || v === '' || v === 0 || v == null ? '' : v; };
+
   /** ★日ごとの表の中身を作るのは1本だけ★（画面も紙も同じ物を見る）
-      ★見出しは <thead> に入れる★＝紙が2枚になった時に ★2枚目にも見出しが出る★
-      （table-header-group が効くのは thead だけ。無いと 数字だけの紙になる）。 */
+      ★見出しは <thead> に入れる★＝紙が2枚になった時に ★2枚目にも見出しが出る★ */
   function dailyInner(s) {
     var CSV = global.TcCsv;
-    var head = CSV.DAILY_HEADERS;
-    var aoa = CSV.dailyAoa(s);
-    return '<thead><tr>' + head.map(function (h, i) {
-      return '<th class="' + (i <= 1 || i === head.length - 1 ? 'l' : '') + '">' + U.esc(h) + '</th>';
-    }).join('') + '</tr></thead><tbody>'
-      + aoa.slice(1).map(function (row) {
-        return '<tr>' + row.map(function (c, i) {
-          return '<td class="' + (i <= 1 || i === row.length - 1 ? 'l' : 'num') + '">' + U.esc(c) + '</td>';
-        }).join('') + '</tr>';
-      }).join('') + '</tbody>';
+    var crossMonth = s.period.from.slice(0, 7) !== s.period.to.slice(0, 7);
+    var sum = { 休憩: 0, 中抜け: 0, 実労働: 0, 所定内: 0, 所定超: 0, 法定外残業: 0, 深夜: 0, 休日: 0 };
+
+    var body = (s.days || []).map(function (d) {
+      sum['休憩'] += d.breakMin; sum['中抜け'] += d.awayMin; sum['実労働'] += d.workMin;
+      sum['所定内'] += d.stdMin; sum['所定超'] += d.overStdMin; sum['法定外残業'] += d.otMin;
+      sum['深夜'] += d.nightMin; sum['休日'] += d.holidayMin;
+      var v = [
+        dayLabel(d.d, crossMonth), U.DOW[d.dow],
+        d.inAt ? d.inAt.slice(11) : '', d.outAt ? d.outAt.slice(11) : '',
+        CSV.hhmm(d.breakMin), CSV.hhmm(d.awayMin), CSV.hhmm(d.workMin),
+        CSV.hhmm(d.stdMin), CSV.hhmm(d.overStdMin), CSV.hhmm(d.otMin),
+        CSV.hhmm(d.nightMin), CSV.hhmm(d.holidayMin),
+        d.lateMin == null ? '' : CSV.hhmm(d.lateMin),
+        d.earlyMin == null ? '' : CSV.hhmm(d.earlyMin),
+        d.dayKind === 'paid_leave' ? '1' : '', d.dayKind === 'absent' ? '1' : '',
+        CSV.note(d),
+      ];
+      /* ★土日と法定休日は薄い網★（紙で見分けが付く。画面のCSSには足さない） */
+      var cls = d.isLegalHoliday || d.dow === 0 || d.dow === 6 ? ' class="rest"' : '';
+      return '<tr' + cls + '>' + DAILY_COLS.map(function (c, i) {
+        return '<td class="' + (c.l ? 'l' : 'num') + '">' + U.esc(c.z ? blank(v[i]) : v[i]) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+
+    return '<colgroup>' + DAILY_COLS.map(function (c) { return '<col style="width:' + c.w + '%">'; }).join('') + '</colgroup>'
+      + '<thead>'
+      /* ★1列だけの仲間は 上下に同じ字を2回 出さない★（縦につなげる） */
+      + '<tr>' + DAILY_GROUPS.map(function (g) {
+        return g[1] === 1
+          ? '<th rowspan="2">' + U.esc(g[0]) + '</th>'
+          : '<th colspan="' + g[1] + '">' + U.esc(g[0]) + '</th>';
+      }).join('') + '</tr>'
+      + '<tr>' + DAILY_COLS.filter(function (c) { return SOLO.indexOf(c.k) < 0; }).map(function (c) {
+        return '<th class="' + (c.l ? 'l' : '') + '">' + U.esc(c.k) + '</th>';
+      }).join('') + '</tr>'
+      + '</thead><tbody>' + body + '</tbody>'
+      /* ★合計行★（日ごとの表だけで 月計と突き合わせられる） */
+      + '<tfoot><tr><th class="l" colspan="4">合計</th>'
+      + DAILY_COLS.slice(4).map(function (c) {
+        return '<td class="num">' + U.esc(sum[c.k] == null ? '' : CSV.hhmm(sum[c.k])) + '</td>';
+      }).join('') + '</tr></tfoot>';
   }
 
   function renderTables(p) {

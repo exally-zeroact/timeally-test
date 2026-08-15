@@ -88,6 +88,16 @@ function measureHeights(htmlPath) {
     + 'document.title=JSON.stringify({body:Math.round(document.body.scrollHeight),'
     + 'h1:g("h1"),sub:g(".sub"),daily:g("table"),sum:g(".paper-sum"),foot:g(".paper-foot"),'
     + 'row:rows.length?Math.round(rows[0].getBoundingClientRect().height):0,rows:rows.length'
+    /* ★1文字ずつ縦に割れていないか／横にはみ出していないか を実物で数える★
+       （DOMに在る≠読める。割れた字は ★背が高くなる★ので 高さで見つかる） */
+    + ',tall:(function(){var n=0,base=1e9;'
+    + 'document.querySelectorAll("td,th").forEach(function(c){var h=c.getBoundingClientRect().height;if(h>0&&h<base)base=h;});'
+    /* ★rowspan の見出しは 2行ぶんの高さで正しい★ので数えない（数えると空振りする） */
+    + 'document.querySelectorAll("td,th").forEach(function(c){'
+    + 'if(c.rowSpan>1)return;if(c.getBoundingClientRect().height>base*1.6)n++;});'
+    + 'return {n:n,base:Math.round(base)};})()'
+    + ',over:(function(){var t=document.querySelector("table");if(!t)return 0;'
+    + 'return Math.max(0,Math.round(t.scrollWidth-t.clientWidth));})()'
     + ',cell:(function(){if(!rows.length)return null;var td=rows[0].querySelector("td");if(!td)return null;'
     + 'var cs=getComputedStyle(td);return{fs:cs.fontSize,lh:cs.lineHeight,pad:cs.paddingTop+"/"+cs.paddingBottom,'
     + 'bd:cs.borderTopWidth,h:Math.round(td.getBoundingClientRect().height),txt:td.textContent.slice(0,12)};})()'
@@ -116,11 +126,21 @@ fs.mkdirSync(outDir, { recursive: true });
 console.log('刷るブラウザ: ' + path.basename(chrome));
 
 /* ★測る所★ … 月の日数の端（28/30/31）と 締め日20（月をまたぐ31日） */
+/* ★9:00〜18:00 が31日 続くのは 一番 幅を食わないデータ★。
+   ★それで1枚に入っても 実物では溢れる★ ので、mix:true で色んな日を混ぜて測る:
+     日をまたぐ夜勤／法定休日に出た日／中抜け／打刻が片方だけ（備考が長い）／
+     合計が3桁時間（310:30 級）／長い氏名・長い会社名 */
+const HEAVY = { mix: true, longName: true };
 const CASES = [
-  { name: '2026-02（28日・末日締め）', back: 6, seed: { days: 28, ym: '2026-02', closeDay: 31 } },
-  { name: '2026-04（30日・末日締め）', back: 4, seed: { days: 30, ym: '2026-04', closeDay: 31 } },
-  { name: '2026-08（31日・末日締め）', back: 0, seed: { days: 31, ym: '2026-08', closeDay: 31 } },
-  { name: '2026-08（締め日20・7/21〜8/20）', back: 0, seed: { days: 31, ym: '2026-07', closeDay: 20 } },
+  { name: '31日・末日締め（色んな日を混ぜた＝一番 重い）', back: 0, seed: Object.assign({ days: 31, ym: '2026-08', closeDay: 31 }, HEAVY) },
+  { name: '28日・2月', back: 6, seed: Object.assign({ days: 28, ym: '2026-02', closeDay: 31 }, HEAVY) },
+  /* ★うるう年の2月は 30か月 戻る★（2026-08 → 2024-02。
+     ★back を間違えると 今月を測って「試したつもり」になる★ ので、下で中身を数えて赤にする） */
+  { name: '29日・うるう年の2月（2024-02）', back: 30, seed: Object.assign({ days: 29, ym: '2024-02', closeDay: 31 }, HEAVY) },
+  { name: '30日の月（4月）', back: 4, seed: Object.assign({ days: 30, ym: '2026-04', closeDay: 31 }, HEAVY) },
+  { name: '締め日20（7/21〜8/20＝月をまたぐ）', back: 0, crossMonth: true, seed: Object.assign({ days: 31, ym: '2026-07', closeDay: 20 }, HEAVY) },
+  { name: '確定した月（頭の【 】が変わる）', back: 1, seed: Object.assign({ days: 31, ym: '2026-07', closeDay: 31, closedYm: '2026-07' }, HEAVY) },
+  { name: 'ふつうの日だけ（9:00〜18:00×31日）', back: 0, seed: { days: 31, ym: '2026-08', closeDay: 31 } },
 ];
 
 let ng = 0;
@@ -142,29 +162,61 @@ for (const c of CASES) {
     console.log(`      実測の高さ: 中身ぜんぶ ${h.body}px ／ 見出し ${h.h1}+${h.sub} ／ 日ごとの表 ${h.daily}`
       + ` ／ 月計 ${h.sum} ／ 出した日 ${h.foot} ／ 1行 ${h.row}px × ${h.rows}行`
       + `　（A4横で使えるのは ★717px★）`);
-    if (h.cell) console.log('      1マスの中身: ' + JSON.stringify(h.cell));
+    /* ★縦に割れた字と 横のはみ出しは 0でなければ赤★ */
+    if (h.tall && h.tall.n > 0) { ng++; console.log('      ★縦に割れているマスが ' + h.tall.n + '個★'); }
+    if (h.over > 0) { ng++; console.log('      ★横に ' + h.over + 'px はみ出している★'); }
+    console.log('      縦に割れたマス ' + (h.tall ? h.tall.n : '?') + '個 ／ 横のはみ出し ' + h.over + 'px');
   }
+  /* ★入れたつもりの物が 本当に紙に出ているか数える★（入っていなければ「試した」と言えない） */
+  const has = {
+    日またぎ: /日をまたぐ勤務/.test(paper),
+    打刻漏れ: /打刻が片方だけ/.test(paper),
+    深夜: /<td class="num">[1-9]\d?:\d\d<\/td>/.test(paper),
+    '3桁時間': /\d{3}:\d\d/.test(paper),
+    月をまたぐ日付: /<td class="l">\d+\/\d+<\/td>/.test(paper),
+    網: /class="rest"/.test(paper),
+    合計行: /<tfoot>/.test(paper),
+    '2段見出し': /colspan="3"/.test(paper),
+    休日: /休日/.test(paper) && /<td class="num">[1-9]\d?:\d\d<\/td>/.test(paper),
+    有給欠勤: /<td class="num">1<\/td>/.test(paper),
+    遅刻早退: /遅刻/.test(paper),
+  };
+  /* ★入っているはずの物が入っていなければ赤★（＝「試したつもり」を潰す） */
+  const want = (c.seed.mix ? ['日またぎ', '打刻漏れ', '深夜', '3桁時間', '有給欠勤'] : [])
+    .concat(['網', '合計行', '2段見出し'])
+    .concat(c.crossMonth ? ['月をまたぐ日付'] : []);
+  const missing = want.filter((k) => !has[k]);
+  if (missing.length) ng++;
+  console.log('      入っている物: ' + Object.keys(has).filter((k) => has[k]).join('・')
+    + (missing.length ? '　／★入っているはずが 無い: ' + missing.join('・') + '★' : ''));
+  /* ★またがない月に 月を出していないか★ も見る（出したら余計な2文字） */
+  if (!c.crossMonth && has['月をまたぐ日付']) { ng++; console.log('      ★またがない月なのに 日付に月が出ている★'); }
   console.log(`      ${pdfPath}`);
   if (!keep) { /* PDFは残す（渡す物を見てもらうため）。HTMLだけ消す */ fs.unlinkSync(htmlPath); }
 }
 
 /* ★全員ぶんを1回で刷る★＝人数ぶんの枚数になり、★1人が2枚に割れない★かを実物で数える */
-const big = await paperHtmlOf({ days: 31, ym: '2026-08', closeDay: 31, people: 2 }, 0, 'b-printall');
-const bigHtml = path.join(outDir, 'overflow.html');
-const bigPdf = path.join(outDir, 'overflow.pdf');
-fs.writeFileSync(bigHtml, big, 'utf8');
-execFileSync(chrome, ['--headless', '--disable-gpu', '--no-pdf-header-footer',
-  '--print-to-pdf=' + bigPdf, 'file:///' + bigHtml.replace(/\\/g, '/')], { stdio: 'ignore', timeout: 60000 });
-const bigN = pageCount(fs.readFileSync(bigPdf));
-const theads = (big.match(/<thead/g) || []).length;
-const headerGroup = /table-header-group/.test(big);
-const breaks = (big.match(/break-before:page/g) || []).length;
-console.log(`  ${bigN === 2 ? '✓' : '✗'} 全員（2人）ぶんを1回で刷る … ★${bigN}枚★（1人1枚・割れていない）`);
-console.log(`  ${theads === 2 && breaks === 1 ? '✓' : '✗'} 人の頭で改ページ（見出し ${theads}個 / 改ページ ${breaks}回）`);
+for (const n of [1, 2, 10]) {
+  const big = await paperHtmlOf({ days: 31, ym: '2026-08', closeDay: 31, people: n, mix: true, longName: true },
+    0, 'b-printall');
+  const bigHtml = path.join(outDir, 'zen' + n + '.html');
+  const bigPdf = path.join(outDir, 'zenin-' + n + 'nin.pdf');
+  fs.writeFileSync(bigHtml, big, 'utf8');
+  execFileSync(chrome, ['--headless', '--disable-gpu', '--no-pdf-header-footer',
+    '--print-to-pdf=' + bigPdf, 'file:///' + bigHtml.replace(/\\/g, '/')], { stdio: 'ignore', timeout: 90000 });
+  const bigN = pageCount(fs.readFileSync(bigPdf));
+  const theads = (big.match(/<thead/g) || []).length;
+  const breaks = (big.match(/break-before:page/g) || []).length;
+  const good = bigN === n && theads === n && breaks === n - 1;
+  if (!good) ng++;
+  console.log(`  ${good ? '✓' : '✗'} 全員（${n}人）ぶんを1回で刷る … ★${bigN}枚★`
+    + `（1人1枚＝割れていない／見出し ${theads}個／改ページ ${breaks}回）`);
+  console.log(`      ${bigPdf}`);
+  if (!keep) fs.unlinkSync(bigHtml);
+}
+const headerGroup = /table-header-group/.test(fs.readFileSync(path.join(ROOT, 'js/tc-ui.js'), 'utf8'));
 console.log(`  ${headerGroup ? '✓' : '✗'} 2枚に割れた時は見出しを繰り返す作り（table-header-group）`);
-if (bigN !== 2 || theads !== 2 || breaks !== 1 || !headerGroup) ng++;
-console.log(`      ${bigPdf}`);
-fs.unlinkSync(bigHtml);
+if (!headerGroup) ng++;
 
 console.log(ng ? `\n★${ng}件 赤★` : '\n全部 1枚に収まりました');
 process.exit(ng ? 1 : 0);
