@@ -423,6 +423,12 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
   const pwSetPage = openPage('index.html', '', { pwSet: true });
   await wait(); await wait(); await wait();
 
+  /* ★法定休日を「曜日で決める」会社も1枚 開く★（2026-08-15）
+     ＝この形でしか ★曜日の欄（hol-dow）が出ない★。開かないと
+     ★その中の空の箱を 見張りが素通りする★（実機で 曜日の下に空の枠が出ていた）。 */
+  openPage('index.html', '', { mix: true });
+  await wait(); await wait(); await wait();
+
   T('★★1枚のカードの中で 札と説明が食い違わない（暗証番号のあり／なし）★★', () => {
     /* 2026-08-15 に踏んだ: 札は帳面を見ず pw_hash を見て、説明は帳面だけを見ていたので、
        ★同じカードに「暗証番号あり」と「まだ決めていません」が同時に出た★。
@@ -687,6 +693,11 @@ T('★1000件で切れない道を通っている（range を呼んでいる）'
   ok(r.page.fake._calls.some((c) => /\.range$/.test(c)), 'range を1度も呼んでいない＝ページめくりの道が死んでいる');
 });
 
+/* ★どの画面も 描き終わるまで待ってから数える★
+   （途中の画面を数えると ★まだ描いていない箱★を「空の箱」と言ってしまう） */
+await new Promise((r) => setTimeout(r, 400));
+
+
 /* ═══ 本文を見る検査（★一番下でやる＝開いた画面を1枚残らず数える★） ═══════ */
 
 T('★★画面に出た文に ★ が混じっていない（★はコードの目印で 人に見せる物ではない）★★', () => {
@@ -707,11 +718,26 @@ T('★★中身が空なのに 枠だけ出ている箱が無い（空の箱を�
      （入口に 何も書いていない箱が1つ余分に見えていた）。 */
   const bad = [];
   for (const p of opened_pages) {
+    /* ★閉じているタブの中も見る★（2026-08-15 実機で また出た）
+       ＝タブで隠れている所は ★押せば出る所★。見ないと ★空の箱を見逃す★
+       （会社情報の「曜日」の下に 空の枠が1つ出ていたのを 見張りが素通りしていた）。
+       ★親の hidden を一時的に外して★ 数え、終わったら元へ戻す。 */
+    /* ★まだ描き終わっていない画面は数えない★（入口で止まっている＝人はまだ何も見ていない）。
+       ★描き終わったか＝本体が出ているか★で見る。 */
+    const main = p.w.document.getElementById('main');
+    if (main && main.hidden) continue;
+    /* ★会社の行をまだ読めていない画面は数えない★（＝まだ描き終わっていない。
+       本物では 会社が読めるまで欄は描かれないので、★空の箱として人に見える事は無い★） */
+    if (p.w.OwnerApp && !p.w.OwnerApp._st.company) continue;
+    const panes = [...p.w.document.querySelectorAll('section[hidden], #pane-company, #pane-people, #pane-list')];
+    const was = panes.map((s) => s.hidden);
+    panes.forEach((s) => { s.hidden = false; });
     p.w.document.querySelectorAll('.tc-note, .tc-alert').forEach((el) => {
-      if (el.hidden || el.closest('[hidden]')) return;     // 消してある物は見ない
+      if (el.hidden || el.closest('[hidden]')) return;     // 自分で消してある物は見ない
       const t = (el.textContent || '').replace(/[\s　]/g, '');
-      if (!t && !el.querySelector('img,svg,input,button,a')) bad.push(p.file + '#' + (el.id || el.className));
+      if (!t && !el.querySelector('img,svg,input,button,a')) bad.push(p.file + '[' + opened_pages.indexOf(p) + ']#' + (el.id || el.className));
     });
+    panes.forEach((s, i) => { s.hidden = was[i]; });
   }
   ok(bad.length === 0, '★空の箱が出ている★: ' + bad.join(' ｜ '));
   console.log('     実測: ' + opened_pages.length + '枚の 見えている箱を数えて 空は 0件');

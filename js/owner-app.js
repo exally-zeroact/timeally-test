@@ -533,9 +533,13 @@
     var ov = q('hol-override');
     if (ov) {
       var n2 = (st.people || []).filter(function (p) { return p.legal_holiday_dow != null; }).length;
-      ov.textContent = mode === 'per_person'
+      var ovText = mode === 'per_person'
         ? '会社の決まりを ' + n2 + '人が上書きしています（従業員の欄で決めます）'
         : (n2 ? '※ ' + n2 + '人に人ごとの指定が残っています（この決め方では使いません）' : '');
+      /* ★中身が空なら 箱ごと消す★（.tc-note には枠が付いているので
+         ★文字を空にしただけでは 空の枠が残る★＝2026-08-15 実機で また出た） */
+      ov.textContent = ovText;
+      ov.hidden = !ovText;
     }
     if (!a) return;
     a.hidden = true;
