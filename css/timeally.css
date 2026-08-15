@@ -174,7 +174,18 @@ label { display: block; font-size: 13px; color: #78705C; margin: 10px 0 4px; }
 .tc-tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table.tc { border-collapse: collapse; width: 100%; font-size: 13px; background: #FFFFFF; }
 table.tc th, table.tc td { border: 1px solid #F0E0B8; padding: 6px 8px; text-align: right; white-space: nowrap; }
-table.tc th { background: #FFE08A; color: #2B2418; font-weight: 700; }
+/* ★表の面はベタ塗りにしない（2026-08-15 司さんの指摘）★
+   前は th を全部 #FFE08A で塗っていた。月計の表は ★行ごとの1列目が th★ なので
+   ★ラベルの列が丸ごと黄色く塗られていた★。
+     ・★黄を塗ってよいのは「今 選ばれている1つ」だけ★（タブと同じ決まり）
+     ・★塗った面の上の字は読みにくい★／★面が主役になって 数字が負ける★
+     ・★白黒コピーで面が灰色に潰れる★
+   ⇒ ★ラベルの列は塗らない★。★見出しの行だけ 薄く★。★行の区切りは罫線でつける★。
+   ※1行おきの縞は ★入れていません★（日ごとの表は土日の網と重なって かえって読みにくいため）。 */
+table.tc th { background: #FFFFFF; color: #2B2418; font-weight: 700; }
+table.tc thead th { background: #FFFBF0; }
+table.tc thead tr:last-child th { border-bottom: 2px solid #8F6200; }
+table.tc tfoot th, table.tc tfoot td { border-top: 2px solid #8F6200; font-weight: 700; }
 /* ★揃えの決まり（2026-08-15 司さんの指摘・全アプリ共通）★
      ★数字（金額・時間・件数）＝右★（既定）／★言葉＝左(.l)★／★1文字の列＝中央(.c)★
      ★中央を使ってよいのは「1文字の列」だけ★（曜日など）
@@ -185,7 +196,7 @@ table.tc td.c, table.tc th.c { text-align: center; }
 table.tc th.grp { text-align: center; }
 /* ★数字は等幅★（1と8で幅が変わらない＝桁が縦に揃う）。日付・時刻・件数も数字なので同じ */
 table.tc td.num, table.tc th.num { font-family: 'DM Mono', ui-monospace, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
-table.tc tr.sel td { background: #FFE08A; }
+/* （tr.sel は ★どこからも使われていない死にCSS★だったので外した・2026-08-15） */
 table.tc td.warn { color: #B3261E; }
 
 /* ── 札 ─────────────────────────────────────────────────────── */

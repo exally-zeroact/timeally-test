@@ -109,6 +109,18 @@ function measure(htmlPath, width) {
     + 'out.foot.push({i:i,a:getComputedStyle(td).textAlign,r:Math.round(td.getBoundingClientRect().right)});});'
     + 'if(body)[].slice.call(body.querySelectorAll("td")).forEach(function(td,i){'
     + 'out.x[i]=Math.round(td.getBoundingClientRect().right);});'
+    /* ★塗っている物を 値に直して数える★（2026-08-15 司さんの指摘）
+       ★黄(#FFE08A)を塗ってよいのは「今 選ばれている1つ」だけ★。
+       ★文字で探さない★＝getComputedStyle が返す rgb() を数える。 */
+    + 'out.fill={};out.labelFill=0;'
+    + '[].slice.call(document.querySelectorAll("*")).forEach(function(e){'
+    + 'var b=getComputedStyle(e).backgroundColor;'
+    + 'if(!b||b==="rgba(0, 0, 0, 0)"||b==="transparent")return;'
+    + 'out.fill[b]=(out.fill[b]||0)+1;});'
+    /* ★月計のラベル列に 背景色が付いていないか★ */
+    + '[].slice.call(document.querySelectorAll(".paper-sum table th, table#total th")).forEach(function(e){'
+    + 'var b=getComputedStyle(e).backgroundColor;'
+    + 'if(b&&b!=="rgba(0, 0, 0, 0)"&&b!=="transparent"&&b!=="rgb(255, 255, 255)")out.labelFill++;});'
     + 'document.title=JSON.stringify(out);});</scr' + 'ipt></body>');
   fs.writeFileSync(probe, src, 'utf8');
   const out = execFileSync(chrome, ['--headless', '--disable-gpu', '--window-size=' + width + ',900',
@@ -168,6 +180,14 @@ function check(where, r) {
   });
   if (off.length) bad.push('合計行の桁が縦に揃っていない: ' + off.join(' '));
 
+  /* ★黄(#FFE08A)を塗っている物は 1つまで★（＝今 選ばれている1つ）
+     ★文字で探さず 値で数える★（rgb(255, 224, 138) が #FFE08A） */
+  const YELLOW = 'rgb(255, 224, 138)';
+  const nYellow = (r.fill && r.fill[YELLOW]) || 0;
+  if (nYellow > 1) bad.push('★黄(#FFE08A)を塗っている物が ' + nYellow + '個ある（1つまで）★');
+  /* ★月計のラベル列に 背景色が0件★ */
+  if (r.labelFill > 0) bad.push('★月計のラベル列に 背景色が ' + r.labelFill + '個ある（塗らない）★');
+
   /* ★月計の箱★ … ラベル＝左／値＝右／★頭に空白が無い（3列とも左端からそろう）★ */
   (r.sum || []).forEach((s) => {
     if (s.ka !== 'left') bad.push('月計「' + s.k.trim() + '」のラベルが ' + s.ka + '（left のはず）');
@@ -179,6 +199,7 @@ function check(where, r) {
     console.log('  ✓ ' + where + ' … 中身 ' + r.cols.length + '列（中央は曜日だけ）'
       + '／★見出し ' + (r.head.length + r.grp) + '個 全部 中央★'
       + '／月計 ' + (r.sum || []).length + '行（ラベル左・値右・頭の空白0）'
+      + '／★黄の面 ' + nYellow + '個・月計のラベルの塗り ' + r.labelFill + '件★'
       + '／★合計行の桁が 上の行と縦に一致★');
   }
 }
