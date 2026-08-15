@@ -312,13 +312,18 @@ for (const c of CASES) {
   /* ★またがない月に 月を出していないか★ も見る（出したら余計な2文字） */
   if (!c.crossMonth && has['月をまたぐ日付']) { ng++; console.log('      ★またがない月なのに 日付に月が出ている★'); }
   if (mg) {
-    /* ★綴じる側だけ広い★（左綴じ＝左20mm・他10mm）。★出た物で測る★ */
-    const okM = Math.abs(mg.left - 20) <= 1.5 && Math.abs(mg.right - 10) <= 1.5
-      && Math.abs(mg.top - 10) <= 1.5 && Math.abs(mg.bottom - 10) <= 1.5;
+    /* ★四辺とも同じ★（綴じる=20mm／綴じない=10mm）。★出た物で測る★
+       ★差は0.3mm以内★（PDFの丸めぶんだけ許す） */
+    /* ★0.1mm 単位の整数で比べる★（20.1-19.8 は小数だと 0.30000000000000071 になり、
+       ★0.3以内のはずが 落ちる★＝2026-08-15 に踏んだ） */
+    const t = (x) => Math.round(x * 10);
+    const v = [mg.top, mg.right, mg.bottom, mg.left].map(t);
+    const same = Math.max.apply(null, v) - Math.min.apply(null, v) <= 3;
+    const okM = same && v.every((x) => Math.abs(x - 200) <= 3);
     if (!okM) ng++;
     console.log('      ' + (okM ? '' : '★') + '余白の実測: 上' + mg.top + ' 右' + mg.right
-      + ' 下' + mg.bottom + ' 左' + mg.left + 'mm （紙 ' + mg.w + '×' + mg.h + 'mm・左綴じ20mm）'
-      + (okM ? '' : '★'));
+      + ' 下' + mg.bottom + ' 左' + mg.left + 'mm （紙 ' + mg.w + '×' + mg.h + 'mm・'
+      + (same ? '★四辺とも同じ★' : '★四辺がそろっていない★') + '）' + (okM ? '' : '★'));
   }
   console.log(`      ${pdfPath}`);
   if (!keep) { /* PDFは残す（渡す物を見てもらうため）。HTMLだけ消す */ fs.unlinkSync(htmlPath); }
@@ -343,6 +348,30 @@ for (const n of [1, 2, 10]) {
   console.log(`      ${bigPdf}`);
   if (!keep) fs.unlinkSync(bigHtml);
 }
+/* ★綴じ代を「とらない」時も 四辺とも同じ（10mm）か★（2026-08-15）
+   ＝★2通りとも測る★。片方だけ見て「そろっている」と言わない。 */
+{
+  const off = await paperHtmlOf({ days: 31, ym: '2026-08', closeDay: 31, mix: true, longName: true,
+    bindMargin: false }, 0);
+  const offHtml = path.join(outDir, 'tojinai.html');
+  const offPdf = path.join(outDir, '綴じない-四辺10mm.pdf');
+  fs.writeFileSync(offHtml, off, 'utf8');
+  execFileSync(chrome, ['--headless', '--disable-gpu', '--no-pdf-header-footer',
+    '--print-to-pdf=' + offPdf, 'file:///' + offHtml.replace(/\\/g, '/')], { stdio: 'ignore', timeout: 60000 });
+  const n2 = pageCount(fs.readFileSync(offPdf));
+  const m2 = pdfMargins(fs.readFileSync(offPdf));
+  const v2 = m2 ? [m2.top, m2.right, m2.bottom, m2.left] : [];
+  const t2 = (x) => Math.round(x * 10);
+  const w2 = v2.map(t2);
+  const ok2 = n2 === 1 && m2 && Math.max.apply(null, w2) - Math.min.apply(null, w2) <= 3
+    && w2.every((x) => Math.abs(x - 100) <= 3);
+  if (!ok2) ng++;
+  console.log('  ' + (ok2 ? '✓' : '✗') + ' 綴じ代をとらない … ★' + n2 + '枚★'
+    + (m2 ? '／余白 上' + m2.top + ' 右' + m2.right + ' 下' + m2.bottom + ' 左' + m2.left + 'mm' : ''));
+  console.log('      ' + offPdf);
+  if (!keep) fs.unlinkSync(offHtml);
+}
+
 const headerGroup = /table-header-group/.test(fs.readFileSync(path.join(ROOT, 'js/tc-ui.js'), 'utf8'));
 console.log(`  ${headerGroup ? '✓' : '✗'} 2枚に割れた時は見出しを繰り返す作り（table-header-group）`);
 if (!headerGroup) ng++;

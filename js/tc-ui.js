@@ -79,9 +79,14 @@
    * @param {string} title 窓の題（＝紙の名前）
    * @param {string} bodyHtml 紙の中身。★空なら開かない（白紙のダイアログを出さない）★
    */
-  /** ★綴じ代の余白★（上 右 下 左）。★綴じる側だけ20mm★・他は10mm */
-  var BIND_MM = { left: '10mm 10mm 10mm 20mm', top: '20mm 10mm 10mm 10mm', none: '10mm' };
-  function pageMargin(bind) { return BIND_MM[bind] || BIND_MM.left; }
+  /** ★紙の余白は 四辺とも同じ★（2026-08-15 司さんの指摘で作り直した）
+      ・前は ★綴じる側だけ20mm・他10mm★ にしていた ⇒ ★左右の幅が合っていない★
+      ・A4横は ★上に穴を開ける人もいる★（むしろ上綴じが普通）
+      ⇒ ★綴じるなら四辺とも20mm／綴じないなら四辺とも10mm★。
+        ★綴じる場所を選ばせない★＝四辺20mmなら 上でも左でも右でも 穴が余白に入る。
+        設定は ★「綴じ代をとる／とらない」の1つだけ★。 */
+  var BIND_MM = { on: '20mm', off: '10mm' };
+  function pageMargin(bind) { return bind === false || bind === 'off' ? BIND_MM.off : BIND_MM.on; }
 
   function printPaper(title, bodyHtml, opts) {
     var body = String(bodyHtml || '').trim();
@@ -97,8 +102,9 @@
          2026-08-15 実測: 片側22mm（10+12）で 31日ぶんが ★3枚★ になっていた） */
       /* ★行の高さも詰める★（1行19px→約15px。31日＋見出しで 約120px 減る） */
       + "body{font-family:'Noto Sans JP',system-ui,sans-serif;color:#2B2418;margin:0;font-size:10px;line-height:1.25;}"
-      + 'h1{font-size:14px;color:#8F6200;margin:0 0 4px;}'
-      + '.sub{font-size:10px;color:#78705C;margin:0 0 6px;display:block;'
+      /* ★紙の頭は1行★（会社名の後ろに 氏名・期間・状態・出した日を並べる） */
+      + 'h1{font-size:13px;color:#8F6200;margin:0 0 3px;}'
+      + '.sub{font-size:10px;color:#78705C;font-weight:400;margin-left:8px;'
       + 'white-space:normal;word-break:normal;overflow-wrap:break-word;}'
       + 'table{border-collapse:collapse;width:100%;}'
       /* ★白黒コピーで読めるようにする★（薄い黄の罫線はコピーでほぼ飛ぶ）

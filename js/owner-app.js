@@ -162,7 +162,6 @@
       holidayCycleStart: c.holiday_cycle_start,
       weekStartDow: c.week_start_dow,
       sme: c.sme,
-      bindSide: c.bind_side,
     };
   }
 
@@ -466,7 +465,8 @@
     var c = st.company || {};
     var set = function (id, v) { var el = q(id); if (el) el.value = v == null ? '' : v; };
     set('c-name', c.name); set('c-close', c.close_day == null ? 31 : c.close_day);
-    set('c-bind', c.bind_side || 'left');            // 紙の綴じ代（左／上／綴じない）
+    /* 紙の綴じ代（★既定は入＝四辺20mm★／切なら四辺10mm） */
+    var bm = q('c-bind'); if (bm) bm.checked = c.bind_margin !== false;
     HOUR_FIELDS.forEach(function (f) {
       var min = c[f.col] == null ? f.def : c[f.col];
       /* ★読みやすい方の単位で出す★（ちょうどの時間は「時間」／端数は「分」）
@@ -641,7 +641,7 @@
       account_id: st.user.id,
       name: q('c-name').value.trim(),
       close_day: Number(q('c-close').value) || 31,
-      bind_side: (q('c-bind') || {}).value || 'left',
+      bind_margin: !!(q('c-bind') || {}).checked,
       holiday_mode: mode,
       holiday_cycle_start: holCycleValue() || null,
       /* ★-1（決めていない）を 0（日）に落とさない★（|| だと -1 も 0 も消える） */
@@ -1136,26 +1136,28 @@
   }
 
   /** ★1人ぶんの紙を組み立てる（1人＝A4横1枚）★
-      ・★月計は横に3つ並べる★（縦12行だと それだけで紙の1/3を使い、2枚に割れる）
-      ・★出した日を刷る★（机の上で新旧が混ざらない）
+      ・★紙の頭は1行★（会社名・氏名・期間・状態・出した日を詰める）
+        ＝見出し／小見出し／脚注の3か所に分けると それだけで約50px 使う
+      ・★月計は横に4つ並べる★（3列だと5行ぶん＝四辺20mmの綴じ代を入れると1枚に収まらない）
       ・★どう絞り込んだかは刷らない★（対象の人と期間と状態だけ）
       ・★1人が2枚に割れない★ように、続けて刷る時は 人の頭で改ページする */
   function paperOf(p, s, dailyHtml, rows, pageBreak) {
     var c = st.close || closeState();
-    var col = Math.ceil(rows.length / 3);
-    var groups = [rows.slice(0, col), rows.slice(col, col * 2), rows.slice(col * 2)];
+    var col = Math.ceil(rows.length / 4);
+    var groups = [];
+    for (var i = 0; i < rows.length; i += col) groups.push(rows.slice(i, i + col));
     return '<section' + (pageBreak ? ' style="break-before:page;page-break-before:always"' : '') + '>'
-      + '<h1>' + U.esc((st.company || {}).name || '') + '　勤務表</h1>'
+      + '<h1>' + U.esc((st.company || {}).name || '') + '　勤務表'
       + '<span class="sub">' + U.esc(p.name || p.employee_id) + '　'
       + U.esc(s.period.from) + ' 〜 ' + U.esc(s.period.to) + '　【' + U.esc(c.label) + '】'
-      + (c.state === 'closed' ? '' : '　※この数字はまだ動きます') + '</span>'
+      + (c.state === 'closed' ? '' : '　※この数字はまだ動きます')
+      + '　出した日: ' + U.esc((DB.nowJst() || '').replace('T', ' ')) + '</span></h1>'
       + dailyHtml.replace('class="tc"', '')
       + '<div class="paper-sum">'
       + groups.filter(function (g) { return g.length; }).map(function (g) {
         return '<table>' + g.map(function (r) { return tr(r[0], r[1]); }).join('') + '</table>';
       }).join('')
       + '</div>'
-      + '<span class="paper-foot">出した日: ' + U.esc((DB.nowJst() || '').replace('T', ' ')) + '</span>'
       + '</section>';
   }
 
@@ -1171,8 +1173,9 @@
     U.printPaper(fileName(p, 'pdf').replace(/\.pdf$/, ''), body, { bind: bindSide() });
   }
 
-  /** ★紙の綴じ代★ … 会社の設定（左＝ふつう／上／綴じない） */
-  function bindSide() { return (st.company && st.company.bind_side) || 'left'; }
+  /** ★紙の綴じ代★ … 会社の設定（既定は入＝四辺20mm／切なら四辺10mm）
+      ★綴じる場所は選ばせない★（四辺が同じなら 上でも左でも右でも穴が余白に入る） */
+  function bindSide() { return (st.company && st.company.bind_margin) === false ? 'off' : 'on'; }
 
   /** ★全員ぶんを1回で刷る★（月末に10人ぶん10回 押さなくてよい）
       ★1人1枚で続けて出る／1人が2枚に割れない★（人の頭で改ページする） */

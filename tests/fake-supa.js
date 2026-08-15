@@ -34,6 +34,8 @@ function rowsFor(table, seed, store) {
       /* ★mix の時は法定休日を「日曜」に決めた会社にする★
          （決めていない会社だと ★休日・休日の深夜が1つも出ず、試したことにならない★） */
       holiday_mode: s.mix ? 'dow' : 'none',
+      /* ★紙の綴じ代★（既定は入＝四辺20mm／切なら四辺10mm） */
+      bind_margin: s.bindMargin !== false,
       rounding: s.rounding || 'none',
       round_unit_min: s.roundUnitMin || 1, round_dir: s.roundDir || 'floor', round_scope: s.roundScope || 'day',
       warn_on: !!s.warnOn, sme: true,

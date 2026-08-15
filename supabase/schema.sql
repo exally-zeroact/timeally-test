@@ -129,13 +129,16 @@ alter table timeally.tc_companies add  constraint tc_companies_holiday_mode_chec
 -- ★人ごとの上書き★（null = 会社の決まりに従う）
 alter table timeally.tc_pub add column if not exists legal_holiday_dow int;
 
--- ★紙の綴じ代（2026-08-15 司さんの質問）★
---   2穴パンチの中心は ★紙の端からおよそ12mm★。★左10mmでは 穴が日付の列にかかる★。
---   ⇒ ★綴じる側だけ20mm★。どちら綴じかは会社ごと（left=ふつう / top / none=綴じない）。
-alter table timeally.tc_companies add column if not exists bind_side text not null default 'left';
-alter table timeally.tc_companies drop constraint if exists tc_companies_bind_side_check;
-alter table timeally.tc_companies add  constraint tc_companies_bind_side_check
-  check (bind_side in ('left','top','none'));
+-- ★紙の綴じ代（2026-08-15 司さんの指摘で作り直した）★
+--   2穴パンチの中心は ★紙の端からおよそ12mm★。
+--   ★綴じる場所は選ばせない★＝★四辺とも20mm★なら 上でも左でも右でも 穴が余白に入る。
+--   設定は ★「綴じ代をとる／とらない」の1つだけ★。
+alter table timeally.tc_companies add column if not exists bind_margin boolean not null default true;
+-- ★bind_side（綴じる場所）は もう読まない・書かない★（同じ日に「四辺とも同じ」へ変えたため）。
+--   ★列は落とさない★＝門番(scripts/sql-guard.mjs)が ★消す系(drop column)を止める★。
+--   出勤簿は法定三帳簿なので ★列を落とす道を軽々に作らない★のが このアプリの前提。
+--   （落とすなら ★司さんの一言をもらって 別の塊で★。今は 使わないだけにしておく）
+alter table timeally.tc_companies add column if not exists bind_side text;
 
 -- ★同じ人を2行 作らせない（指示役の裁定 2026-08-15）★
 --   ★人が入ってからでは剥がせない★ので、まだ0行/4行のうちに入れる。
