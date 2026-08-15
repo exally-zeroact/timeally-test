@@ -247,7 +247,9 @@ for (const c of CASES) {
     打刻漏れ: /打刻が片方だけ/.test(paper),
     深夜: /<td class="num">[1-9]\d?:\d\d<\/td>/.test(paper),
     '3桁時間': /\d{3}:\d\d/.test(paper),
-    月をまたぐ日付: /<td class="l">\d+\/\d+<\/td>/.test(paper),
+    /* ★日付の列は 揃えを直して class="num" になった★（2026-08-15）。
+       ★見た目の class で探すと 揃えを変えた時に空振りする★ので、行の先頭のマスで見る。 */
+    月をまたぐ日付: /<tr[^>]*><td[^>]*>\d+\/\d+<\/td>/.test(paper),
     網: /class="rest"/.test(paper),
     合計行: /<tfoot>/.test(paper),
     '2段見出し': /colspan="3"/.test(paper),

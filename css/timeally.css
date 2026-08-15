@@ -175,7 +175,16 @@ label { display: block; font-size: 13px; color: #78705C; margin: 10px 0 4px; }
 table.tc { border-collapse: collapse; width: 100%; font-size: 13px; background: #FFFFFF; }
 table.tc th, table.tc td { border: 1px solid #F0E0B8; padding: 6px 8px; text-align: right; white-space: nowrap; }
 table.tc th { background: #FFE08A; color: #2B2418; font-weight: 700; }
+/* ★揃えの決まり（2026-08-15 司さんの指摘・全アプリ共通）★
+     ★数字（金額・時間・件数）＝右★（既定）／★言葉＝左(.l)★／★1文字の列＝中央(.c)★
+     ★中央を使ってよいのは「1文字の列」だけ★（曜日など）
+     ★見出しは中身と同じ揃え★＝同じ class を付ける（js/owner-app.js の alignOf が1か所で決める） */
 table.tc td.l, table.tc th.l { text-align: left; }
+table.tc td.c, table.tc th.c { text-align: center; }
+/* 何列かにまたがる見出しだけ 中央（どれか1列の中身ではないので この決まりの外） */
+table.tc th.grp { text-align: center; }
+/* ★数字は等幅★（1と8で幅が変わらない＝桁が縦に揃う）。日付・時刻・件数も数字なので同じ */
+table.tc td.num, table.tc th.num { font-family: 'DM Mono', ui-monospace, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
 table.tc tr.sel td { background: #FFE08A; }
 table.tc td.warn { color: #B3261E; }
 

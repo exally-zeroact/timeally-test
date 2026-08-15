@@ -933,8 +933,17 @@
      ・★土日と法定休日に薄い網★（紙のCSSだけ。画面の色は増やさない）
      ・★一番下に合計行★（月計と突き合わせられる）
      ※ ★CSVは触っていない★（機械が読む物なので 年つきの日付・0は0のまま） */
+  /* ★揃えの決まり（2026-08-15 司さんの指摘・全アプリ共通）★
+       ★数字（金額・時間・件数）＝ 右★（桁が縦に揃う）
+       ★言葉（名前・備考）      ＝ 左★
+       ★日付                    ＝ 右★（数字だから。「8/14」も右で揃う）
+       ★1文字の列（曜日）        ＝ 中央★
+       ★見出しは 中身と同じ揃え★／★中央を使ってよいのは「1文字の列」だけ★
+     a: 省略＝右 / 'l' / 'c'
+     ★有給・欠勤は「件数」なので右★（1文字に見えるが 合計行では 2 のような数になる。
+      ★上下の桁が縦に揃う方を採る★） */
   var DAILY_COLS = [
-    { k: '日付', w: 4, l: true }, { k: '曜日', w: 3, l: true },
+    { k: '日付', w: 4 }, { k: '曜日', w: 3, a: 'c' },
     { k: '出勤', w: 6 }, { k: '退勤', w: 6 },
     { k: '休憩', w: 5 }, { k: '中抜け', w: 5, z: true },
     { k: '実労働', w: 7 },
@@ -943,8 +952,10 @@
     { k: '深夜', w: 6, z: true }, { k: '休日', w: 6, z: true },
     { k: '遅刻', w: 5, z: true }, { k: '早退', w: 5, z: true },
     { k: '有給', w: 4, z: true }, { k: '欠勤', w: 4, z: true },
-    { k: '備考', w: 15, l: true },
+    { k: '備考', w: 15, a: 'l' },
   ];
+  /** ★列の揃えを決めるのは この1本だけ★（見出しも中身も合計行も ここから取る＝食い違わない） */
+  function alignOf(c) { return c.a === 'l' ? 'l' : c.a === 'c' ? 'c' : 'num'; }
   /* 1段目の見出し（何の仲間か）。colspan の合計は 17 */
   var DAILY_GROUPS = [['日', 2], ['打刻', 2], ['引いた分', 2], ['実労働', 1],
     ['内訳', 3], ['割増', 2], ['その他', 4], ['備考', 1]];
@@ -991,31 +1002,37 @@
       return '<tr' + cls + '>' + DAILY_COLS.map(function (c, i) {
         var t = v[i];
         if (noPunch && c.k !== '日付' && c.k !== '曜日' && c.k !== '有給' && c.k !== '欠勤' && c.k !== '備考') t = '';
-        return '<td class="' + (c.l ? 'l' : 'num') + '">' + U.esc(c.z ? blank(t) : t) + '</td>';
+        return '<td class="' + alignOf(c) + '">' + U.esc(c.z ? blank(t) : t) + '</td>';
       }).join('') + '</tr>';
     }).join('');
 
     return '<colgroup>' + DAILY_COLS.map(function (c) { return '<col style="width:' + c.w + '%">'; }).join('') + '</colgroup>'
       + '<thead>'
       /* ★1列だけの仲間は 上下に同じ字を2回 出さない★（縦につなげる） */
+      /* ★1列だけの仲間は その列と同じ揃え★（縦につなぐので 見出しと中身が同じ列になる）
+         ★何列かにまたがる見出しは 中央★＝「どれか1列の中身」ではないので この決まりの外
+         （検査も またぐ見出しは数えない） */
       + '<tr>' + DAILY_GROUPS.map(function (g) {
-        return g[1] === 1
-          ? '<th rowspan="2">' + U.esc(g[0]) + '</th>'
-          : '<th colspan="' + g[1] + '">' + U.esc(g[0]) + '</th>';
+        if (g[1] !== 1) return '<th colspan="' + g[1] + '" class="grp">' + U.esc(g[0]) + '</th>';
+        var col = DAILY_COLS.filter(function (c) { return c.k === g[0]; })[0] || {};
+        return '<th rowspan="2" class="' + alignOf(col) + '">' + U.esc(g[0]) + '</th>';
       }).join('') + '</tr>'
+      /* ★見出しは 中身と同じ揃え★（同じ alignOf から取る） */
       + '<tr>' + DAILY_COLS.filter(function (c) { return SOLO.indexOf(c.k) < 0; }).map(function (c) {
-        return '<th class="' + (c.l ? 'l' : '') + '">' + U.esc(c.k) + '</th>';
+        return '<th class="' + alignOf(c) + '">' + U.esc(c.k) + '</th>';
       }).join('') + '</tr>'
       + '</thead><tbody>' + body + '</tbody>'
       /* ★合計行★（日ごとの表だけで 月計と突き合わせられる） */
       /* ★遅刻・早退も足す★（給与で控除に使う数字なのに、どこにも合計が無かった）
          ★有給・欠勤は「日数」＝件数で数える★（時間ではない） */
+      /* ★合計行も 上の列と同じ揃え★（桁が縦にぴったり重なる） */
       + '<tfoot><tr><th class="l" colspan="4">合計</th>'
       + DAILY_COLS.slice(4).map(function (c) {
-        if (c.k === '有給') return '<td class="num">' + U.esc(s.month.yukyu || '') + '</td>';
-        if (c.k === '欠勤') return '<td class="num">' + U.esc(s.month.kekkin || '') + '</td>';
-        if (sum[c.k] == null) return '<td class="num"></td>';
-        return '<td class="num">' + U.esc(c.z && !sum[c.k] ? '' : CSV.hhmm(sum[c.k])) + '</td>';
+        var a = ' class="' + alignOf(c) + '"';
+        if (c.k === '有給') return '<td' + a + '>' + U.esc(s.month.yukyu || '') + '</td>';
+        if (c.k === '欠勤') return '<td' + a + '>' + U.esc(s.month.kekkin || '') + '</td>';
+        if (sum[c.k] == null) return '<td' + a + '></td>';
+        return '<td' + a + '>' + U.esc(c.z && !sum[c.k] ? '' : CSV.hhmm(sum[c.k])) + '</td>';
       }).join('') + '</tr></tfoot>';
   }
 

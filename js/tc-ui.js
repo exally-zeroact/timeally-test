@@ -104,14 +104,19 @@
       /* ★太線は見出しの一番下の行だけ★（月計の各行に出ると うるさい） */
       + 'thead tr:last-child th{border-bottom:2px solid #333333;}'
       /* ★1段目（何の仲間か）は 中央に置いて 細い線で区切る★ */
-      + 'thead tr:first-child th{text-align:center;font-size:9px;}'
+      + 'thead tr:first-child th.grp{font-size:9px;}'
       /* ★土日と法定休日は薄い網★（★コピーで飛ばない濃さ★） */
       + 'tr.rest td{background:#EEEEEE;}'
       /* ★一番下の合計行★（月計と突き合わせられる） */
       + 'tfoot th,tfoot td{border-top:2px solid #333333;font-weight:700;}'
       /* ★長い備考で列が押し出されないようにする★（はみ出す分は切る＝表は崩さない） */
       + 'table{table-layout:fixed;}td.l{overflow:hidden;text-overflow:ellipsis;}'
-      + 'td.l,th.l{text-align:left;}td.warn{color:#B3261E;}'
+      /* ★揃えの決まり（全アプリ共通）★ 数字＝右（既定）／言葉＝左(.l)／1文字の列＝中央(.c)
+         ★見出しは中身と同じ揃え★（同じ class が付く）。またがる見出し(.grp)だけ中央 */
+      + 'td.l,th.l{text-align:left;}td.c,th.c{text-align:center;}th.grp{text-align:center;}'
+      /* ★数字は等幅★（1と8で幅が変わらない＝桁が縦に揃う） */
+      + 'td.num,th.num{font-variant-numeric:tabular-nums;font-family:ui-monospace,Menlo,Consolas,monospace;}'
+      + 'td.warn{color:#B3261E;}'
       /* ★2枚になった時は 見出しを2枚目にも出す／1行を2枚に割らない★ */
       + 'thead{display:table-header-group;}tr{break-inside:avoid;page-break-inside:avoid;}'
       /* ★月計は横に並べる★（縦12行だと それだけで紙の1/3を使う） */
