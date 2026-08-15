@@ -36,6 +36,33 @@ function findChrome() {
   throw new Error('紙を刷れるブラウザが見つかりません（Chrome / Edge）');
 }
 
+/** 直前に動かした画面（中の値を見るために持っておく） */
+let lastWin = null;
+
+/** ★列ごとの恒等式★（日ごとの合計 ＝ 合計行に描いた文字 ＝ 月計）
+    ★「実労働の合計」しか突き合わせないと、他の列の穴は出ても気づけない★（指示役 2026-08-15）。
+    ★中の値・描いた文字・月計 の3つを突き合わせる★ので、
+    数える所の穴も 描く所の穴も どちらも捕まる。 */
+function checkColumns(w) {
+  const HEAD = ['休憩', '中抜け', '実労働', '所定内', '所定超', '法定外残業', '深夜', '休日'];
+  const KEY = ['breakMin', 'awayMin', 'workMin', 'stdMin', 'overStdMin', 'otMin', 'nightMin', 'holidayMin'];
+  const MKEY = [null, null, 'workedMin', 'stdMin', 'overStdMin', 'otMin', 'nightMin', 'holidayMin'];
+  const hhmm = (m) => Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0');
+  const st = w.OwnerApp._st;
+  const foot = [...w.document.querySelectorAll('#daily tfoot td')].map((c) => c.textContent);
+  const bad = [];
+  HEAD.forEach((label, i) => {
+    const sum = st.sum.days.reduce((a, x) => a + x[KEY[i]], 0);
+    if (hhmm(sum) !== foot[i]) bad.push(label + '（日ごと ' + hhmm(sum) + ' ≠ 合計行「' + foot[i] + '」）');
+    if (MKEY[i] != null && st.sum.month[MKEY[i]] !== sum) {
+      bad.push(label + '（日ごと ' + hhmm(sum) + ' ≠ 月計 ' + hhmm(st.sum.month[MKEY[i]]) + '）');
+    }
+  });
+  /* ★働いた日に「休み」が立っていないか★（見本が雑でも通る＝本物でも通る） */
+  const conflict = st.sum.days.filter((x) => x.workMin > 0 && (x.dayKind === 'absent' || x.dayKind === 'paid_leave'));
+  return { bad: bad, conflict: conflict.map((x) => x.d + ' ' + x.dayKind) };
+}
+
 /** アプリ本体を動かして ★印刷の窓のHTML★ を取り出す */
 function paperHtmlOf(seed, back, btn) {
   const file = 'shukei.html';
@@ -65,6 +92,7 @@ function paperHtmlOf(seed, back, btn) {
       w.document.getElementById(btn || 'b-print').click();
       setTimeout(() => {
         if (!opened.length) throw new Error('★印刷の窓が開かなかった★');
+        lastWin = w;
         /* ★doctype を必ず付ける★
            documentElement.outerHTML は ★doctype を落とす★。落ちたまま Chrome に渡すと
            ★互換モード★で開き、表が body の font-size を継がず ★1行28px★になる
@@ -146,6 +174,9 @@ const CASES = [
 let ng = 0;
 for (const c of CASES) {
   const paper = await paperHtmlOf(c.seed, c.back);
+  const col = checkColumns(lastWin);
+  if (col.bad.length) { ng++; console.log('  ✗ ' + c.name + ' … ★列が合っていない: ' + col.bad.join(' / ') + '★'); }
+  if (col.conflict.length) { ng++; console.log('  ✗ ' + c.name + ' … ★働いた日に休みが立っている: ' + col.conflict.join(' / ') + '★'); }
   const htmlPath = path.join(outDir, c.name.replace(/[^0-9A-Za-z]/g, '_') + '.html');
   const pdfPath = htmlPath.replace(/\.html$/, '.pdf');
   fs.writeFileSync(htmlPath, paper, 'utf8');
@@ -165,7 +196,8 @@ for (const c of CASES) {
     /* ★縦に割れた字と 横のはみ出しは 0でなければ赤★ */
     if (h.tall && h.tall.n > 0) { ng++; console.log('      ★縦に割れているマスが ' + h.tall.n + '個★'); }
     if (h.over > 0) { ng++; console.log('      ★横に ' + h.over + 'px はみ出している★'); }
-    console.log('      縦に割れたマス ' + (h.tall ? h.tall.n : '?') + '個 ／ 横のはみ出し ' + h.over + 'px');
+    console.log('      縦に割れたマス ' + (h.tall ? h.tall.n : '?') + '個 ／ 横のはみ出し ' + h.over + 'px'
+      + ' ／ ★列ごとの突き合わせ 8本 一致★');
   }
   /* ★入れたつもりの物が 本当に紙に出ているか数える★（入っていなければ「試した」と言えない） */
   const has = {

@@ -85,11 +85,19 @@ function rowsFor(table, seed, store) {
         out.push({ id: id, account_id: 'u1', employee_id: emp, at: at, kind: kind, src: 'punch',
           device: null, approved_at: at, voided_at: null, created_at: at });
       };
+      /* ★有給・欠勤の日には 打刻を作らない★（2026-08-15 指示役の指摘で直した）
+         ＝前は ★働いた日に有給・欠勤が立った矛盾した見本★を刷っていた。
+         ★見本が雑でも通る＝本物でも通る★ので、アプリ側にも見張りを入れてある（day_conflict）。 */
+      var OFF_DAYS = [2, 10, 23, 27];
+      /* ★締め日が末日でない時は 月をまたぐ★ので、★2か月ぶん作る★。
+         片方だけだと ★11日ぶんしか載らない薄い紙★を「試した」と言ってしまう（実際に踏んだ）。 */
+      var span = (s.closeDay && s.closeDay < 31) ? s.days * 2 : s.days;
       who.forEach(function (emp) {
-        for (var i = 0; i < s.days; i++) {
+        for (var i = 0; i < span; i++) {
           var ymd = new Date(Date.UTC(y, mo - 1, 1 + i)).toISOString().slice(0, 10);
           var dow = new Date(ymd + 'T00:00:00Z').getUTCDay();
           var id = emp + '_' + i;
+          if (s.mix && OFF_DAYS.indexOf(i + 1) >= 0) continue;   // 休んだ日は打刻なし
           /* ★色んな形の日を混ぜる★（一番 幅を食う所を測るため）
              ★9:00〜18:00 が31日 続くのは 一番 幅を食わないデータ★ なので使わない。 */
           if (s.mix && i % 7 === 3) {                       // ★日をまたぐ夜勤★（深夜・休日深夜が出る）

@@ -193,7 +193,27 @@ T('★★深夜が 実労働を超えない（休憩を引いた後）★★', (
   ok(r.day.nightMin <= r.day.workMin, '★深夜(' + r.day.nightMin + ') が 実労働(' + r.day.workMin + ') を超えている★');
 });
 
-/* ── ⑦ 押す画面から休憩のボタンが消えている ─────────────────── */
+/* ── ⑦ 働いた日に「休み」が立っていたら知らせる ───────────────── */
+T('★★欠勤・有給になっている日に打刻が在ったら 赤で知らせる（勝手に消さない）★★', () => {
+  /* 2026-08-15 指示役の指摘。★見本が雑でも通る＝本物でも通る★ので、見張りを入れる。 */
+  const ps = day('2026-08-03', [['09:00', 'in'], ['18:00', 'out']]);
+  ['absent', 'paid_leave'].forEach(function (kind) {
+    const r = oneDay(ps, { warnOn: true }, [{ d: '2026-08-03', dayKind: kind }]);
+    const w = r.sum.warnings.filter(function (x) { return x.code === 'day_conflict'; });
+    ok(w.length === 1, '★' + kind + ' なのに打刻が在る日を知らせていない★');
+    ok(/どちらかが違います/.test(w[0].detail), '理由が弱い: ' + w[0].detail);
+    /* ★勝手に片方を消さない★（どちらが本当かは人にしか決められない） */
+    eq(r.day.workMin, 480, '★働いた時間を勝手に消している★');
+    eq(r.day.dayKind, kind, '★休みの印を勝手に消している★');
+  });
+});
+
+T('★働いていない日の欠勤・有給は 知らせない（誤警告を出さない）', () => {
+  const r = oneDay([], { warnOn: true }, [{ d: '2026-08-03', dayKind: 'absent' }]);
+  eq(r.sum.warnings.filter(function (x) { return x.code === 'day_conflict'; }).length, 0);
+});
+
+/* ── ⑧ 押す画面から休憩のボタンが消えている ─────────────────── */
 T('★★打つ画面のボタンは4つ（休憩の2つが消え、外出は残る）★★', () => {
   const html = fs.readFileSync(path.join(ROOT, 'punch.html'), 'utf8');
   const ids = (html.match(/id="(b-[a-z]+)"/g) || []).map(function (s) { return s.slice(4, -1); });
@@ -224,6 +244,13 @@ if (process.argv.includes('--self-test')) {
     const r = oneDay(day('2026-08-03', [['09:00', 'in'], ['12:00', 'break_in'],
       ['12:45', 'break_out'], ['18:00', 'out']]));
     eq(r.day.breakMin, 45, '★本物が打った45分を上書きしている★');
+  });
+  S('④「働いた日の欠勤」を見ない作り物は 見本が雑でも通る（本物は赤にする）', () => {
+    const wrong = function () { return []; };
+    eq(wrong().length, 0, '作り物が壊れていない＝この検査が空振り');
+    const r = oneDay(day('2026-08-03', [['09:00', 'in'], ['18:00', 'out']]),
+      { warnOn: true }, [{ d: '2026-08-03', dayKind: 'absent' }]);
+    ok(r.sum.warnings.some(function (x) { return x.code === 'day_conflict'; }), '★本物が知らせていない★');
   });
   S('③ 法定に足りない既定を黙って引き上げる作り物は 違法な設定を隠す（本物は隠さない）', () => {
     const r = oneDay(day('2026-08-03', [['09:00', 'in'], ['18:00', 'out']]),
