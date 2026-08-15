@@ -132,9 +132,11 @@ alter table timeally.tc_pub add column if not exists legal_holiday_dow int;
 -- ★紙の綴じ代（2026-08-15 司さんの指摘で作り直した）★
 --   2穴パンチの中心は ★紙の端からおよそ12mm★。
 --   ★綴じる場所は選ばせない★＝★四辺とも20mm★なら 上でも左でも右でも 穴が余白に入る。
---   設定は ★「綴じ代をとる／とらない」の1つだけ★。
+--   ★2026-08-15（同じ日の後）に 設定そのものを外した★（司さんの決定）
+--   ＝★勤務表は必ず綴じる紙★なので ★いつでも四辺20mm★。人が決める事を1つ減らす。
+--   ⇒ ★bind_margin も もう読まない・書かない★（四辺20mmは js/tc-ui.js の1か所で決める）。
 alter table timeally.tc_companies add column if not exists bind_margin boolean not null default true;
--- ★bind_side（綴じる場所）は もう読まない・書かない★（同じ日に「四辺とも同じ」へ変えたため）。
+-- ★bind_side（綴じる場所）も もう読まない・書かない★（同じ日に「四辺とも同じ」へ変えたため）。
 --   ★列は落とさない★＝門番(scripts/sql-guard.mjs)が ★消す系(drop column)を止める★。
 --   出勤簿は法定三帳簿なので ★列を落とす道を軽々に作らない★のが このアプリの前提。
 --   （落とすなら ★司さんの一言をもらって 別の塊で★。今は 使わないだけにしておく）

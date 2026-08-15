@@ -79,16 +79,13 @@
    * @param {string} title 窓の題（＝紙の名前）
    * @param {string} bodyHtml 紙の中身。★空なら開かない（白紙のダイアログを出さない）★
    */
-  /** ★紙の余白は 四辺とも同じ★（2026-08-15 司さんの指摘で作り直した）
-      ・前は ★綴じる側だけ20mm・他10mm★ にしていた ⇒ ★左右の幅が合っていない★
-      ・A4横は ★上に穴を開ける人もいる★（むしろ上綴じが普通）
-      ⇒ ★綴じるなら四辺とも20mm／綴じないなら四辺とも10mm★。
-        ★綴じる場所を選ばせない★＝四辺20mmなら 上でも左でも右でも 穴が余白に入る。
-        設定は ★「綴じ代をとる／とらない」の1つだけ★。 */
-  var BIND_MM = { on: '20mm', off: '10mm' };
-  function pageMargin(bind) { return bind === false || bind === 'off' ? BIND_MM.off : BIND_MM.on; }
+  /** ★紙の余白は いつでも四辺20mm★（2026-08-15 司さんの決定）
+      ・★勤務表は必ず綴じる紙★なので「綴じる／綴じない」を選ばせない（★設定を1つ減らす★）
+      ・★四辺が同じ★なので 上でも左でも右でも ★2穴（端から約12mm）が余白に入る★
+      ・★決めるのは ここ1か所だけ★（画面にも倉庫にも持たせない） */
+  var PAGE_MARGIN_MM = 20;
 
-  function printPaper(title, bodyHtml, opts) {
+  function printPaper(title, bodyHtml) {
     var body = String(bodyHtml || '').trim();
     if (!body) { toast('刷る中身がありません（先に対象を選んでください）'); return false; }
     var w = global.open('', '_blank');
@@ -133,11 +130,10 @@
       + '.paper-sum{display:flex;gap:12px;align-items:flex-start;margin-top:6px;}'
       + '.paper-sum table{width:auto;}'
       + '.paper-foot{display:block;margin-top:6px;font-size:9px;color:#78705C;}'
-      /* ★綴じ代★（2026-08-15 司さんの質問）
-         2穴パンチの中心は ★紙の端からおよそ12mm★。★左10mmでは 穴が日付の列にかかる★。
-         ⇒ ★綴じる側だけ20mm★・他の3辺は10mm。★どちら綴じかは会社が選ぶ★（左＝ふつう／上／綴じない）。
-         ★プリンタの拡大縮小で余白が変わる★ので、画面に「実際のサイズ（100%）で」と出している。 */
-      + '@page{size:A4 landscape;margin:' + pageMargin(opts && opts.bind) + ';}'
+      /* ★綴じ代★ 2穴パンチの中心は ★紙の端からおよそ12mm★。
+         ★四辺とも20mm★なら どこに開けても 穴が余白に入る。
+         ★プリンタの拡大縮小で余白が変わる★ので、刷る画面に「実際のサイズ（100%）で」と出している。 */
+      + '@page{size:A4 landscape;margin:' + PAGE_MARGIN_MM + 'mm;}'
       + '</style></head><body>' + body + '</body></html>'
     );
     w.document.close();
@@ -162,7 +158,7 @@
   }
 
   global.TcUi = {
-    esc: esc, toast: toast, pageMargin: pageMargin, BIND_MM: BIND_MM,
+    esc: esc, toast: toast, PAGE_MARGIN_MM: PAGE_MARGIN_MM,
     mdShort: mdShort, dateField: dateField, onDateChange: onDateChange,
     hm: hm, minToHm: minToHm, dowOf: dowOf, DOW: DOW,
     printPaper: printPaper, deliverText: deliverText, nameHint: nameHint,

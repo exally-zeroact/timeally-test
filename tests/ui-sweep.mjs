@@ -732,6 +732,24 @@ T('★★画面に「気づき」が1文字も無い（2026-08-15 に丸ごと�
   console.log('     実測: ' + opened_pages.length + '枚を見て「気づき」0件／一覧の列 ' + cols + '個');
 });
 
+T('★★画面に「綴じ代」の設定が無い（いつでも四辺20mm）★★', () => {
+  /* 2026-08-15 司さんの決定＝★勤務表は必ず綴じる紙★なので選ばせない。
+     ★人が決める事を1つ減らした★のが 本当に消えているかを 出た物から数える。 */
+  const bad = [];
+  for (const p of opened_pages) {
+    const d2 = p.w.document;
+    if (d2.getElementById('c-bind')) bad.push(p.file + '（設定が残っている）');
+    if ((d2.body.textContent || '').indexOf('綴じ代をとる') >= 0) bad.push(p.file + '（説明が残っている）');
+    if ((d2.body.textContent || '').indexOf('綴じない') >= 0) bad.push(p.file + '（「綴じない」が残っている）');
+  }
+  ok(bad.length === 0, '★綴じ代の設定が残っている: ' + [...new Set(bad)].join(', '));
+  /* ★「実際のサイズ（100%）で」は残す★（刷る画面へ移した） */
+  const sh = results.filter((x) => x.file === 'shukei.html')[0];
+  ok(/実際のサイズ/.test(sh.page.w.document.body.textContent || ''),
+    '★「実際のサイズ（100%）で刷ってください」が消えている★');
+  console.log('     実測: ' + opened_pages.length + '枚に 綴じ代の設定 0件／「実際のサイズ」は残っている');
+});
+
 T('★★画面に出た文に「あいことば」が無い（言葉は「暗証番号」1つ）★★', () => {
   /* 言葉が2つある物は必ず食い違う（司さん 2026-08-15）。 */
   const bad = [], withPin = [];

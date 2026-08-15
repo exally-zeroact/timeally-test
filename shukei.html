@@ -4,24 +4,24 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <title>Timeally — 集計・印刷</title>
-    <link rel="icon" href="icons/favicon-32.png?v=fc99c84d" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=fc99c84d" />
+    <link rel="icon" href="icons/favicon-32.png?v=83370a22" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=83370a22" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
     <meta name="theme-color" content="#FFC72C" />
-    <link rel="manifest" href="manifest.json?v=fc99c84d" />
+    <link rel="manifest" href="manifest.json?v=83370a22" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=fc99c84d" />
+    <link rel="stylesheet" href="css/timeally.css?v=83370a22" />
   </head>
   <body>
     <div class="tc-appbar">
       <h1>Timeally</h1>
       <span class="tc-sub">集計・印刷</span>
       <span class="tc-spacer"></span>
-      <a class="tc-btn sub" href="index.html?v=fc99c84d">一覧へ</a>
+      <a class="tc-btn sub" href="index.html?v=83370a22">一覧へ</a>
     </div>
 
     <div class="tc-wrap" id="main" hidden>
@@ -82,6 +82,10 @@
       <div class="tc-tablewrap"><table class="tc" id="total"></table></div>
 
       <h2>渡す</h2>
+      <!-- ★押す直前に読める所に置く★（プリンタの拡大縮小で余白が変わるため・会社情報から移した） -->
+      <div class="tc-note">
+        刷るときは「実際のサイズ（100%）」で刷ってください。紙の余白は四辺とも20mmです。
+      </div>
       <div class="tc-note" id="namehint"></div>
       <div class="tc-tabs">
         <button class="tc-btn" id="b-print" type="button">印刷（この人）</button>
@@ -92,18 +96,18 @@
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=fc99c84d"></script>
-    <script src="js/env-badge.js?v=fc99c84d"></script>
-    <script src="lib/tc-law.js?v=fc99c84d"></script>
-    <script src="lib/tc-calc.js?v=fc99c84d"></script>
-    <script src="lib/tc-close.js?v=fc99c84d"></script>
-    <script src="lib/tc-csv.js?v=fc99c84d"></script>
-    <script src="lib/tc-name.js?v=fc99c84d"></script>
-    <script src="lib/tc-hours.js?v=fc99c84d"></script>
-    <script src="js/file-out.js?v=fc99c84d"></script>
-    <script src="js/tc-ui.js?v=fc99c84d"></script>
-    <script src="js/tc-db.js?v=fc99c84d"></script>
-    <script src="js/owner-app.js?v=fc99c84d"></script>
+    <script src="js/supa-config.js?v=83370a22"></script>
+    <script src="js/env-badge.js?v=83370a22"></script>
+    <script src="lib/tc-law.js?v=83370a22"></script>
+    <script src="lib/tc-calc.js?v=83370a22"></script>
+    <script src="lib/tc-close.js?v=83370a22"></script>
+    <script src="lib/tc-csv.js?v=83370a22"></script>
+    <script src="lib/tc-name.js?v=83370a22"></script>
+    <script src="lib/tc-hours.js?v=83370a22"></script>
+    <script src="js/file-out.js?v=83370a22"></script>
+    <script src="js/tc-ui.js?v=83370a22"></script>
+    <script src="js/tc-db.js?v=83370a22"></script>
+    <script src="js/owner-app.js?v=83370a22"></script>
     <script>
       OwnerApp.startShukei();
     </script>

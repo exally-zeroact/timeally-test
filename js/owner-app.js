@@ -465,8 +465,6 @@
     var c = st.company || {};
     var set = function (id, v) { var el = q(id); if (el) el.value = v == null ? '' : v; };
     set('c-name', c.name); set('c-close', c.close_day == null ? 31 : c.close_day);
-    /* 紙の綴じ代（★既定は入＝四辺20mm★／切なら四辺10mm） */
-    var bm = q('c-bind'); if (bm) bm.checked = c.bind_margin !== false;
     HOUR_FIELDS.forEach(function (f) {
       var min = c[f.col] == null ? f.def : c[f.col];
       /* ★読みやすい方の単位で出す★（ちょうどの時間は「時間」／端数は「分」）
@@ -641,7 +639,6 @@
       account_id: st.user.id,
       name: q('c-name').value.trim(),
       close_day: Number(q('c-close').value) || 31,
-      bind_margin: !!(q('c-bind') || {}).checked,
       holiday_mode: mode,
       holiday_cycle_start: holCycleValue() || null,
       /* ★-1（決めていない）を 0（日）に落とさない★（|| だと -1 も 0 も消える） */
@@ -1170,12 +1167,8 @@
     /* ★紙にも状態を刷る★（確定前の紙が「確定」の顔で回ると、後で数字が動いた時に食い違う）
        ★これは「どう絞り込んだか」ではなく「この数字が動くかどうか」なので刷ってよい★ */
     var body = paperOf(p, s, q('daily').outerHTML, st.totalRows);
-    U.printPaper(fileName(p, 'pdf').replace(/\.pdf$/, ''), body, { bind: bindSide() });
+    U.printPaper(fileName(p, 'pdf').replace(/\.pdf$/, ''), body);
   }
-
-  /** ★紙の綴じ代★ … 会社の設定（既定は入＝四辺20mm／切なら四辺10mm）
-      ★綴じる場所は選ばせない★（四辺が同じなら 上でも左でも右でも穴が余白に入る） */
-  function bindSide() { return (st.company && st.company.bind_margin) === false ? 'off' : 'on'; }
 
   /** ★全員ぶんを1回で刷る★（月末に10人ぶん10回 押さなくてよい）
       ★1人1枚で続けて出る／1人が2枚に割れない★（人の頭で改ページする） */
@@ -1188,7 +1181,7 @@
       var name = global.TcName.build({
         kind: '勤務表', company: (st.company || {}).name, ym: st.ym, count: rows.length, stamp: stamp(),
       }, 'pdf').replace(/\.pdf$/, '');
-      U.printPaper(name, body, { bind: bindSide() });
+      U.printPaper(name, body);
     }).catch(failed('作れませんでした'));
   }
 

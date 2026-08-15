@@ -348,29 +348,8 @@ for (const n of [1, 2, 10]) {
   console.log(`      ${bigPdf}`);
   if (!keep) fs.unlinkSync(bigHtml);
 }
-/* ★綴じ代を「とらない」時も 四辺とも同じ（10mm）か★（2026-08-15）
-   ＝★2通りとも測る★。片方だけ見て「そろっている」と言わない。 */
-{
-  const off = await paperHtmlOf({ days: 31, ym: '2026-08', closeDay: 31, mix: true, longName: true,
-    bindMargin: false }, 0);
-  const offHtml = path.join(outDir, 'tojinai.html');
-  const offPdf = path.join(outDir, '綴じない-四辺10mm.pdf');
-  fs.writeFileSync(offHtml, off, 'utf8');
-  execFileSync(chrome, ['--headless', '--disable-gpu', '--no-pdf-header-footer',
-    '--print-to-pdf=' + offPdf, 'file:///' + offHtml.replace(/\\/g, '/')], { stdio: 'ignore', timeout: 60000 });
-  const n2 = pageCount(fs.readFileSync(offPdf));
-  const m2 = pdfMargins(fs.readFileSync(offPdf));
-  const v2 = m2 ? [m2.top, m2.right, m2.bottom, m2.left] : [];
-  const t2 = (x) => Math.round(x * 10);
-  const w2 = v2.map(t2);
-  const ok2 = n2 === 1 && m2 && Math.max.apply(null, w2) - Math.min.apply(null, w2) <= 3
-    && w2.every((x) => Math.abs(x - 100) <= 3);
-  if (!ok2) ng++;
-  console.log('  ' + (ok2 ? '✓' : '✗') + ' 綴じ代をとらない … ★' + n2 + '枚★'
-    + (m2 ? '／余白 上' + m2.top + ' 右' + m2.right + ' 下' + m2.bottom + ' 左' + m2.left + 'mm' : ''));
-  console.log('      ' + offPdf);
-  if (!keep) fs.unlinkSync(offHtml);
-}
+/* （「綴じ代をとらない」の検査は 2026-08-15 に外した＝★設定そのものを無くした★ので
+    ★誰も呼ばない検査を残さない★。★四辺が20mmでそろっているか★は 上の1枚ずつで見ている） */
 
 const headerGroup = /table-header-group/.test(fs.readFileSync(path.join(ROOT, 'js/tc-ui.js'), 'utf8'));
 console.log(`  ${headerGroup ? '✓' : '✗'} 2枚に割れた時は見出しを繰り返す作り（table-header-group）`);
