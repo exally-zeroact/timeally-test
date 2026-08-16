@@ -325,8 +325,10 @@
     }
     var yet = st.people.filter(function (p) { return !p.pw_hash; }).length;
     if (head) {
+      /* ★何の状態かが 一目で分かる言葉にする★（2026-08-16 司さん「ぜんぶとかまだって何」）
+         ＝この画面で見たいのは ★その人が もう打てるのか★の1点。 */
       head.textContent = '従業員 ' + st.people.length + '人'
-        + (yet ? '（まだ決めていません ' + yet + '人）' : '（全員 暗証番号あり）');
+        + (yet ? '（うち ' + yet + '人は まだ打てません）' : '（全員 打てます）');
     }
     if (tabs) {
       tabs.hidden = false;
@@ -338,7 +340,7 @@
     }
     var list = st.people.filter(function (p) { return peopleFilter === 'yet' ? !p.pw_hash : true; });
     if (!list.length) {
-      box.innerHTML = '<div class="tc-note">まだ決めていない人はいません。</div>';
+      box.innerHTML = '<div class="tc-note">まだ打てない人はいません（全員 暗証番号を決めています）。</div>';
       return;
     }
     box.innerHTML = list.map(function (p) {
@@ -346,7 +348,8 @@
       return '<div class="tc-row">'
         + '<button class="tc-rowhead" type="button" data-open="' + t + '" aria-expanded="false">'
         + '<span class="tc-rowname">' + U.esc(p.name || p.employee_id) + '</span>'
-        + (p.pw_hash ? '<span class="tc-tag">済</span>' : '<span class="tc-tag pending">まだ</span>')
+        + (p.pw_hash ? '<span class="tc-tag">打てます</span>'
+          : '<span class="tc-tag pending">まだ打てません</span>')
         + '<span class="tc-chev">›</span></button>'
         + '<div class="tc-rowbody" id="row-' + t + '" hidden>'
         + '<div class="tc-tabs">'
@@ -675,7 +678,10 @@
 
     /* ★2行に収める★（2026-08-16 司さん「分かりにくい」・390pxで実測して3行だった） */
     var n = q('round-note');
-    if (n) n.textContent = '打った時刻（原本）は1分単位のまま残ります。変わるのは見せ方だけです。';
+    /* ★「見せ方」ではない★（2026-08-16 司さん）＝ここで決めるのは
+       ★会社の決まり（賃金を数える時の丸め方）★。打った時刻の原本は消えない、という話は
+       ★決まりの説明として★書く（「見せ方だけ」と言い切らない）。 */
+    if (n) n.textContent = '会社の決まりとして、賃金を数える時の丸め方を決めます。打った時刻そのもの（原本）は1分単位で残ります。';
 
     var law = LAW.roundingLegality(r);
     var a = q('round-warn'), head = q('round-warn-head'), rest = q('round-warn-rest');
@@ -1061,18 +1067,25 @@
      a: 省略＝右 / 'l' / 'c'
      ★有給・欠勤は「件数」なので右★（1文字に見えるが 合計行では 2 のような数になる。
       ★上下の桁が縦に揃う方を採る★） */
+  /* g … ★仲間の名前★（1段目の見出しと同じ）。
+     ★スマホでは 仲間ごと まるごと隠す★（2026-08-16 司さん「横スクロールせずに見せられないか」）
+     ＝1列ずつ隠すと ★1段目の見出しの colspan と数が合わなくなって 表がずれる★。
+     ★仲間ごとなら 何列 隠しても 2段の見出しが崩れない★。
+     紙（A4横）では ★17列 全部 出す★（隠すのは 狭い画面だけ）。 */
   var DAILY_COLS = [
-    { k: '日付', w: 4 }, { k: '曜日', w: 3, a: 'c' },
-    { k: '出勤', w: 6 }, { k: '退勤', w: 6 },
-    { k: '休憩', w: 5 }, { k: '中抜け', w: 5, z: true },
-    { k: '実労働', w: 7 },
+    { k: '日付', w: 4, g: 'hi' }, { k: '曜日', w: 3, a: 'c', g: 'hi' },
+    { k: '出勤', w: 6, g: 'da' }, { k: '退勤', w: 6, g: 'da' },
+    { k: '休憩', w: 5, g: 'hk' }, { k: '中抜け', w: 5, z: true, g: 'hk' },
+    { k: '実労働', w: 7, g: 'jr' },
     /* ★所定超は0が並びやすい★ので0なら空欄（所定内と法定外残業は 0にも意味がある＝出す） */
-    { k: '所定内', w: 6 }, { k: '所定超', w: 6, z: true }, { k: '法定外残業', w: 7 },
-    { k: '深夜', w: 6, z: true }, { k: '休日', w: 6, z: true },
-    { k: '遅刻', w: 5, z: true }, { k: '早退', w: 5, z: true },
-    { k: '有給', w: 4, z: true }, { k: '欠勤', w: 4, z: true },
-    { k: '備考', w: 15, a: 'l' },
+    { k: '所定内', w: 6, g: 'uw' }, { k: '所定超', w: 6, z: true, g: 'uw' }, { k: '法定外残業', w: 7, g: 'uw' },
+    { k: '深夜', w: 6, z: true, g: 'wm' }, { k: '休日', w: 6, z: true, g: 'wm' },
+    { k: '遅刻', w: 5, z: true, g: 'st' }, { k: '早退', w: 5, z: true, g: 'st' },
+    { k: '有給', w: 4, z: true, g: 'st' }, { k: '欠勤', w: 4, z: true, g: 'st' },
+    { k: '備考', w: 15, a: 'l', g: 'bk' },
   ];
+  /* ★狭い画面で出す仲間★（日・打刻・実労働＝5列）。他は「紙のとおりに見る」で全部 見える */
+  var PHONE_GROUPS = ['hi', 'da', 'jr'];
   /** ★中身の揃えを決めるのは この1本だけ★（中身も合計行も ここから取る＝食い違わない） */
   function alignOf(c) { return c.a === 'l' ? 'l' : c.a === 'c' ? 'c' : 'num'; }
   /** ★見出し（列の名前）は 中身に関係なく 中央★（2026-08-15 司さんの指摘で訂正）
@@ -1080,8 +1093,8 @@
       ※数字の列は ★等幅のまま★（見出しの字も同じ書体で並ぶ） */
   function headAlignOf(c) { return alignOf(c) === 'num' ? 'c num' : 'c'; }
   /* 1段目の見出し（何の仲間か）。colspan の合計は 17 */
-  var DAILY_GROUPS = [['日', 2], ['打刻', 2], ['引いた分', 2], ['実労働', 1],
-    ['内訳', 3], ['割増', 2], ['その他', 4], ['備考', 1]];
+  var DAILY_GROUPS = [['日', 2, 'hi'], ['打刻', 2, 'da'], ['引いた分', 2, 'hk'], ['実労働', 1, 'jr'],
+    ['内訳', 3, 'uw'], ['割増', 2, 'wm'], ['その他', 4, 'st'], ['備考', 1, 'bk']];
   /* 1列だけの仲間（1段目に縦2行で置くので、2段目には出さない） */
   var SOLO = DAILY_GROUPS.filter(function (g) { return g[1] === 1; }).map(function (g) { return g[0]; });
 
@@ -1125,24 +1138,26 @@
       return '<tr' + cls + '>' + DAILY_COLS.map(function (c, i) {
         var t = v[i];
         if (noPunch && c.k !== '日付' && c.k !== '曜日' && c.k !== '有給' && c.k !== '欠勤' && c.k !== '備考') t = '';
-        return '<td class="' + alignOf(c) + '">' + U.esc(c.z ? blank(t) : t) + '</td>';
+        return '<td class="' + alignOf(c) + ' g-' + c.g + '">' + U.esc(c.z ? blank(t) : t) + '</td>';
       }).join('') + '</tr>';
     }).join('');
 
-    return '<colgroup>' + DAILY_COLS.map(function (c) { return '<col style="width:' + c.w + '%">'; }).join('') + '</colgroup>'
+    return '<colgroup>' + DAILY_COLS.map(function (c) {
+      return '<col class="g-' + c.g + '" style="width:' + c.w + '%">';
+    }).join('') + '</colgroup>'
       + '<thead>'
       /* ★1列だけの仲間は 上下に同じ字を2回 出さない★（縦につなげる） */
       /* ★1列だけの仲間は その列と同じ揃え★（縦につなぐので 見出しと中身が同じ列になる）
          ★何列かにまたがる見出しは 中央★＝「どれか1列の中身」ではないので この決まりの外
          （検査も またぐ見出しは数えない） */
       + '<tr>' + DAILY_GROUPS.map(function (g) {
-        if (g[1] !== 1) return '<th colspan="' + g[1] + '" class="grp">' + U.esc(g[0]) + '</th>';
+        if (g[1] !== 1) return '<th colspan="' + g[1] + '" class="grp g-' + g[2] + '">' + U.esc(g[0]) + '</th>';
         var col = DAILY_COLS.filter(function (c) { return c.k === g[0]; })[0] || {};
-        return '<th rowspan="2" class="' + headAlignOf(col) + '">' + U.esc(g[0]) + '</th>';
+        return '<th rowspan="2" class="' + headAlignOf(col) + ' g-' + g[2] + '">' + U.esc(g[0]) + '</th>';
       }).join('') + '</tr>'
       /* ★見出しは中央★（表の見出しは中央が普通・2026-08-15 訂正） */
       + '<tr>' + DAILY_COLS.filter(function (c) { return SOLO.indexOf(c.k) < 0; }).map(function (c) {
-        return '<th class="' + headAlignOf(c) + '">' + U.esc(c.k) + '</th>';
+        return '<th class="' + headAlignOf(c) + ' g-' + c.g + '">' + U.esc(c.k) + '</th>';
       }).join('') + '</tr>'
       + '</thead><tbody>' + body + '</tbody>'
       /* ★合計行★（日ごとの表だけで 月計と突き合わせられる） */
@@ -1151,7 +1166,7 @@
       /* ★合計行も 上の列と同じ揃え★（桁が縦にぴったり重なる） */
       + '<tfoot><tr><th class="l" colspan="4">合計</th>'
       + DAILY_COLS.slice(4).map(function (c) {
-        var a = ' class="' + alignOf(c) + '"';
+        var a = ' class="' + alignOf(c) + ' g-' + c.g + '"';
         if (c.k === '有給') return '<td' + a + '>' + U.esc(s.month.yukyu || '') + '</td>';
         if (c.k === '欠勤') return '<td' + a + '>' + U.esc(s.month.kekkin || '') + '</td>';
         if (sum[c.k] == null) return '<td' + a + '></td>';

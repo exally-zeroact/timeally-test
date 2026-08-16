@@ -4,17 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <title>Timeally — 集計・印刷</title>
-    <link rel="icon" href="icons/favicon-32.png?v=89568b1f" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=89568b1f" />
+    <link rel="icon" href="icons/favicon-32.png?v=93af5566" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=93af5566" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
     <meta name="theme-color" content="#FFC72C" />
-    <link rel="manifest" href="manifest.json?v=89568b1f" />
+    <link rel="manifest" href="manifest.json?v=93af5566" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=89568b1f" />
+    <link rel="stylesheet" href="css/timeally.css?v=93af5566" />
   </head>
   <body>
     <div class="tc-appbar">
@@ -22,7 +22,7 @@
       <span class="tc-sub">集計・印刷</span>
       <span class="tc-spacer"></span>
       <!-- ★別のページへ移る物は いつでも 帯のいちばん右★（置き場所は1つ・2026-08-16） -->
-      <a class="tc-btn sub tc-nav" href="index.html?v=89568b1f">← 今月の勤務へ</a>
+      <a class="tc-btn sub tc-nav" href="index.html?v=93af5566">← 今月の勤務へ</a>
     </div>
 
     <div class="tc-wrap" id="main" hidden>
@@ -62,8 +62,9 @@
 
       <h2>日ごと</h2>
       <div class="tc-tablewrap"><table class="tc" id="daily"></table></div>
-      <!-- ★切れている事が分かる印★（スマホでは17列が入り切らない・2026-08-16） -->
-      <p class="tc-scrollhint">→ 表は横に滑ります（右にまだ列があります）。「紙のとおりに見る」なら全部 見えます。</p>
+      <!-- ★狭い画面では 5列だけ出す（横に滑らせない）★
+           ＝隠した列がある事は 黙らずに言う（2026-08-16 司さん） -->
+      <p class="tc-scrollhint">スマホでは 出勤・退勤・実労働だけ出しています。休憩・残業・深夜などを含む全部の列は「紙のとおりに見る」で見えます。</p>
 
       <!-- ★休憩は押させず 会社の既定を引く★（2026-08-15 司さんの指摘）。
            ただし ★本当に休憩が取れなかった日★は在るので、社長が日ごとに直せる。
@@ -102,18 +103,18 @@
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=89568b1f"></script>
-    <script src="js/env-badge.js?v=89568b1f"></script>
-    <script src="lib/tc-law.js?v=89568b1f"></script>
-    <script src="lib/tc-calc.js?v=89568b1f"></script>
-    <script src="lib/tc-close.js?v=89568b1f"></script>
-    <script src="lib/tc-csv.js?v=89568b1f"></script>
-    <script src="lib/tc-name.js?v=89568b1f"></script>
-    <script src="lib/tc-hours.js?v=89568b1f"></script>
-    <script src="js/file-out.js?v=89568b1f"></script>
-    <script src="js/tc-ui.js?v=89568b1f"></script>
-    <script src="js/tc-db.js?v=89568b1f"></script>
-    <script src="js/owner-app.js?v=89568b1f"></script>
+    <script src="js/supa-config.js?v=93af5566"></script>
+    <script src="js/env-badge.js?v=93af5566"></script>
+    <script src="lib/tc-law.js?v=93af5566"></script>
+    <script src="lib/tc-calc.js?v=93af5566"></script>
+    <script src="lib/tc-close.js?v=93af5566"></script>
+    <script src="lib/tc-csv.js?v=93af5566"></script>
+    <script src="lib/tc-name.js?v=93af5566"></script>
+    <script src="lib/tc-hours.js?v=93af5566"></script>
+    <script src="js/file-out.js?v=93af5566"></script>
+    <script src="js/tc-ui.js?v=93af5566"></script>
+    <script src="js/tc-db.js?v=93af5566"></script>
+    <script src="js/owner-app.js?v=93af5566"></script>
     <script>
       OwnerApp.startShukei();
     </script>

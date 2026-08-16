@@ -289,7 +289,7 @@ for (const c of CASES) {
   const has = {
     日またぎ: /日をまたぐ勤務/.test(paper),
     打刻漏れ: /打刻が片方だけ/.test(paper),
-    深夜: /<td class="num">[1-9]\d?:\d\d<\/td>/.test(paper),
+    深夜: /<td class="num[^"]*">[1-9]\d?:\d\d<\/td>/.test(paper),
     '3桁時間': /\d{3}:\d\d/.test(paper),
     /* ★日付の列は 揃えを直して class="num" になった★（2026-08-15）。
        ★見た目の class で探すと 揃えを変えた時に空振りする★ので、行の先頭のマスで見る。 */
@@ -297,8 +297,11 @@ for (const c of CASES) {
     網: /class="rest"/.test(paper),
     合計行: /<tfoot>/.test(paper),
     '2段見出し': /colspan="3"/.test(paper),
-    休日: /休日/.test(paper) && /<td class="num">[1-9]\d?:\d\d<\/td>/.test(paper),
-    有給欠勤: /<td class="num">1<\/td>/.test(paper),
+    /* ★class を「ぴったり一致」で探さない★（2026-08-16 実際に空振りした）
+       ＝列に仲間の印（g-…）を足した瞬間に この見張りが黙った。
+       ★class は増える物★として、含まれているかで見る。 */
+    休日: /休日/.test(paper) && /<td class="num[^"]*">[1-9]\d?:\d\d<\/td>/.test(paper),
+    有給欠勤: /<td class="num[^"]*">1<\/td>/.test(paper),
     遅刻早退: /遅刻/.test(paper),
   };
   /* ★入っているはずの物が入っていなければ赤★（＝「試したつもり」を潰す） */

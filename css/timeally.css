@@ -239,9 +239,16 @@ table.tc td.warn { color: #B3261E; }
 /* ★何が分かる画面かの1行★（見出しの下・本文と同じ薄い黒） */
 .tc-lead { font-size: 13px; color: #2B2418; margin: 8px 0; }
 
-/* ★右にまだ列がある事を 出しておく★（横に切れている表は 切れていると分かるように）
-   ★スマホでは 17列が入り切らない★＝黙って切れているより 印を出す。
-   広い画面（900px以上）では入るので 出さない。 */
+/* ★狭い画面では 横に滑らせない★（2026-08-16 司さん「横スクロールせずに見せられないか」）
+   17列は スマホの幅に入らない ⇒ ★仲間ごと まるごと隠して 5列だけ出す★
+   （日付・曜日・出勤・退勤・実労働）。★隠した列は「紙のとおりに見る」で全部 見える★。
+   ★1列ずつ隠さない★＝1段目の見出し（colspan）と数が合わなくなり 表がずれるため。 */
+@media (max-width: 899px) {
+  table.tc .g-hk, table.tc .g-uw, table.tc .g-wm, table.tc .g-st, table.tc .g-bk { display: none; }
+  /* ★幅の指定（%）は 全部の列がある前提★なので、狭い画面では外す */
+  table.tc colgroup col { width: auto; }
+}
+/* ★出していない列がある事を 言っておく★（黙って減らさない）。広い画面では出さない。 */
 .tc-scrollhint { display: none; font-size: 12px; color: #78705C; margin: 4px 0 0; }
 @media (max-width: 899px) { .tc-scrollhint { display: block; } }
 

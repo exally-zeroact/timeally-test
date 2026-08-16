@@ -4,17 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <title>Timeally — 一覧</title>
-    <link rel="icon" href="icons/favicon-32.png?v=89568b1f" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=89568b1f" />
+    <link rel="icon" href="icons/favicon-32.png?v=93af5566" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=93af5566" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
     <meta name="theme-color" content="#FFC72C" />
-    <link rel="manifest" href="manifest.json?v=89568b1f" />
+    <link rel="manifest" href="manifest.json?v=93af5566" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=89568b1f" />
+    <link rel="stylesheet" href="css/timeally.css?v=93af5566" />
   </head>
   <body>
     <div class="tc-appbar">
@@ -26,7 +26,7 @@
       <!-- ★別のページへ移る物は いつでも 帯のいちばん右★（2026-08-16 司さん
            「戻るが集計の時だけ右上にある」）＝★置き場所を1つに決める★。
            タブ（会社／従業員／今月の勤務）は同じページの中なので 帯には出さない。 -->
-      <a class="tc-btn go tc-nav" id="go-shukei" href="shukei.html?v=89568b1f">集計へ →</a>
+      <a class="tc-btn go tc-nav" id="go-shukei" href="shukei.html?v=93af5566">集計へ →</a>
     </div>
 
     <div class="tc-wrap" id="main" hidden>
@@ -74,8 +74,8 @@
         <!-- ★人数を頭に出す★／★状態で絞れる★（20人でも探せるように・2026-08-16） -->
         <div class="tc-lead" id="people-count"></div>
         <div class="tc-tabs" id="people-filter" hidden>
-          <button class="tc-btn sub" type="button" data-filter="all" aria-selected="true">ぜんぶ</button>
-          <button class="tc-btn sub" type="button" data-filter="yet" aria-selected="false">まだ決めていない人</button>
+          <button class="tc-btn sub" type="button" data-filter="all" aria-selected="true">全員</button>
+          <button class="tc-btn sub" type="button" data-filter="yet" aria-selected="false">まだ打てない人</button>
         </div>
         <div id="people"></div>
 
@@ -132,7 +132,7 @@
         <label for="c-holmode">法定休日の決め方</label>
         <select id="c-holmode">
           <option value="none">決めていない（就業規則で特定していない）</option>
-          <option value="dow">曜日で決める（会社ぜんぶ同じ）</option>
+          <option value="dow">曜日で決める（全員おなじ曜日）</option>
           <option value="per_person">従業員ごとに曜日で決める</option>
           <option value="w4d4">4週4日制（変形休日制）</option>
         </select>
@@ -153,7 +153,7 @@
         <div class="tc-note" id="holiday-note"></div>
         <div class="tc-alert" id="holiday-warn" hidden></div>
 
-        <h3>時間の見せ方（丸め方）</h3>
+        <h3>時間の丸め方（会社の決まり）</h3>
         <div class="tc-note" id="round-note"></div>
         <label for="c-round">決め方</label>
         <select id="c-round">
@@ -199,18 +199,18 @@
       </section>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=89568b1f"></script>
-    <script src="js/env-badge.js?v=89568b1f"></script>
-    <script src="lib/tc-law.js?v=89568b1f"></script>
-    <script src="lib/tc-calc.js?v=89568b1f"></script>
-    <script src="lib/tc-csv.js?v=89568b1f"></script>
-    <script src="lib/tc-name.js?v=89568b1f"></script>
-    <script src="lib/tc-hours.js?v=89568b1f"></script>
-    <script src="lib/qr.js?v=89568b1f"></script>
-    <script src="js/file-out.js?v=89568b1f"></script>
-    <script src="js/tc-ui.js?v=89568b1f"></script>
-    <script src="js/tc-db.js?v=89568b1f"></script>
-    <script src="js/owner-app.js?v=89568b1f"></script>
+    <script src="js/supa-config.js?v=93af5566"></script>
+    <script src="js/env-badge.js?v=93af5566"></script>
+    <script src="lib/tc-law.js?v=93af5566"></script>
+    <script src="lib/tc-calc.js?v=93af5566"></script>
+    <script src="lib/tc-csv.js?v=93af5566"></script>
+    <script src="lib/tc-name.js?v=93af5566"></script>
+    <script src="lib/tc-hours.js?v=93af5566"></script>
+    <script src="lib/qr.js?v=93af5566"></script>
+    <script src="js/file-out.js?v=93af5566"></script>
+    <script src="js/tc-ui.js?v=93af5566"></script>
+    <script src="js/tc-db.js?v=93af5566"></script>
+    <script src="js/owner-app.js?v=93af5566"></script>
     <script>
       OwnerApp.startIndex();
     </script>

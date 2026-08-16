@@ -226,6 +226,45 @@ say(r3.h1 <= 60, '1人あたりの高さは ★60px以下★（実測 ' + r3.h1 
 say(r3.urls === 0, '長いURLをそのまま出さない（実測 ' + r3.urls + '個）');
 say(r3.fit >= 8, '1画面に ★8人以上★ 見える（実測 ' + r3.fit + '人）');
 
+/* ── ④ 集計の表（★横に滑らせない★） ─────────────────────────── */
+console.log('\n④ 集計の「日ごと」（★横スクロールを出さない★）');
+const shukeiHtml = await render('shukei.html', { days: 31, ym: '2026-08', closeDay: 31, mix: true }, null);
+const TABLE_PROBE = VISIBLE + `
+  var W = document.documentElement.clientWidth;
+  var t = document.getElementById("daily");
+  var wrap = t.closest(".tc-tablewrap");
+  var cols = [].slice.call(t.querySelectorAll("tbody tr")).map(function(tr){
+    return [].slice.call(tr.children).filter(vis).length; })[0] || 0;
+  /* ★2段目には「1列だけの仲間」が居ない★（1段目に縦2行で置いてある）。
+     ＝2段目の数だけ見ると ★正しい表を「ずれている」と言ってしまう★（実際に出た）。
+     ⇒ ★上の段から降りてくる分（rowspan=2）を足してから数える★。 */
+  var down = [].slice.call(t.querySelectorAll("thead tr:first-child th[rowspan]")).filter(vis).length;
+  var heads = [].slice.call(t.querySelectorAll("thead tr")).map(function(tr, i){
+    var n = [].slice.call(tr.children).filter(vis).reduce(function(a,th){
+      return a + (Number(th.getAttribute("colspan"))||1); }, 0);
+    return i === 0 ? n : n + down; });
+  var names = [].slice.call(t.querySelectorAll("thead tr:last-child th")).filter(vis)
+    .map(function(th){return th.textContent.trim();});
+  var hint = document.querySelector(".tc-scrollhint");
+  return { w: W, 列: cols, 見出しの段: heads, 出ている列: names,
+    はみ出し: Math.max(0, Math.round(wrap.scrollWidth - wrap.clientWidth)),
+    印: hint && vis(hint) ? hint.textContent.trim().slice(0, 30) : "" };
+`;
+for (const wpx of [390, 412]) {
+  const r4 = measure('shuukei-hyou', shukeiHtml, wpx, TABLE_PROBE);
+  console.log('    幅' + wpx + ' … 出ている列 ★' + r4.列 + '列★ ' + JSON.stringify(r4.出ている列)
+    + ' ／ 横のはみ出し ★' + r4.はみ出し + 'px★');
+  say(r4.はみ出し === 0, '幅' + wpx + 'で ★横に滑らせない★（実測 はみ出し ' + r4.はみ出し + 'px）');
+  say(r4.見出しの段.every((n) => n === r4.列),
+    '幅' + wpx + 'で ★2段の見出しと列の数が合っている★（実測 見出し ' + r4.見出しの段.join('/') + ' 列 ' + r4.列 + '）');
+  say(!!r4.印, '幅' + wpx + 'で ★出していない列がある事を言っている★');
+}
+/* 広い画面では ★17列 全部★ 出る（隠しっぱなしにしない） */
+const rWide = measure('shuukei-hyou-hiroi', shukeiHtml, 1100, TABLE_PROBE);
+console.log('    幅1100 … 出ている列 ★' + rWide.列 + '列★ ／ 印: ' + (rWide.印 || '（出さない＝正）'));
+say(rWide.列 === 17, '広い画面では ★17列 全部 出る★（実測 ' + rWide.列 + '列）');
+say(!rWide.印, '広い画面では 「出していない列がある」と言わない');
+
 /* ── ⑤ 一覧 ─────────────────────────────────────────────────── */
 console.log('\n⑤ 一覧（何が分かる画面か）');
 const listHtml = await render('index.html', {}, null);
