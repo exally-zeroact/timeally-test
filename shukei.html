@@ -4,24 +4,25 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <title>Timeally — 集計・印刷</title>
-    <link rel="icon" href="icons/favicon-32.png?v=724cf274" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=724cf274" />
+    <link rel="icon" href="icons/favicon-32.png?v=89568b1f" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=89568b1f" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
     <meta name="theme-color" content="#FFC72C" />
-    <link rel="manifest" href="manifest.json?v=724cf274" />
+    <link rel="manifest" href="manifest.json?v=89568b1f" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=724cf274" />
+    <link rel="stylesheet" href="css/timeally.css?v=89568b1f" />
   </head>
   <body>
     <div class="tc-appbar">
       <h1>Timeally</h1>
       <span class="tc-sub">集計・印刷</span>
       <span class="tc-spacer"></span>
-      <a class="tc-btn sub" href="index.html?v=724cf274">一覧へ</a>
+      <!-- ★別のページへ移る物は いつでも 帯のいちばん右★（置き場所は1つ・2026-08-16） -->
+      <a class="tc-btn sub tc-nav" href="index.html?v=89568b1f">← 今月の勤務へ</a>
     </div>
 
     <div class="tc-wrap" id="main" hidden>
@@ -61,6 +62,8 @@
 
       <h2>日ごと</h2>
       <div class="tc-tablewrap"><table class="tc" id="daily"></table></div>
+      <!-- ★切れている事が分かる印★（スマホでは17列が入り切らない・2026-08-16） -->
+      <p class="tc-scrollhint">→ 表は横に滑ります（右にまだ列があります）。「紙のとおりに見る」なら全部 見えます。</p>
 
       <!-- ★休憩は押させず 会社の既定を引く★（2026-08-15 司さんの指摘）。
            ただし ★本当に休憩が取れなかった日★は在るので、社長が日ごとに直せる。
@@ -88,6 +91,9 @@
       </div>
       <div class="tc-note" id="namehint"></div>
       <div class="tc-tabs">
+        <!-- ★刷る前に「紙のとおり」を見る★（2026-08-16 司さん）
+             ＝★刷る物と同じ物★を A4横のまま出す。指で広げて 端の列まで読める。 -->
+        <button class="tc-btn" id="b-preview" type="button">紙のとおりに見る</button>
         <button class="tc-btn" id="b-print" type="button">印刷（この人）</button>
         <button class="tc-btn" id="b-printall" type="button">印刷（全員）</button>
         <button class="tc-btn sub" id="b-csv" type="button">この人の日ごと（CSV）</button>
@@ -96,18 +102,18 @@
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=724cf274"></script>
-    <script src="js/env-badge.js?v=724cf274"></script>
-    <script src="lib/tc-law.js?v=724cf274"></script>
-    <script src="lib/tc-calc.js?v=724cf274"></script>
-    <script src="lib/tc-close.js?v=724cf274"></script>
-    <script src="lib/tc-csv.js?v=724cf274"></script>
-    <script src="lib/tc-name.js?v=724cf274"></script>
-    <script src="lib/tc-hours.js?v=724cf274"></script>
-    <script src="js/file-out.js?v=724cf274"></script>
-    <script src="js/tc-ui.js?v=724cf274"></script>
-    <script src="js/tc-db.js?v=724cf274"></script>
-    <script src="js/owner-app.js?v=724cf274"></script>
+    <script src="js/supa-config.js?v=89568b1f"></script>
+    <script src="js/env-badge.js?v=89568b1f"></script>
+    <script src="lib/tc-law.js?v=89568b1f"></script>
+    <script src="lib/tc-calc.js?v=89568b1f"></script>
+    <script src="lib/tc-close.js?v=89568b1f"></script>
+    <script src="lib/tc-csv.js?v=89568b1f"></script>
+    <script src="lib/tc-name.js?v=89568b1f"></script>
+    <script src="lib/tc-hours.js?v=89568b1f"></script>
+    <script src="js/file-out.js?v=89568b1f"></script>
+    <script src="js/tc-ui.js?v=89568b1f"></script>
+    <script src="js/tc-db.js?v=89568b1f"></script>
+    <script src="js/owner-app.js?v=89568b1f"></script>
     <script>
       OwnerApp.startShukei();
     </script>

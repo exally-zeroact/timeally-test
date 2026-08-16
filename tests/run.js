@@ -35,6 +35,11 @@ for (const cmd of [['scripts/sql-guard.mjs', '--self-test'], ['scripts/sql-guard
   /* ★揃えは「描き終わった物」から数える★（ソースの grep ではない）。
      紙（A4横）と 画面（375/390/412）の両方。これも刷るブラウザが要るので手元だけ。 */
   ['scripts/align-check.mjs'],
+  /* ★画面そのものを 本物のブラウザで測る★（2026-08-16 追加）
+     ＝1人あたりの高さ・1画面に入る人数・説明文の行数・行き来ボタンの置き場所。
+     ★窓の大きさでは測れない（Chromeは526pxより狭くできない）ので 枠(iframe)で測る★。
+     これも刷るブラウザが要るので手元だけ（CIには並べていない）。 */
+  ['scripts/screen-check.mjs'],
   /* ★数えるだけで誰も呼ばない物を残さない★（src= だけで判定しない） */
   ['scripts/dead-check.mjs']]) {
   total++;

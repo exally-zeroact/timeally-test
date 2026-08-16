@@ -436,15 +436,17 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
        ★「暗証番号あり・帳面に記録なし」の人を作らないと この検査は素通りする★ */
     const d2 = pwSetPage.w.document;
     d2.getElementById('tab-people').click();
-    const cards = [...d2.querySelectorAll('#people .tc-card')];
-    ok(cards.length > 0, '従業員のカードが無い');
-    cards.forEach((c) => {
+    /* ★2026-08-16 から 1人1行★（開くと中が出る）。★開かないと説明が読めない＝必ず開いて数える★ */
+    const rows = [...d2.querySelectorAll('#people .tc-row')];
+    ok(rows.length > 0, '従業員の行が無い');
+    rows.forEach((c) => {
+      c.querySelector('[data-open]').click();
       const t = c.textContent.replace(/\s+/g, ' ');
-      const hasTag = /暗証番号あり/.test(t);
+      const hasTag = /済/.test(c.querySelector('.tc-tag').textContent);
       const saysNone = /まだ暗証番号を決めていません/.test(t);
       ok(!(hasTag && saysNone), '★札と説明が食い違っている★: ' + t.slice(0, 90));
     });
-    console.log('     実測: 従業員 ' + cards.length + '枚で 食い違い 0件');
+    console.log('     実測: 従業員 ' + rows.length + '行を開いて 食い違い 0件');
   });
 
   T('★★同じ従業員番号は 人が読む言葉で止まる（倉庫へ書きに行かない）★★', () => {
@@ -589,12 +591,18 @@ T('★★「出る」はタブと同じ形にしない・押しても1回 確認
   ok(/quiet/.test(out.className), '「出る」を目立たない形にしていない');
   /* ★タブの行の中に居ない★（ヘッダーへ移した） */
   ok(!out.closest('.tc-tabs'), '「出る」がまだタブの行に並んでいる');
-  /* 並びは 会社 → 従業員 → 一覧 → 集計（★月めくりの行と混ぜない★＝role=tablist の行だけ見る） */
+  /* 並びは 会社 → 従業員 → 今月の勤務（★月めくりの行と混ぜない★＝role=tablist の行だけ見る）
+     ★2026-08-16 から 集計へは タブの行ではなく 帯のいちばん右★
+     ＝★別のページへ移る物の置き場所を 全画面で1つに決めた★（司さん「戻るが集計の時だけ右上」） */
   const row = d.querySelector('.tc-tabs[role="tablist"]');
   ok(row, 'タブの行が見つからない');
   const order = [...row.children].map((e) => e.id).filter(Boolean);
-  ok(order.join(',') === 'tab-company,tab-people,tab-list,go-shukei',
+  ok(order.join(',') === 'tab-company,tab-people,tab-list',
     '並びが違う: ' + order.join(','));
+  const goShukei = d.getElementById('go-shukei');
+  ok(goShukei && goShukei.closest('.tc-appbar'), '★集計へが 帯の中に無い★');
+  ok(goShukei && !goShukei.closest('.tc-tabs'), '★集計へが タブの行に戻っている★');
+  ok(goShukei && goShukei.parentNode.lastElementChild === goShukei, '★集計へが 帯のいちばん右にない★');
   /* ★集計は別のページへ飛ぶ物だと分かる★ */
   const go = d.getElementById('go-shukei');
   ok(go.tagName === 'A' && /shukei\.html/.test(go.getAttribute('href')), '集計が飛び先を持っていない');

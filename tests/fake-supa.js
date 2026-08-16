@@ -50,7 +50,9 @@ function rowsFor(table, seed, store) {
           employee_id: 'E' + (k + 1),
           name: s.longName ? '長谷川 佐和子' + (k + 1) : (['山田 太郎', '佐藤 花子', '鈴木 一郎'][k] || ('従業員' + k)),
           emp_no: 'A0' + (k + 1), hire_date: '2024-04-01', hourly_yen: 1200,
-          init_code: null, pw_hash: null, device_tokens: [],
+          /* ★seed.pinMix=true … 決めた人と まだの人が混ざる★（2026-08-16 追加）
+             ＝全員おなじだと ★「まだの人だけ出す」が 何も絞っていなくても緑になる★。 */
+          init_code: null, pw_hash: (s.pinMix && k % 3 !== 0) ? '$2a$10$dummydummydummydummydu' : null, device_tokens: [],
           fail_count: 0, locked_until: null, active: true, created_at: '2026-08-01T00:00:00Z',
         });
       }
@@ -69,6 +71,10 @@ function rowsFor(table, seed, store) {
     }];
   }
   if (table === 'tc_punch') {
+    /* ★seed.noPunch=true … 打刻が1つも無い会社★（2026-08-16 追加）
+       ＝入れたばかりの会社は ★必ずこの姿から始まる★。作らないと
+       ★「黙って空の表が出る」を 見張りが素通りする★（指示役⑤）。 */
+    if (s.noPunch) return [];
     /* ★seed.days を渡すと 1か月ぶんの打刻を作る★（紙が1枚に収まるかを実物で数えるため）
        ★repeat で わざと増やせる★＝2枚になった時の見出しを確かめる用。 */
     if (s.days) {

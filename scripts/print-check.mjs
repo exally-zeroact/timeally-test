@@ -351,6 +351,32 @@ for (const n of [1, 2, 10]) {
 /* （「綴じ代をとらない」の検査は 2026-08-15 に外した＝★設定そのものを無くした★ので
     ★誰も呼ばない検査を残さない★。★四辺が20mmでそろっているか★は 上の1枚ずつで見ている） */
 
+/* ★「紙のとおりに見る」と「刷った紙」が 同じ物か★（2026-08-16 司さん④）
+   ★出た物どうしで比べる★＝同じ月・同じ人で 両方を作り、
+   ★表の中の字を1つ残らず並べて 突き合わせる★（作り方が同じ事を言うだけにしない）。
+   ※見せる方は ★.sheet で包む★＋★画面用のCSS★だけが違う（刷る時は外れる）。 */
+{
+  const seed = { days: 31, ym: '2026-08', closeDay: 31, mix: true };
+  const printed = await paperHtmlOf(seed, 0, 'b-print');
+  const shown = await paperHtmlOf(seed, 0, 'b-preview');
+  const cells = (html) => {
+    const d = new JSDOM(html).window.document;
+    return [...d.querySelectorAll('th,td')].map((e) => e.textContent.trim()).join('|');
+  };
+  const a = cells(printed), b = cells(shown);
+  const same = a === b && a.length > 0;
+  if (!same) ng++;
+  const sheet = /class="sheet"/.test(shown) && !/class="sheet"/.test(printed);
+  if (!sheet) ng++;
+  console.log(`  ${same ? '✓' : '✗'} ★「紙のとおりに見る」と「刷った紙」の中身が 1字も違わない★`
+    + `（マス ${a.split('|').length}個 を突き合わせ）`);
+  console.log(`  ${sheet ? '✓' : '✗'} 見せる時だけ 紙の形（.sheet）で包む／刷る時は包まない`);
+  /* ★見せる方は 印刷ダイアログを開かない★（開くと「見るだけ」にならない） */
+  const noPrint = !/window\.print\(\)/.test(shown);
+  if (!noPrint) ng++;
+  console.log(`  ${noPrint ? '✓' : '✗'} 見せるだけの時は 印刷ダイアログを開かない`);
+}
+
 const headerGroup = /table-header-group/.test(fs.readFileSync(path.join(ROOT, 'js/tc-ui.js'), 'utf8'));
 console.log(`  ${headerGroup ? '✓' : '✗'} 2枚に割れた時は見出しを繰り返す作り（table-header-group）`);
 if (!headerGroup) ng++;

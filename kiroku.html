@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="format-detection" content="telephone=no" />
     <title>Timeally — 自分の記録</title>
-    <link rel="icon" href="icons/favicon-32.png?v=724cf274" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=724cf274" />
+    <link rel="icon" href="icons/favicon-32.png?v=89568b1f" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=89568b1f" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
@@ -14,13 +14,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=724cf274" />
+    <link rel="stylesheet" href="css/timeally.css?v=89568b1f" />
   </head>
   <body>
     <div class="tc-appbar">
       <h1>Timeally</h1>
       <span class="tc-spacer"></span>
       <span class="tc-sub" id="who"></span>
+      <!-- ★別のページへ移る物は いつでも 帯のいちばん右★（全画面で同じ場所・2026-08-16） -->
+      <a class="tc-btn sub tc-nav" id="to-punch" href="#">← 打つ画面へ</a>
     </div>
 
     <div class="tc-wrap" id="main" hidden>
@@ -59,8 +61,6 @@
       <label for="ar">ひとこと（打ち忘れた理由など）</label>
       <input type="text" id="ar" />
       <p><button class="tc-btn wide" id="b-add" type="button">お願いを出す</button></p>
-
-      <p><a class="tc-btn sub wide" id="to-punch" href="#">打つ画面にもどる</a></p>
     </div>
 
     <div class="tc-overlay" id="gate">
@@ -85,12 +85,12 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=724cf274"></script>
-    <script src="js/env-badge.js?v=724cf274"></script>
-    <script src="lib/tc-pin.js?v=724cf274"></script>
-    <script src="js/tc-ui.js?v=724cf274"></script>
-    <script src="js/tc-db.js?v=724cf274"></script>
-    <script src="js/emp-app.js?v=724cf274"></script>
+    <script src="js/supa-config.js?v=89568b1f"></script>
+    <script src="js/env-badge.js?v=89568b1f"></script>
+    <script src="lib/tc-pin.js?v=89568b1f"></script>
+    <script src="js/tc-ui.js?v=89568b1f"></script>
+    <script src="js/tc-db.js?v=89568b1f"></script>
+    <script src="js/emp-app.js?v=89568b1f"></script>
     <script>
       EmpApp.startKiroku();
     </script>

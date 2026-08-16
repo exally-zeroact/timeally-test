@@ -37,10 +37,13 @@
     };
   }
 
-  function alertBox(id, msg) {
+  /** ★うまく行った時は 赤で出さない★（2026-08-16 司さんが本番で止まった）
+   *  ＝登録は成功しているのに 赤い箱に出ると ★失敗に見える★。ok=true で緑の箱にする。 */
+  function alertBox(id, msg, ok) {
     var el = q(id);
     if (!el) { U.toast(msg); return; }
     el.textContent = msg || '';
+    el.className = 'tc-alert' + (ok ? ' ok' : '');
     el.hidden = !msg;
   }
 
@@ -52,12 +55,22 @@
         global.location.href = 'index.html';
       });
     };
+    /* ★登録したら そのまま入る★（2026-08-16 司さんが本番の実機で止まった）
+       ★確認メールは 来ません★＝倉庫の設定が mailer_autoconfirm=true（指示役が実測）。
+       それなのに「メールが届いていたら…」と出していたので ★人が待ってしまった★。
+       ⇒ ①言葉を実物に合わせる ②赤で出さない ③★もう一度 打たせない（そのまま入る）★ */
     q('b-new').onclick = function () {
+      var email = q('email').value.trim();
       var pw = q('pw').value;
       if (pw.length < 8) { alertBox('alert', 'パスワードは8文字以上にしてください。'); return; }
-      DB.Auth.signUp(q('email').value.trim(), pw).then(function (r) {
+      DB.Auth.signUp(email, pw).then(function (r) {
         if (r.error) { alertBox('alert', '登録できませんでした（' + r.error.message + '）'); return; }
-        alertBox('alert', '登録しました。メールが届いていたら中のリンクを押してください。');
+        alertBox('alert', '登録しました。そのまま中へ入ります。', true);
+        /* 入れなかった時だけ ★次に押す物を1つだけ★言う（メールの話はしない） */
+        DB.Auth.signIn(email, pw).then(function (s) {
+          if (s.error) { alertBox('alert', '登録しました。そのまま「入る」を押してください。', true); return; }
+          global.location.href = 'index.html';
+        });
       });
     };
     q('b-reset').onclick = function () {
@@ -106,6 +119,17 @@
       q('b-next').onclick = function () { shiftYm(1); };
       q('b-addperson').onclick = addPerson;
       q('b-savecompany').onclick = saveCompany;
+      /* ★押した時だけ 出す物★（既定で使う人の画面を短くする・2026-08-16） */
+      q('b-round-ex').onclick = function () {
+        var ex = q('round-example');
+        ex.hidden = !ex.hidden;
+        q('b-round-ex').textContent = ex.hidden ? '例を見る' : '例を閉じる';
+      };
+      q('b-warn-more').onclick = function () {
+        var rest = q('round-warn-rest');
+        rest.hidden = !rest.hidden;
+        q('b-warn-more').textContent = rest.hidden ? 'くわしく' : '閉じる';
+      };
       ['c-round', 'c-runit', 'c-rdir', 'c-rscope'].forEach(function (id) {
         var el = q(id); if (el) el.onchange = drawRoundNote;
       });
@@ -253,6 +277,14 @@
         return { p: p, s: s };
       });
     })).then(function (rows) {
+      /* ★1つも打刻が無い月に 0:00 が並ぶ表を黙って出さない★（2026-08-16 司さん）
+         ＝入れたばかりの会社は ★必ずこの姿から始まる★。何をすればよいかを1行で言う。 */
+      var anyPunch = rows.some(function (x) { return x.s.month.shukkin > 0 || x.s.month.workedMin > 0; });
+      if (!anyPunch) {
+        box.innerHTML = '<div class="tc-note">' + U.esc(st.ym.replace('-', '年') + '月')
+          + ' は まだ打刻がありません。従業員が入口のリンクから打つと、ここに出ます。</div>';
+        return;
+      }
       /* ★割増が要る時数を 一覧にも出す★（うち60超＝50%・うち休日の深夜＝60%）
          ★0の人は空欄★（出ている人だけ目立たせる） */
       /* ★「気づき」の列は 2026-08-15 に外した★（司さんの決定）
@@ -276,30 +308,90 @@
   }
 
   /* ── ② 従業員（入口の発行・QR） ─────────────────────────────── */
+  /** ★従業員は 1人1行★（2026-08-16 司さん「増えるとごちゃごちゃ」）
+   *  前は 1人に 194px 使っていて ★390×844 の画面に2人しか入らなかった★（実測）。
+   *  ＝20人の会社では ★画面が20倍★になる。
+   *  ⇒ ★氏名＋状態＋「>」だけ★を並べ、★押した人の分だけ★中を開く。
+   *    長いURLは ★出さずに「リンクをコピー」1つ★（読ませる物ではないため）。 */
+  var peopleFilter = 'all';
   function drawPeople() {
-    var box = q('people');
+    var box = q('people'), head = q('people-count'), tabs = q('people-filter');
     if (!box) return;
-    if (!st.people.length) { box.innerHTML = '<div class="tc-note">まだ登録がありません。</div>'; return; }
-    box.innerHTML = st.people.map(function (p) {
-      var url = linkFor(p.token);
-      return '<div class="tc-card"><div class="tc-cardhead"><b>' + U.esc(p.name || p.employee_id) + '</b>'
-        + (p.pw_hash ? '<span class="tc-tag">暗証番号あり</span>' : '<span class="tc-tag pending">まだ決めていません</span>')
-        + '<span class="tc-spacer"></span>'
-        + '<button class="tc-btn sub" type="button" data-qr="' + U.esc(p.token) + '">QRを出す</button>'
-        + '<button class="tc-btn sub" type="button" data-re="' + U.esc(p.token) + '">入口を作り直す</button>'
+    if (!st.people.length) {
+      if (head) head.textContent = '';
+      if (tabs) tabs.hidden = true;
+      box.innerHTML = '<div class="tc-note">まだ登録がありません。下の「追加する」から1人ずつ作ります。</div>';
+      return;
+    }
+    var yet = st.people.filter(function (p) { return !p.pw_hash; }).length;
+    if (head) {
+      head.textContent = '従業員 ' + st.people.length + '人'
+        + (yet ? '（まだ決めていません ' + yet + '人）' : '（全員 暗証番号あり）');
+    }
+    if (tabs) {
+      tabs.hidden = false;
+      Array.prototype.forEach.call(tabs.querySelectorAll('[data-filter]'), function (b) {
+        var on = b.getAttribute('data-filter') === peopleFilter;
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+        b.onclick = function () { peopleFilter = b.getAttribute('data-filter'); drawPeople(); };
+      });
+    }
+    var list = st.people.filter(function (p) { return peopleFilter === 'yet' ? !p.pw_hash : true; });
+    if (!list.length) {
+      box.innerHTML = '<div class="tc-note">まだ決めていない人はいません。</div>';
+      return;
+    }
+    box.innerHTML = list.map(function (p) {
+      var t = U.esc(p.token);
+      return '<div class="tc-row">'
+        + '<button class="tc-rowhead" type="button" data-open="' + t + '" aria-expanded="false">'
+        + '<span class="tc-rowname">' + U.esc(p.name || p.employee_id) + '</span>'
+        + (p.pw_hash ? '<span class="tc-tag">済</span>' : '<span class="tc-tag pending">まだ</span>')
+        + '<span class="tc-chev">›</span></button>'
+        + '<div class="tc-rowbody" id="row-' + t + '" hidden>'
+        + '<div class="tc-tabs">'
+        + '<button class="tc-btn sub" type="button" data-copy="' + t + '">リンクをコピー</button>'
+        + '<button class="tc-btn sub" type="button" data-qr="' + t + '">QRを出す</button>'
+        + '<button class="tc-btn sub" type="button" data-re="' + t + '">入口を作り直す</button>'
         + '</div>'
-        + '<div style="word-break:break-all">' + U.esc(url) + '</div>'
         /* ★いつ決めたかを出す★（身に覚えの無い日時なら 社長が気づける）
            秘密を1つに減らした分の埋め合わせ（司さん 2026-08-15） */
         + '<div class="tc-when">' + U.esc(pinHistoryOf(p)) + '</div>'
-        + '<div id="qr-' + U.esc(p.token) + '"></div></div>';
+        + '<div id="qr-' + t + '"></div></div></div>';
     }).join('');
+    Array.prototype.forEach.call(box.querySelectorAll('[data-open]'), function (b) {
+      b.onclick = function () {
+        var body = q('row-' + b.getAttribute('data-open'));
+        body.hidden = !body.hidden;
+        b.setAttribute('aria-expanded', body.hidden ? 'false' : 'true');
+      };
+    });
+    Array.prototype.forEach.call(box.querySelectorAll('[data-copy]'), function (b) {
+      b.onclick = function () { copyLink(b.getAttribute('data-copy')); };
+    });
     Array.prototype.forEach.call(box.querySelectorAll('[data-qr]'), function (b) {
       b.onclick = function () { showQr(b.getAttribute('data-qr')); };
     });
     Array.prototype.forEach.call(box.querySelectorAll('[data-re]'), function (b) {
       b.onclick = function () { reissue(b.getAttribute('data-re')); };
     });
+  }
+  /** ★リンクは「見せる物」ではなく「渡す物」★＝コピーだけできればよい。
+   *  ★コピーできない機械でも 行き止まりにしない★（できなければ その場に出す）。 */
+  function copyLink(token) {
+    var url = linkFor(token);
+    var nav = global.navigator;
+    if (nav && nav.clipboard && nav.clipboard.writeText) {
+      nav.clipboard.writeText(url).then(function () { U.toast('リンクをコピーしました'); },
+        function () { showLink(token, url); });
+      return;
+    }
+    showLink(token, url);
+  }
+  function showLink(token, url) {
+    var box = q('qr-' + token);
+    if (!box) { U.toast(url); return; }
+    box.innerHTML = '<div class="tc-note" style="word-break:break-all">' + U.esc(url) + '</div>';
   }
   function linkFor(token) {
     return global.location.href.replace(/[^/]*$/, '') + 'punch.html?t=' + token;
@@ -581,23 +673,27 @@
     var custom = q('round-custom');
     if (custom) custom.hidden = mode !== 'custom';
 
+    /* ★2行に収める★（2026-08-16 司さん「分かりにくい」・390pxで実測して3行だった） */
     var n = q('round-note');
-    if (n) {
-      n.textContent = '打った時刻そのもの（原本）は、どれを選んでも1分単位のまま残ります。'
-        + '変わるのは 集計の見せ方だけです。';
-    }
+    if (n) n.textContent = '打った時刻（原本）は1分単位のまま残ります。変わるのは見せ方だけです。';
 
     var law = LAW.roundingLegality(r);
-    var a = q('round-warn');
-    if (a) {
-      if (law.ok) { a.hidden = true; a.textContent = ''; } else {
+    var a = q('round-warn'), head = q('round-warn-head'), rest = q('round-warn-rest');
+    if (a && head && rest) {
+      if (law.ok) {
+        a.hidden = true; head.textContent = ''; rest.textContent = '';
+      } else {
         a.hidden = false;
-        a.textContent = law.code === 'day_cut'
-          ? 'これは法律の上ではできない扱いです　1日ごとに、一定時間に満たない労働時間を'
+        /* ★頭の1行＝結論だけ★／★続き＝理由と法律★（押すと出る） */
+        head.textContent = law.code === 'day_cut'
+          ? 'これは法律の上ではできない扱いです。'
+          : '認められている形とは違います。';
+        rest.textContent = law.code === 'day_cut'
+          ? '　1日ごとに、一定時間に満たない労働時間を'
             + '一律に切り捨てて その分の賃金を払わないのは 労働基準法違反になります'
             + '（労働時間は1分単位が原則）。選ぶことはできますが、'
             + '切り捨てた時間と金額を 集計の画面に必ず出します。'
-          : '認められている形とは違います　1か月の合計に当てる形で認められているのは、'
+          : '　1か月の合計に当てる形で認められているのは、'
             + '1時間未満の端数を ' + LAW.MONTH_FRACTION_HALF_MIN + '分で分ける物'
             + '（' + LAW.MONTH_FRACTION_HALF_MIN + '分未満は切り捨て・'
             + LAW.MONTH_FRACTION_HALF_MIN + '分以上は切り上げ）だけです。'
@@ -663,7 +759,9 @@
       q('b-prev').onclick = function () { shiftYm2(-1); };
       q('b-next').onclick = function () { shiftYm2(1); };
       q('who').onchange = function () { st.who = q('who').value; drawShukei(); };
-      q('b-print').onclick = doPrint;
+      q('b-print').onclick = function () { doPrint(false); };
+      /* ★紙のとおりに見る★（刷らずに A4横のまま見せる・指で広げて読める） */
+      q('b-preview').onclick = function () { doPrint(true); };
       q('b-printall').onclick = doPrintAll;
       q('b-csv').onclick = doCsvDaily;
       q('b-kyuyo').onclick = doCsvMonthly;
@@ -1164,14 +1262,15 @@
 
   /* 印刷 … ★紙だけの新しい窓で刷る／中身が0枚なら開かない★
      ★紙に「どう絞り込んだか」は刷らない★（対象の人と期間だけ書く） */
-  function doPrint() {
+  function doPrint(preview) {
     var p = personOf(st.who);
     if (!p || !st.sum) { U.toast('先に対象を選んでください'); return; }
     var s = st.sum;
     /* ★紙にも状態を刷る★（確定前の紙が「確定」の顔で回ると、後で数字が動いた時に食い違う）
        ★これは「どう絞り込んだか」ではなく「この数字が動くかどうか」なので刷ってよい★ */
     var body = paperOf(p, s, q('daily').outerHTML, st.totalRows);
-    U.printPaper(fileName(p, 'pdf').replace(/\.pdf$/, ''), body);
+    /* ★見せる物と刷る物は 同じ body★（作り方を分けない＝ズレようがない） */
+    U.printPaper(fileName(p, 'pdf').replace(/\.pdf$/, ''), body, { preview: preview === true });
   }
 
   /** ★全員ぶんを1回で刷る★（月末に10人ぶん10回 押さなくてよい）

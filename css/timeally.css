@@ -82,6 +82,10 @@ h3 { font-size: 14px; color: #8F6200; margin: 14px 0 6px; }
   padding: 10px 12px; margin: 8px 0;
 }
 
+/* ★うまく行った時の箱★（2026-08-16）＝赤は「間違い」だけに取っておく。
+   緑は全アプリ共通の #2E7D54 だけを使う（濃い緑は禁止色）。 */
+.tc-alert.ok { color: #2E7D54; border-color: #2E7D54; }
+
 /* ── 押す物 ─────────────────────────────────────────────────── */
 .tc-btn {
   display: inline-block;
@@ -215,6 +219,31 @@ table.tc td.warn { color: #B3261E; }
 .tc-card.pending { border-color: #B3261E; }
 .tc-card .tc-cardhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .tc-card .tc-cardhead .tc-spacer { flex: 1 1 auto; }
+
+/* ── ★1人1行★（従業員が増えても画面が伸びない・2026-08-16 司さんの指摘） ──
+   前は 1人 194px（390×844 に ★2人★しか入らなかった＝実測）。
+   ★氏名＋状態＋「›」だけ★にして、押した人の分だけ 下を開く。 */
+.tc-row { border-bottom: 1px solid #F0E0B8; }
+.tc-rowhead {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  min-height: 44px;                      /* 指で押せる大きさは変えない */
+  padding: 8px 4px;
+  background: none; border: 0; font: inherit; color: #2B2418;
+  text-align: left; cursor: pointer;
+}
+.tc-rowhead .tc-rowname { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-rowhead .tc-chev { color: #78705C; font-size: 18px; line-height: 1; }
+.tc-rowhead[aria-expanded='true'] .tc-chev { transform: rotate(90deg); display: inline-block; }
+.tc-rowbody { padding: 0 4px 10px; }
+
+/* ★何が分かる画面かの1行★（見出しの下・本文と同じ薄い黒） */
+.tc-lead { font-size: 13px; color: #2B2418; margin: 8px 0; }
+
+/* ★右にまだ列がある事を 出しておく★（横に切れている表は 切れていると分かるように）
+   ★スマホでは 17列が入り切らない★＝黙って切れているより 印を出す。
+   広い画面（900px以上）では入るので 出さない。 */
+.tc-scrollhint { display: none; font-size: 12px; color: #78705C; margin: 4px 0 0; }
+@media (max-width: 899px) { .tc-scrollhint { display: block; } }
 
 /* ── タブ ───────────────────────────────────────────────────── */
 .tc-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0; }

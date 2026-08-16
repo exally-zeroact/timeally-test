@@ -4,17 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <title>Timeally — 一覧</title>
-    <link rel="icon" href="icons/favicon-32.png?v=724cf274" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=724cf274" />
+    <link rel="icon" href="icons/favicon-32.png?v=89568b1f" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=89568b1f" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
     <meta name="theme-color" content="#FFC72C" />
-    <link rel="manifest" href="manifest.json?v=724cf274" />
+    <link rel="manifest" href="manifest.json?v=89568b1f" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=724cf274" />
+    <link rel="stylesheet" href="css/timeally.css?v=89568b1f" />
   </head>
   <body>
     <div class="tc-appbar">
@@ -23,16 +23,20 @@
       <span class="tc-spacer"></span>
       <!-- ★「出る」はタブと同じ形にしない★（同じ形だとタブだと思って押す。実機で踏んだ） -->
       <button class="tc-btn quiet" id="b-signout" type="button">ログアウト</button>
+      <!-- ★別のページへ移る物は いつでも 帯のいちばん右★（2026-08-16 司さん
+           「戻るが集計の時だけ右上にある」）＝★置き場所を1つに決める★。
+           タブ（会社／従業員／今月の勤務）は同じページの中なので 帯には出さない。 -->
+      <a class="tc-btn go tc-nav" id="go-shukei" href="shukei.html?v=89568b1f">集計へ →</a>
     </div>
 
     <div class="tc-wrap" id="main" hidden>
-      <!-- ★左から 会社／従業員／一覧／集計→（司さんの指示）★
-           集計だけ別のページへ飛ぶので「→」を付けて 飛ぶ物だと分かるようにする -->
+      <!-- ★左から 会社／従業員／今月の勤務★
+           ★タブの名前は「何が分かるか」にする★（2026-08-16 司さん「一覧が何か分からない」）
+           ★別ページへ飛ぶ「集計へ →」は 帯の右端★（この列には置かない） -->
       <div class="tc-tabs" role="tablist">
         <button class="tc-btn sub" id="tab-company" type="button" role="tab" aria-selected="false">会社</button>
         <button class="tc-btn sub" id="tab-people" type="button" role="tab" aria-selected="false">従業員</button>
-        <button class="tc-btn sub" id="tab-list" type="button" role="tab" aria-selected="true">一覧</button>
-        <a class="tc-btn go" id="go-shukei" href="shukei.html?v=724cf274">集計 →</a>
+        <button class="tc-btn sub" id="tab-list" type="button" role="tab" aria-selected="true">今月の勤務</button>
       </div>
 
       <!-- 出るを押した時の確認（★白紙のダイアログを開かない・画面の中で聞く★） -->
@@ -46,6 +50,8 @@
 
       <!-- ① 一覧（★未承認のお願いが上★） -->
       <section id="pane-list">
+        <!-- ★何が分かる画面かを 頭に1行★（2026-08-16 司さん「何のためにあるか分からない」） -->
+        <div class="tc-lead">今月 誰が何時間 働いたかを 全員ぶん並べます。直しのお願いは いちばん上に出ます。</div>
         <h2>直しのお願い（未承認が上）</h2>
         <div id="fixes"></div>
 
@@ -64,6 +70,12 @@
         <div class="tc-note">
           1人ずつ「入口のリンク」を作ります。リンクを渡すと、本人が暗証番号（数字4〜6桁）を決めて
           本人がスマホで打てるようになります。
+        </div>
+        <!-- ★人数を頭に出す★／★状態で絞れる★（20人でも探せるように・2026-08-16） -->
+        <div class="tc-lead" id="people-count"></div>
+        <div class="tc-tabs" id="people-filter" hidden>
+          <button class="tc-btn sub" type="button" data-filter="all" aria-selected="true">ぜんぶ</button>
+          <button class="tc-btn sub" type="button" data-filter="yet" aria-selected="false">まだ決めていない人</button>
         </div>
         <div id="people"></div>
 
@@ -164,8 +176,16 @@
             <option value="month">1か月の合計</option>
           </select>
         </div>
-        <div class="tc-alert" id="round-warn" hidden></div>
-        <div class="tc-note" id="round-example"></div>
+        <!-- ★長い注意は 頭の1行だけ出し、続きは畳む★（2026-08-16 司さん「分かりにくい」）
+             ★畳んでも「押せば全部 読める」★＝法律の話を短くして終わりにはしない -->
+        <div class="tc-alert" id="round-warn" hidden>
+          <span id="round-warn-head"></span>
+          <button class="tc-btn sub small" id="b-warn-more" type="button">くわしく</button>
+          <span id="round-warn-rest" hidden></span>
+        </div>
+        <!-- ★例は 押した時だけ出す★（既定で使う人には見せない） -->
+        <p><button class="tc-btn sub small" id="b-round-ex" type="button">例を見る</button></p>
+        <div class="tc-note" id="round-example" hidden></div>
 
         <!-- ★紙の綴じ代の設定は 2026-08-15 に外した★（司さんの決定）
              ＝★勤務表は必ず綴じる紙★なので ★いつでも四辺20mm★。人が決める事を1つ減らす。
@@ -179,18 +199,18 @@
       </section>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=724cf274"></script>
-    <script src="js/env-badge.js?v=724cf274"></script>
-    <script src="lib/tc-law.js?v=724cf274"></script>
-    <script src="lib/tc-calc.js?v=724cf274"></script>
-    <script src="lib/tc-csv.js?v=724cf274"></script>
-    <script src="lib/tc-name.js?v=724cf274"></script>
-    <script src="lib/tc-hours.js?v=724cf274"></script>
-    <script src="lib/qr.js?v=724cf274"></script>
-    <script src="js/file-out.js?v=724cf274"></script>
-    <script src="js/tc-ui.js?v=724cf274"></script>
-    <script src="js/tc-db.js?v=724cf274"></script>
-    <script src="js/owner-app.js?v=724cf274"></script>
+    <script src="js/supa-config.js?v=89568b1f"></script>
+    <script src="js/env-badge.js?v=89568b1f"></script>
+    <script src="lib/tc-law.js?v=89568b1f"></script>
+    <script src="lib/tc-calc.js?v=89568b1f"></script>
+    <script src="lib/tc-csv.js?v=89568b1f"></script>
+    <script src="lib/tc-name.js?v=89568b1f"></script>
+    <script src="lib/tc-hours.js?v=89568b1f"></script>
+    <script src="lib/qr.js?v=89568b1f"></script>
+    <script src="js/file-out.js?v=89568b1f"></script>
+    <script src="js/tc-ui.js?v=89568b1f"></script>
+    <script src="js/tc-db.js?v=89568b1f"></script>
+    <script src="js/owner-app.js?v=89568b1f"></script>
     <script>
       OwnerApp.startIndex();
     </script>
