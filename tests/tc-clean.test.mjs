@@ -126,7 +126,9 @@ T('★実物★ その日の結論を1行 出す（★決められない日は �
   const r = CLEAN.clean(REAL_0817, { today: TODAY });
   const line = CLEAN.daySentence(r.byDay['2026-08-17'], '2026-08-17');
   ok(/決められません/.test(line), line);
-  ok(/08:00 は 出勤と退勤が同じ時刻です/.test(line), '理由が入っていない: ' + line);
+  /* ★すぐ下に同じ質問が出るので ここは短く★（同じ文を2回 並べない） */
+  ok(/08:00 が 出勤か退勤か 決まっていません/.test(line), '理由が入っていない: ' + line);
+  ok(line.indexOf(r.asks[0].text) < 0, '★質問と同じ文をそのまま繰り返している★: ' + line);
   console.log('     実測: ' + line);
 });
 

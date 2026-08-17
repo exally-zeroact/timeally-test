@@ -231,9 +231,18 @@
      ★1問ごとに保存★（最後まで行かないと保存されない、を作らない）。
      ★出した物は「お願い中」の札が付き、会社が見てから記録に入る★（今までの作りと同じ）。 */
   var _asks = [];                                   // 画面に出している質問（押した時に引く）
+  /* ★もう答えた質問★（この画面を開いている間だけ覚える）
+     ＝答えても ★会社が見るまで 記録は変わらない★ ので、質問はそのまま残る。
+     何も言わないと ★同じお願いを何回も出してしまう★（連打を直す機能で連打を作らない）。 */
+  var _answered = {};
+  function askKey(a) { return a.type + '@' + a.at; }
 
   function askHtml(a, n, res) {
     var head = '<div class="tc-askq">' + U.esc(a.text) + '</div>';
+    if (_answered[askKey(a)]) {
+      return '<div class="tc-ask">' + head
+        + '<div class="tc-askwhy">お願いを出しました。会社が見てから記録に入ります。</div></div>';
+    }
     var btn = function (id, label, why) {
       return '<button class="tc-btn sub" type="button" id="' + id + '">' + U.esc(label) + '</button>'
         + (why ? '<span class="tc-askwhy">' + U.esc(why) + '</span>' : '');
@@ -258,8 +267,13 @@
   }
 
   /** ★お願いを1つ出す★（入れる打刻 と 使わない打刻 を まとめて1件で出す） */
-  function sendAsk(d, why, addKind, addWall, voidIds) {
-    var done = function () { U.toast('お願いを出しました。会社が見てから記録に入ります。'); draw(); };
+  function sendAsk(ask, why, addKind, addWall, voidIds) {
+    var d = ask.d;
+    var done = function () {
+      _answered[askKey(ask)] = true;
+      U.toast('お願いを出しました。会社が見てから記録に入ります。');
+      draw();
+    };
     var ng = function (e) { U.toast('つながりませんでした（' + e.message + '）'); };
     if (!addKind) {
       return DB.Emp.fixRequest(st.token, st.device, st.pw, d, null, null, why, [], voidIds || [])
@@ -283,32 +297,32 @@
       var pick = function () { return (q('ask' + n + '-t') || {}).value || ''; };
       if (a.type === 'both') {
         on('in', function () {
-          sendAsk(a.d, a.hm + ' は ' + K.in + 'でした（' + K.out + 'は使いません）', null, null, [a.outId]);
+          sendAsk(a, a.hm + ' は ' + K.in + 'でした（' + K.out + 'は使いません）', null, null, [a.outId]);
         });
         on('out', function () {
-          sendAsk(a.d, a.hm + ' は ' + K.out + 'でした（' + K.in + 'は使いません）', null, null, [a.inId]);
+          sendAsk(a, a.hm + ' は ' + K.out + 'でした（' + K.in + 'は使いません）', null, null, [a.inId]);
         });
       } else if (a.type === 'open-in') {
         on('now', function () {
           var hm = (DB.nowJst() || '').slice(11, 16);
-          sendAsk(a.d, a.hm + ' の' + K.in + 'に ' + hm + ' の' + K.out + 'を入れました', 'out', a.d + 'T' + hm, []);
+          sendAsk(a, a.hm + ' の' + K.in + 'に ' + hm + ' の' + K.out + 'を入れました', 'out', a.d + 'T' + hm, []);
         });
         on('pick', function () {
           var hm = pick();
           if (!hm) { U.toast('時刻を選んでください'); return; }
-          sendAsk(a.d, a.hm + ' の' + K.in + 'に ' + hm + ' の' + K.out + 'を入れました', 'out', a.d + 'T' + hm, []);
+          sendAsk(a, a.hm + ' の' + K.in + 'に ' + hm + ' の' + K.out + 'を入れました', 'out', a.d + 'T' + hm, []);
         });
         on('drop', function () {
-          sendAsk(a.d, a.hm + ' の' + K.in + 'を取り消しました', null, null, [a.id]);
+          sendAsk(a, a.hm + ' の' + K.in + 'を取り消しました', null, null, [a.id]);
         });
       } else {
         on('pick', function () {
           var hm = pick();
           if (!hm) { U.toast('時刻を選んでください'); return; }
-          sendAsk(a.d, a.hm + ' の' + K.out + 'に ' + hm + ' の' + K.in + 'を入れました', 'in', a.d + 'T' + hm, []);
+          sendAsk(a, a.hm + ' の' + K.out + 'に ' + hm + ' の' + K.in + 'を入れました', 'in', a.d + 'T' + hm, []);
         });
         on('drop', function () {
-          sendAsk(a.d, a.hm + ' の' + K.out + 'を取り消しました', null, null, [a.id]);
+          sendAsk(a, a.hm + ' の' + K.out + 'を取り消しました', null, null, [a.id]);
         });
       }
     });

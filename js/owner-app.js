@@ -206,8 +206,13 @@
         DB.loadPunches(f.employee_id, f.d, f.d, { includePending: false }),
         DB.loadPunches(f.employee_id, f.d, f.d, { includePending: true }),
       ]).then(function (p) {
-        var before = one(p[0], f.d).workMin, after = one(p[1], f.d).workMin;
-        f._before = before; f._after = after;
+        /* ★「この1本は使わない」お願い★（2026-08-18）＝承認すると その打刻が外れる。
+           ★外した姿で数えないと「元は0分 → 承認すると0分」と出て 何も変わらないように見える★
+           （実際に変わるのは そこ）。★数えるのは いつもの summarize 1本のまま★。 */
+        var kill = f.void_ids || [];
+        var after = p[1].filter(function (x) { return kill.indexOf(x.id) < 0; });
+        f._before = one(p[0], f.d).workMin;
+        f._after = one(after, f.d).workMin;
         return f;
       }).catch(function () { f._before = null; f._after = null; return f; });
     })).then(function (rows) {
@@ -1249,7 +1254,8 @@
     };
     var s = CL.daySentence(info, d.d);
     if (!d.undecided && d.inAt && d.outAt) {
-      s = s.replace('として記録します', '（実労働 ' + CSV.hhmm(d.workMin) + '）として数えます');
+      /* ★前の空白ごと差し替える★（残すと「18:00 （実労働…」と 1つ空きが出る＝実配信で見た） */
+      s = s.replace(' として記録します', '（実労働 ' + CSV.hhmm(d.workMin) + '）として数えます');
     }
     var more = (d.asks || []).filter(function (a) { return a.type !== 'both'; })
       .map(function (a) { return a.text; }).join(' / ');

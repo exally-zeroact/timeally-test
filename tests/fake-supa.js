@@ -146,10 +146,16 @@ function rowsFor(table, seed, store) {
   }
   if (table === 'tc_fix') {
     return [{
-      id: 'f1', account_id: 'u1', employee_id: 'E1', d: '2026-08-04',
+      /* ★fixVoid の時は 打刻が在る日にする★（別の日にすると どちらも0分で
+         「数に入れていない」のか「その日に打刻が無い」のか 見分けが付かない） */
+      id: 'f1', account_id: 'u1', employee_id: 'E1', d: s.fixVoid ? '2026-08-03' : '2026-08-04',
       before_min: null, after_min: null, reason: '打ち忘れ', requested_by: 'employee',
       requested_at: '2026-08-05T00:00:00Z', approved_by: null, approved_at: null,
       status: 'pending', punch_ids: ['p3'],
+      /* ★seed.fixVoid=true …「この1本は使わない」お願い★（2026-08-18 追加）
+         ＝連打・打ち間違いの答え。★これを数に入れないと 社長の画面が
+         「元は540分 → 承認すると540分」と出て ★何も変わらないように見える★。 */
+      void_ids: s.fixVoid ? ['p1'] : [],
     }];
   }
   if (table === 'tc_shift') {

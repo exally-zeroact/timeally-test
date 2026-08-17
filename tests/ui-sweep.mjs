@@ -214,6 +214,19 @@ T('★集計の画面が 実際に数えて表を描いた（空振りしてい�
   console.log('     実測: 日ごと ' + rows.length + '行 / 月計あり');
 });
 
+/* ★その日の結論を1行★（2026-08-18 指示役③）… ★社長の画面だけ 長さも足す★ */
+T('★★日を押すと その日の結論が1行 出る（08:00〜17:03（実労働 8:03）の形）★★', () => {
+  const r = results.filter((x) => x.file === 'shukei.html')[0];
+  const d2 = r.page.w.document;
+  const cell = [...d2.querySelectorAll('#cal [data-day]')].filter((b) => /\d+:\d\d/.test(b.textContent))[0];
+  ok(cell, 'カレンダーに 数字の入った日が1つも無い');
+  cell.click();
+  const line = d2.getElementById('cal-day').textContent;
+  ok(/は \d\d:\d\d〜\d\d:\d\d（実労働 \d+:\d\d）として数えます/.test(line),
+    '★結論の1行が出ていない（または 空きが入っている）★: ' + line.slice(0, 80));
+  console.log('     実測: ' + (/[^\n]*として数えます/.exec(line) || [''])[0].trim());
+});
+
 T('★「渡す」を押したらファイルが実際に作られた（名前も出る）', () => {
   const r = results.filter((x) => x.file === 'shukei.html')[0];
   ok(r.page.delivered.length >= 2, '落とした物: ' + JSON.stringify(r.page.delivered));
@@ -531,13 +544,15 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
   /* 08/17  08:00 出勤 ／ 08:00 退勤 ／ 08:00 出勤 ／ 17:03 退勤 ／ 21:44 出勤 */
   const REAL = [['2026-08-17T08:00', 'in'], ['2026-08-17T08:00', 'out'], ['2026-08-17T08:00', 'in'],
     ['2026-08-17T17:03', 'out'], ['2026-08-17T21:44', 'in']];
+  /* ★答えた質問は その場で「お願いを出しました」に変わる★（同じお願いを2回 出させない）
+     ＝だから ★取り消す★は もう1枚 開いて押す（1枚の上で3つ押すと 3つ目は もう無い）。 */
   const PLAN_ASK = [
     ['ask0-in', '「出勤でした」→ ★同じ時刻の退勤を使わない★お願いを1件 出す'],
     ['ask1-pick', '21:44 の出勤に ★選んだ時刻の退勤★を入れるお願いを出す', { 'ask1-t': '22:30' }],
-    ['ask1-drop', '21:44 の ★出勤を取り消す★お願いを出す'],
   ];
+  const PLAN_ASK2 = [['ask1-drop', '21:44 の ★出勤を取り消す★お願いを出す（★もう1枚 開いて押す★）']];
   console.log('\n  kiroku.html（★08/17 の実物 5本★）で押す物');
-  PLAN_ASK.forEach(([id, why]) => console.log('    - #' + id + '  … ' + why));
+  PLAN_ASK.concat(PLAN_ASK2).forEach(([id, why]) => console.log('    - #' + id + '  … ' + why));
 
   const p = openPage('kiroku.html', '?t=11111111-1111-1111-1111-111111111111', { punches: REAL });
   await wait(); await wait(); await wait();
@@ -574,14 +589,33 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
     await wait(); await wait();
   }
 
+  /* ★取り消す★は もう1枚 開いて押す（答えた質問は「お願いを出しました」に変わるため） */
+  const p2 = openPage('kiroku.html', '?t=11111111-1111-1111-1111-111111111111', { punches: REAL });
+  await wait(); await wait(); await wait();
+  for (const [id] of PLAN_ASK2) {
+    const el = p2.w.document.getElementById(id);
+    if (!el || typeof el.onclick !== 'function') { missing.push(id); continue; }
+    try { el.click(); } catch (e) { threw.push(id + ': ' + e.message); }
+    await wait(); await wait();
+  }
+
   T('★★聞いた事に 押すだけで答えられる（空欄を出して打ち直させない）★★', () => {
     ok(missing.length === 0, '見つからない/配線されていない: ' + missing.join(', '));
     ok(threw.length === 0, '例外: ' + threw.join(' / '));
     ok(p.errors.length === 0, '画面のエラー: ' + p.errors.join(' / '));
+    ok(p2.errors.length === 0, '画面のエラー(2枚目): ' + p2.errors.join(' / '));
+  });
+
+  T('★★答えた質問は その場で「お願いを出しました」に変わる（同じお願いを2回 出させない）★★', () => {
+    const now = p.w.document.getElementById('list').textContent;
+    ok(/お願いを出しました。会社が見てから記録に入ります。/.test(now), '★答えた事が画面に出ていない★');
+    ok(!p.w.document.getElementById('ask0-in'), '★答えた後も 同じボタンが押せる★');
+    /* ★質問そのものは消さない★（何を答えたのか分かるように） */
+    ok(/08:00 は 出勤と退勤が同じ時刻です/.test(now), '★質問ごと消している★');
   });
 
   T('★★押した分だけ「お願い」が出た（1問ごとに保存・原本は1本も消していない）★★', () => {
-    const req = p.fake._store.fixReq;
+    const req = p.fake._store.fixReq.concat(p2.fake._store.fixReq);
     ok(req.length === 3, 'お願いの数が3でない: ' + JSON.stringify(req.map((r) => r.p_reason)));
     /* ①「出勤でした」＝同じ時刻の ★退勤の1本★ を使わない（★消さずに印だけ★） */
     ok(/08:00 は 出勤でした/.test(req[0].p_reason), '理由が残っていない: ' + req[0].p_reason);
@@ -609,6 +643,19 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
     /* 倉庫の中身は変えていない（承認前）ので、画面はまだ「決められません」のまま */
     const now = p.w.document.getElementById('list').textContent;
     ok(/決められません/.test(now), '★お願いを出した時点で 決まった事にしている★');
+  });
+}
+
+/* ── ★社長の「承認する前に どうなるか」★（★使わない印のお願いも数に入る★・2026-08-18） ── */
+{
+  const p = openPage('index.html', '', { fixVoid: true });
+  await wait(); await wait(); await wait();
+  T('★★「この1本は使わない」お願いも 承認前に 数で見せる（0→0 に見せない）★★', () => {
+    const box = p.w.document.getElementById('fixes').textContent;
+    const m = /元は (\d+)分 → 承認すると (\d+)分/.exec(box);
+    ok(m, '★承認する前の数が出ていない★: ' + box.slice(0, 120));
+    ok(m[1] !== m[2], '★使わない印を数に入れていない（元と後が同じ）★: ' + m[0]);
+    console.log('     実測: ' + m[0]);
   });
 }
 
