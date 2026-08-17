@@ -4,17 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <title>Timeally — 集計・印刷</title>
-    <link rel="icon" href="icons/favicon-32.png?v=93af5566" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=93af5566" />
+    <link rel="icon" href="icons/favicon-32.png?v=4a89188a" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=4a89188a" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
     <meta name="theme-color" content="#FFC72C" />
-    <link rel="manifest" href="manifest.json?v=93af5566" />
+    <link rel="manifest" href="manifest.json?v=4a89188a" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=93af5566" />
+    <link rel="stylesheet" href="css/timeally.css?v=4a89188a" />
   </head>
   <body>
     <div class="tc-appbar">
@@ -22,18 +22,21 @@
       <span class="tc-sub">集計・印刷</span>
       <span class="tc-spacer"></span>
       <!-- ★別のページへ移る物は いつでも 帯のいちばん右★（置き場所は1つ・2026-08-16） -->
-      <a class="tc-btn sub tc-nav" href="index.html?v=93af5566">← 今月の勤務へ</a>
+      <a class="tc-btn sub tc-nav" href="index.html?v=4a89188a">← 今月の勤務へ</a>
     </div>
 
     <div class="tc-wrap" id="main" hidden>
       <div class="tc-tabs">
-        <button class="tc-btn sub" id="b-prev" type="button">前の月</button>
+        <!-- ★「月」ではなく「締め」★（締め日が末日でない会社では 月ではないため・2026-08-17） -->
+        <button class="tc-btn sub" id="b-prev" type="button">前の締め</button>
         <span class="tc-btn sub" id="ymlabel" style="pointer-events: none"></span>
-        <button class="tc-btn sub" id="b-next" type="button">次の月</button>
+        <button class="tc-btn sub" id="b-next" type="button">次の締め</button>
         <select id="who" style="width: auto; min-width: 160px"></select>
       </div>
 
       <div class="tc-note" id="period"></div>
+      <!-- ★存在しない締め日（29・30・31）の扱いを 画面に書いておく★（黙って寄せない） -->
+      <div class="tc-note">その月に締め日が無い時は 末日を締め日にします（例: 締め日30 の2月は 2/28、うるう年は 2/29）。</div>
 
       <!-- ★締め（受付中／締め待ち／確定）★
            押せるか・なぜ押せないかは js/owner-app.js が lib/tc-close.js から
@@ -61,10 +64,17 @@
       <div class="tc-alert" id="cutbox" hidden></div>
 
       <h2>日ごと</h2>
-      <div class="tc-tablewrap"><table class="tc" id="daily"></table></div>
-      <!-- ★狭い画面では 5列だけ出す（横に滑らせない）★
-           ＝隠した列がある事は 黙らずに言う（2026-08-16 司さん） -->
-      <p class="tc-scrollhint">スマホでは 出勤・退勤・実労働だけ出しています。休憩・残業・深夜などを含む全部の列は「紙のとおりに見る」で見えます。</p>
+      <!-- ★狭い画面＝カレンダー／広い画面＝17列の表★（2026-08-17 司さんの決定）
+           ★列は1つも省きません★＝日を押すと その日の17項目が全部 出ます（畳んでいるだけ）。
+           ★カレンダーは締め期間★＝締め日の翌日から 締め日まで（締め日が いつも最後のマス）。 -->
+      <div class="tc-cal" id="cal"></div>
+      <p class="tc-scrollhint">
+        日を押すと、その日の全部が下に出ます。どの列も見られます／その日に無い物は出しません。<br />
+        ？＝打刻が片方だけ（直すまで数字が出ません）　有＝有給　欠＝欠勤　−＝打刻なし　締＝締め日<br />
+        濃い網＝法定休日（休日の割増が付く日）　薄い網＝土日
+      </p>
+      <div class="tc-daybox" id="cal-day" hidden></div>
+      <div class="tc-tablewrap" id="daily-wrap"><table class="tc" id="daily"></table></div>
 
       <!-- ★休憩は押させず 会社の既定を引く★（2026-08-15 司さんの指摘）。
            ただし ★本当に休憩が取れなかった日★は在るので、社長が日ごとに直せる。
@@ -103,18 +113,18 @@
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=93af5566"></script>
-    <script src="js/env-badge.js?v=93af5566"></script>
-    <script src="lib/tc-law.js?v=93af5566"></script>
-    <script src="lib/tc-calc.js?v=93af5566"></script>
-    <script src="lib/tc-close.js?v=93af5566"></script>
-    <script src="lib/tc-csv.js?v=93af5566"></script>
-    <script src="lib/tc-name.js?v=93af5566"></script>
-    <script src="lib/tc-hours.js?v=93af5566"></script>
-    <script src="js/file-out.js?v=93af5566"></script>
-    <script src="js/tc-ui.js?v=93af5566"></script>
-    <script src="js/tc-db.js?v=93af5566"></script>
-    <script src="js/owner-app.js?v=93af5566"></script>
+    <script src="js/supa-config.js?v=4a89188a"></script>
+    <script src="js/env-badge.js?v=4a89188a"></script>
+    <script src="lib/tc-law.js?v=4a89188a"></script>
+    <script src="lib/tc-calc.js?v=4a89188a"></script>
+    <script src="lib/tc-close.js?v=4a89188a"></script>
+    <script src="lib/tc-csv.js?v=4a89188a"></script>
+    <script src="lib/tc-name.js?v=4a89188a"></script>
+    <script src="lib/tc-hours.js?v=4a89188a"></script>
+    <script src="js/file-out.js?v=4a89188a"></script>
+    <script src="js/tc-ui.js?v=4a89188a"></script>
+    <script src="js/tc-db.js?v=4a89188a"></script>
+    <script src="js/owner-app.js?v=4a89188a"></script>
     <script>
       OwnerApp.startShukei();
     </script>

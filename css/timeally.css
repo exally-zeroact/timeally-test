@@ -239,18 +239,63 @@ table.tc td.warn { color: #B3261E; }
 /* ★何が分かる画面かの1行★（見出しの下・本文と同じ薄い黒） */
 .tc-lead { font-size: 13px; color: #2B2418; margin: 8px 0; }
 
-/* ★狭い画面では 横に滑らせない★（2026-08-16 司さん「横スクロールせずに見せられないか」）
-   17列は スマホの幅に入らない ⇒ ★仲間ごと まるごと隠して 5列だけ出す★
-   （日付・曜日・出勤・退勤・実労働）。★隠した列は「紙のとおりに見る」で全部 見える★。
-   ★1列ずつ隠さない★＝1段目の見出し（colspan）と数が合わなくなり 表がずれるため。 */
+/* ── ★日ごと：狭い画面はカレンダー／広い画面は17列の表★（2026-08-17 司さんの決定） ──
+   ★列を隠す作りは やめた★（2026-08-16 の「仲間ごと隠す」は ★省いている★ので取り下げ）。
+   ★カレンダーは締め期間★（締め日の翌日〜締め日）。★締め日が いつも最後のマス★。
+   ★日を押すと その日の17項目が全部 出る★＝★省くのではなく 畳む★。 */
+.tc-cal, .tc-daybox, .tc-scrollhint { display: none; }
 @media (max-width: 899px) {
-  table.tc .g-hk, table.tc .g-uw, table.tc .g-wm, table.tc .g-st, table.tc .g-bk { display: none; }
-  /* ★幅の指定（%）は 全部の列がある前提★なので、狭い画面では外す */
-  table.tc colgroup col { width: auto; }
+  .tc-cal, .tc-scrollhint { display: block; }
+  #daily-wrap { display: none; }              /* 狭い画面では 17列の表は出さない */
 }
-/* ★出していない列がある事を 言っておく★（黙って減らさない）。広い画面では出さない。 */
-.tc-scrollhint { display: none; font-size: 12px; color: #78705C; margin: 4px 0 0; }
-@media (max-width: 899px) { .tc-scrollhint { display: block; } }
+@media (min-width: 900px) {
+  #daily-wrap { display: block; }             /* ★広い画面は 17列 全部★（隠しっぱなしにしない） */
+}
+.cal-g { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-h { text-align: center; font-size: 11px; color: #78705C; padding: 2px 0; }
+.cal-h.sun { color: #B3261E; }
+.cal-h.sat { color: #8F6200; }
+.cal-c {
+  min-height: 46px; padding: 2px 3px;
+  border: 1px solid #F0E0B8; border-radius: 6px; background: #FFFFFF;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  font: inherit; color: #2B2418; cursor: pointer;
+}
+.cal-c .d { font-size: 11px; color: #78705C; }
+.cal-c .h { font-family: 'DM Mono', ui-monospace, monospace; font-size: 12px; font-weight: 700; }
+.cal-c .h.none { color: #78705C; font-weight: 400; }
+.cal-c .sh { font-size: 9px; color: #8F6200; }
+/* ★休みの網は2段★（2026-08-17 指示役）＝★法定休日は 休日の割増(35%)が付く★ので
+   ★土日と同じ濃さにしない★。★色ではなく 濃さで分ける★（白黒でも2段が残る）。 */
+.cal-c.rest-w { background: #F0E0B8; }        /* 薄い網＝土日（所定休日） */
+.cal-c.rest-h { background: #D4BC72; }        /* 濃い網＝法定休日 */
+/* ★直さないと数字が出ない日★（打刻が片方だけ）。★文字「？」が主で、枠は添え物★ */
+.cal-c.fix { border: 2px solid #B3261E; }
+/* ★締め日★ … 下に太い線＋「締」 */
+.cal-c.shime { border-bottom: 3px solid #8F6200; }
+/* ★月が変わる所に線1本★ */
+.cal-c.newmonth { border-left: 2px solid #8F6200; }
+/* ★期間の外は 空・薄く・押せない★ */
+.cal-c.out { background: none; border-color: transparent; pointer-events: none; cursor: default; }
+/* ★黄を塗るのは「今 選ばれている1つ」だけ★（タブと同じ決まり） */
+.cal-c[aria-selected='true'] { background: #FFE08A; border-color: #F0B400; }
+
+/* ★押した日の中身★ … ★1カラム／ラベル左・値右／仲間の見出し中央★（給料明細と同じ作法） */
+.tc-daybox {
+  border: 1px solid #F0E0B8; border-radius: 12px; background: #FFFFFF;
+  padding: 10px 12px; margin: 10px 0;
+}
+@media (min-width: 900px) { .tc-daybox { display: none; } }
+.tc-daybox .day-h { font-weight: 700; margin-bottom: 6px; }
+.tc-daybox .day-g { text-align: center; font-size: 11px; color: #78705C; margin: 8px 0 2px; }
+.tc-daybox .day-l {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-size: 13px; padding: 3px 0; border-bottom: 1px dotted #F0E0B8;
+}
+.tc-daybox .day-l .k { color: #78705C; }
+.tc-daybox .day-l .v { font-family: 'DM Mono', ui-monospace, monospace; }
+
+.tc-scrollhint { font-size: 12px; color: #78705C; margin: 6px 0; line-height: 1.7; }
 
 /* ── タブ ───────────────────────────────────────────────────── */
 .tc-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0; }

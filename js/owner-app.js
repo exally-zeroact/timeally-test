@@ -1104,6 +1104,24 @@
   }
   var blank = function (v) { return v === '0:00' || v === '' || v === 0 || v == null ? '' : v; };
 
+  /** ★1日ぶんの「描く文字」を作るのは この1本だけ★
+   *  表（17列）も 紙も ★カレンダー★も、★ここが返した同じ文字★を並べる。
+   *  ＝別々に作ると ★表とカレンダーで数字が食い違う★（それを起こさない作りにする）。 */
+  function dayValues(d, crossMonth) {
+    var CSV = global.TcCsv;
+    return [
+      dayLabel(d.d, crossMonth), U.DOW[d.dow],
+      d.inAt ? d.inAt.slice(11) : '', d.outAt ? d.outAt.slice(11) : '',
+      CSV.hhmm(d.breakMin), CSV.hhmm(d.awayMin), CSV.hhmm(d.workMin),
+      CSV.hhmm(d.stdMin), CSV.hhmm(d.overStdMin), CSV.hhmm(d.otMin),
+      CSV.hhmm(d.nightMin), CSV.hhmm(d.holidayMin),
+      d.lateMin == null ? '' : CSV.hhmm(d.lateMin),
+      d.earlyMin == null ? '' : CSV.hhmm(d.earlyMin),
+      d.dayKind === 'paid_leave' ? '1' : '', d.dayKind === 'absent' ? '1' : '',
+      CSV.note(d),
+    ];
+  }
+
   /** ★日ごとの表の中身を作るのは1本だけ★（画面も紙も同じ物を見る）
       ★見出しは <thead> に入れる★＝紙が2枚になった時に ★2枚目にも見出しが出る★ */
   function dailyInner(s) {
@@ -1117,17 +1135,7 @@
       sum['所定内'] += d.stdMin; sum['所定超'] += d.overStdMin; sum['法定外残業'] += d.otMin;
       sum['深夜'] += d.nightMin; sum['休日'] += d.holidayMin;
       sum['遅刻'] += (d.lateMin || 0); sum['早退'] += (d.earlyMin || 0);
-      var v = [
-        dayLabel(d.d, crossMonth), U.DOW[d.dow],
-        d.inAt ? d.inAt.slice(11) : '', d.outAt ? d.outAt.slice(11) : '',
-        CSV.hhmm(d.breakMin), CSV.hhmm(d.awayMin), CSV.hhmm(d.workMin),
-        CSV.hhmm(d.stdMin), CSV.hhmm(d.overStdMin), CSV.hhmm(d.otMin),
-        CSV.hhmm(d.nightMin), CSV.hhmm(d.holidayMin),
-        d.lateMin == null ? '' : CSV.hhmm(d.lateMin),
-        d.earlyMin == null ? '' : CSV.hhmm(d.earlyMin),
-        d.dayKind === 'paid_leave' ? '1' : '', d.dayKind === 'absent' ? '1' : '',
-        CSV.note(d),
-      ];
+      var v = dayValues(d, crossMonth);
       /* ★打刻が1つも無い日は 数字を全部 空欄にする★（2026-08-15 指示役の指摘）
          ＝有給・欠勤の日に 0:00 が4つ並んで読みにくかった。印（有給1／欠勤1）だけ残す。
          ★打刻が在って結果が0の日は 0:00 のまま★（＝★数えた結果の0★。
@@ -1174,9 +1182,116 @@
       }).join('') + '</tr></tfoot>';
   }
 
+  /** ★カレンダー（締め期間）★ 2026-08-17 司さんの決定
+   *  ・★暦月ではなく 締め期間★（締め日の翌日 〜 締め日）。★締め日が いつも最後のマス★
+   *  ・★曜日は日〜土の7列で固定★／★期間の外のマスは 空・薄く・押せない★
+   *  ・★1つのマスに出すのは「1つの値」＋「地の網」＋「締めの線」まで★（重ねない）
+   *  ・★印は3つ＋締め日★
+   *      ？＝打刻が片方だけ（直さないと数字が出ない）／有・欠＝有給・欠勤／
+   *      網＝休み（★濃い網＝法定休日／薄い網＝土日★＝35%が付く日を見分ける）／締＝締め日
+   *  ・★数字は 表と同じ dayValues() から取る★（作り直さない）
+   */
+  function calInner(s) {
+    var days = s.days || [];
+    if (!days.length) return '';
+    var crossMonth = s.period.from.slice(0, 7) !== s.period.to.slice(0, 7);
+    var head = U.DOW.map(function (w, i) {
+      return '<div class="cal-h' + (i === 0 ? ' sun' : i === 6 ? ' sat' : '') + '">' + w + '</div>';
+    }).join('');
+    /* ★先頭の空きマス★（1日目の曜日ぶん・押せない） */
+    var cells = [];
+    for (var i = 0; i < days[0].dow; i++) cells.push('<div class="cal-c out"></div>');
+    days.forEach(function (d, idx) {
+      var v = dayValues(d, crossMonth);
+      var half = (!!d.inAt) !== (!!d.outAt);         /* ★打刻が片方だけ★ */
+      var main = half ? '？'
+        : d.dayKind === 'paid_leave' ? '有'
+          : d.dayKind === 'absent' ? '欠'
+            : (d.inAt || d.outAt) ? v[6]            /* 実労働（表と同じ文字） */
+              : '−';
+      /* ★月は「またぐ時」だけ、しかも 期間の頭と 月が変わる日だけ★（7/21・8/1）
+         ＝7列のマスに毎日 月を書くと 数字が読めない。紙は今までどおり全部に月を出す。 */
+      var newMonth = idx > 0 && d.d.slice(5, 7) !== days[idx - 1].d.slice(5, 7);
+      var label = (crossMonth && (idx === 0 || newMonth))
+        ? (+d.d.slice(5, 7)) + '/' + (+d.d.slice(8, 10)) : String(+d.d.slice(8, 10));
+      var cls = 'cal-c';
+      if (d.isLegalHoliday) cls += ' rest-h';        /* ★濃い網＝法定休日★ */
+      else if (d.dow === 0 || d.dow === 6) cls += ' rest-w'; /* ★薄い網＝土日★ */
+      if (half) cls += ' fix';
+      if (newMonth) cls += ' newmonth';
+      if (idx === days.length - 1) cls += ' shime';
+      return cells.push('<button type="button" class="' + cls + '" data-day="' + idx + '"'
+        + ' aria-selected="false">'
+        + '<span class="d">' + U.esc(label) + '</span>'
+        + '<span class="h' + (main === '−' ? ' none' : '') + '">' + U.esc(main) + '</span>'
+        + (idx === days.length - 1 ? '<span class="sh">締</span>' : '')
+        + '</button>');
+    });
+    return '<div class="cal-g head">' + head + '</div><div class="cal-g">' + cells.join('') + '</div>';
+  }
+
+  /** ★押した日の中身★（★17項目を 仲間ごと・1カラム・ラベル左/値右★）
+   *  ★どの列も見られる／その日に無い物は出さない★（値が1つも無い仲間は 見出しごと出さない）
+   *  ★実労働だけは いつも出す★（0でも その日の答え） */
+  function drawDayBox(idx) {
+    var box = q('cal-day');
+    var s = st.sum;
+    if (!box || !s || !s.days || !s.days[idx]) return;
+    var d = s.days[idx];
+    var crossMonth = s.period.from.slice(0, 7) !== s.period.to.slice(0, 7);
+    var v = dayValues(d, crossMonth);
+    /* ★表・紙と同じ見せ方にする★（2026-08-17）
+       ＝打刻が1つも無い日は 表では数字を空欄にしている。ここだけ 0:00 を出すと
+       ★同じ日の同じ項目が 画面によって違う★事になる。★実労働は「−」★（マスと同じ字）。 */
+    var noPunch = !d.inAt && !d.outAt;
+    if (noPunch) {
+      DAILY_COLS.forEach(function (c, i) {
+        if (c.k === '日付' || c.k === '曜日' || c.k === '有給' || c.k === '欠勤' || c.k === '備考') return;
+        v[i] = c.k === '実労働' ? '−' : '';
+      });
+    }
+    var at = 0, html = '';
+    DAILY_GROUPS.forEach(function (g) {
+      var cols = DAILY_COLS.slice(at, at + g[1]);
+      at += g[1];
+      if (g[2] === 'hi') return;                     /* 日付・曜日は 見出しに出す */
+      /* ★出す／出さないの決まりは 表と同じ物を使う★（2026-08-17 見張りが食い違いを捕まえた）
+         ＝表は「0にも意味がある列（所定内・法定外残業・実労働）」を 0:00 のまま出している。
+         ここで独自に「0:00は消す」とすると ★同じ日の同じ項目が 画面によって違う★。
+         ⇒ ★c.z（0なら空欄にしてよい列）★ だけを 0で落とす。 */
+      var lines = cols.map(function (c) {
+        return { k: c.k, z: c.z, v: v[DAILY_COLS.indexOf(c)] };
+      }).filter(function (x) {
+        if (x.k === '実労働') return true;           /* ★実労働は いつも出す★ */
+        return (x.z ? blank(x.v) : x.v) !== '';
+      });
+      if (!lines.length) return;                     /* ★空の仲間は 見出しごと出さない★ */
+      html += '<div class="day-g">' + U.esc(g[0]) + '</div>'
+        + lines.map(function (x) {
+          return '<div class="day-l"><span class="k">' + U.esc(x.k) + '</span>'
+            + '<span class="v">' + U.esc(x.v) + '</span></div>';
+        }).join('');
+    });
+    box.innerHTML = '<div class="day-h">' + U.esc(v[0]) + '（' + U.esc(v[1]) + '）'
+      + (d.isLegalHoliday ? '　法定休日' : '') + '</div>' + html;
+    box.hidden = false;
+    Array.prototype.forEach.call(q('cal').querySelectorAll('[data-day]'), function (b) {
+      b.setAttribute('aria-selected', String(Number(b.getAttribute('data-day')) === idx));
+    });
+  }
+
   function renderTables(p) {
     var s = st.sum;
     q('daily').innerHTML = dailyInner(s);
+    /* ★狭い画面はカレンダー・広い画面は17列の表★（★同じ数字から作る★・CSSで出し分ける） */
+    var cal = q('cal');
+    if (cal) {
+      cal.innerHTML = calInner(s);
+      q('cal-day').hidden = true;
+      Array.prototype.forEach.call(cal.querySelectorAll('[data-day]'), function (b) {
+        b.onclick = function () { drawDayBox(Number(b.getAttribute('data-day'))); };
+      });
+    }
 
     /* ★割増の内訳を全部 出す★（社長が「なぜこれが残業でないのか」を説明できるように）
        ★総労働 ＝ 所定内 ＋ 所定超 ＋ 時間外 ＋ 休日★（深夜は上乗せなので足さない）

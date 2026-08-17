@@ -226,44 +226,170 @@ say(r3.h1 <= 60, '1人あたりの高さは ★60px以下★（実測 ' + r3.h1 
 say(r3.urls === 0, '長いURLをそのまま出さない（実測 ' + r3.urls + '個）');
 say(r3.fit >= 8, '1画面に ★8人以上★ 見える（実測 ' + r3.fit + '人）');
 
-/* ── ④ 集計の表（★横に滑らせない★） ─────────────────────────── */
-console.log('\n④ 集計の「日ごと」（★横スクロールを出さない★）');
-const shukeiHtml = await render('shukei.html', { days: 31, ym: '2026-08', closeDay: 31, mix: true }, null);
-const TABLE_PROBE = VISIBLE + `
+/* ── ④ 集計の「日ごと」＝★カレンダー（締め期間）★ ───────────── */
+console.log('\n④ 集計の「日ごと」（★狭い画面＝カレンダー／広い画面＝17列★）');
+
+const CAL_PROBE = VISIBLE + `
   var W = document.documentElement.clientWidth;
-  var t = document.getElementById("daily");
-  var wrap = t.closest(".tc-tablewrap");
-  var cols = [].slice.call(t.querySelectorAll("tbody tr")).map(function(tr){
-    return [].slice.call(tr.children).filter(vis).length; })[0] || 0;
-  /* ★2段目には「1列だけの仲間」が居ない★（1段目に縦2行で置いてある）。
-     ＝2段目の数だけ見ると ★正しい表を「ずれている」と言ってしまう★（実際に出た）。
-     ⇒ ★上の段から降りてくる分（rowspan=2）を足してから数える★。 */
-  var down = [].slice.call(t.querySelectorAll("thead tr:first-child th[rowspan]")).filter(vis).length;
-  var heads = [].slice.call(t.querySelectorAll("thead tr")).map(function(tr, i){
-    var n = [].slice.call(tr.children).filter(vis).reduce(function(a,th){
-      return a + (Number(th.getAttribute("colspan"))||1); }, 0);
-    return i === 0 ? n : n + down; });
-  var names = [].slice.call(t.querySelectorAll("thead tr:last-child th")).filter(vis)
-    .map(function(th){return th.textContent.trim();});
-  var hint = document.querySelector(".tc-scrollhint");
-  return { w: W, 列: cols, 見出しの段: heads, 出ている列: names,
-    はみ出し: Math.max(0, Math.round(wrap.scrollWidth - wrap.clientWidth)),
-    印: hint && vis(hint) ? hint.textContent.trim().slice(0, 30) : "" };
+  var cal = document.getElementById("cal");
+  var cells = [].slice.call(cal.querySelectorAll(".cal-c")).filter(vis);
+  var days = cells.filter(function(e){ return !/out/.test(e.className); });
+  var last = days[days.length-1];
+  var texts = days.map(function(e){ return (e.innerText||"").replace(/\s+/g," ").trim(); });
+  /* ★月が出ているマスの数★（またぐ時だけ・期間の頭と月替わりの2つ） */
+  var withMonth = texts.filter(function(t){ return t.indexOf("/")>=0; }).length;
+  /* ★網の2段★ … 実際に描かれた背景を 灰色の明るさに直して数える */
+  function lum(c){
+    var nums=String(c||"").replace(/[^0-9.,]/g," ").split(/[ ,]+/).filter(function(x){return x!=="";}).map(Number);
+    if(nums.length<3) return null;
+    var g=nums.slice(0,3).map(function(v){v/=255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);});
+    return 0.2126*g[0]+0.7152*g[1]+0.0722*g[2];
+  }
+  var kinds = {};
+  days.forEach(function(e){
+    var k = /rest-h/.test(e.className) ? "法定休日" : /rest-w/.test(e.className) ? "土日" : "平日";
+    kinds[k] = kinds[k] || { n:0, lum:null };
+    kinds[k].n++;
+    /* ★選ばれているマス（黄）は 網の明るさに混ぜない★
+       ＝混ぜると ★平日の地が 0.76★になり「網の差」が小さく出る（実際に出た） */
+    if (e.getAttribute("aria-selected") === "true") return;
+    if (kinds[k].lum === null) kinds[k].lum = Math.round(lum(getComputedStyle(e).backgroundColor)*1000)/1000;
+  });
+  var tableWrap = document.getElementById("daily-wrap");
+  var table = document.getElementById("daily");
+  var tblCols = vis(tableWrap)
+    ? ([].slice.call(table.querySelectorAll("tbody tr"))[0]||{children:[]}).children.length : 0;
+  /* ★押した日の中身★（1日目を押して数える） */
+  var box = document.getElementById("cal-day");
+  var opened = null;
+  if (days.length && !box.hidden) {
+    opened = {
+      見出し: (box.querySelector(".day-h")||{}).textContent || "",
+      仲間: [].slice.call(box.querySelectorAll(".day-g")).map(function(e){return e.textContent;}),
+      行: [].slice.call(box.querySelectorAll(".day-l")).map(function(e){
+        return (e.querySelector(".k").textContent) + "=" + (e.querySelector(".v").textContent); }),
+      空の仲間: 0,
+      黄のマス: [].slice.call(cal.querySelectorAll(".cal-c[aria-selected='true']")).length
+    };
+    /* ★中身が空の仲間（見出しだけ）が出ていないか★ */
+    [].slice.call(box.querySelectorAll(".day-g")).forEach(function(g){
+      var nx = g.nextElementSibling;
+      if (!nx || !/day-l/.test(nx.className)) opened.空の仲間++;
+    });
+    /* ★★列を省いていないか★★
+       ＝★表のその日の行に出ている値★が ★1つ残らず 開いた中身にも在る★かを数える。
+       仲間を1つ落とすだけで ここが赤になる（★「省くな」を見張りにする★）。 */
+    var COLS = ["日付","曜日","出勤","退勤","休憩","中抜け","実労働","所定内","所定超",
+      "法定外残業","深夜","休日","遅刻","早退","有給","欠勤","備考"];
+    var sel = cal.querySelector(".cal-c[aria-selected='true']");
+    var di = sel ? Number(sel.getAttribute("data-day")) : -1;
+    var tr = document.querySelectorAll("#daily tbody tr")[di];
+    opened.表に在るのに出ていない = [];
+    if (tr) COLS.forEach(function(k, j){
+      if (j < 2) return;
+      var t = ((tr.children[j]||{}).textContent || "").trim();
+      if (t === "") return;
+      if (opened.行.indexOf(k + "=" + t) < 0) opened.表に在るのに出ていない.push(k + "=" + t);
+    });
+  }
+  return { w: W, 対象: (document.getElementById("period")||{}).textContent || "",
+    マスの数: days.length, 空きマス: cells.length - days.length,
+    最後のマス: last ? (last.innerText||"").replace(/\s+/g," ").trim() : "",
+    締めの印: last ? /shime/.test(last.className) : false,
+    月が出ているマス: withMonth,
+    網: kinds,
+    はみ出し: Math.max(0, document.documentElement.scrollWidth - W),
+    カレンダーの高さ: Math.round(cal.getBoundingClientRect().height),
+    表の列: tblCols, カレンダーが見えている: vis(cal),
+    押した中身: opened };
 `;
-for (const wpx of [390, 412]) {
-  const r4 = measure('shuukei-hyou', shukeiHtml, wpx, TABLE_PROBE);
-  console.log('    幅' + wpx + ' … 出ている列 ★' + r4.列 + '列★ ' + JSON.stringify(r4.出ている列)
-    + ' ／ 横のはみ出し ★' + r4.はみ出し + 'px★');
-  say(r4.はみ出し === 0, '幅' + wpx + 'で ★横に滑らせない★（実測 はみ出し ' + r4.はみ出し + 'px）');
-  say(r4.見出しの段.every((n) => n === r4.列),
-    '幅' + wpx + 'で ★2段の見出しと列の数が合っている★（実測 見出し ' + r4.見出しの段.join('/') + ' 列 ' + r4.列 + '）');
-  say(!!r4.印, '幅' + wpx + 'で ★出していない列がある事を言っている★');
+
+/* ★実物で測る4通り★
+   ・末日締め／締め日20（月をまたぐ）／★2月の締め日30（末日に寄る）★／
+     ★法定休日を決めていない会社（濃い網が0件のはず）★
+   ★押すのは jsdom 側★（Chrome へ渡す時にスクリプトを外すので、あちらでは押せない。
+     ここを間違えて ★「押しても0行」＝道具のせいの赤★を出した。2026-08-17） */
+const openDay = (i) => (w) => {
+  const b = w.document.querySelectorAll('#cal [data-day]')[i];
+  if (b) b.click();
+};
+/** ★月を戻してから 日を押す★
+ *  月を戻すたびに ★倉庫から読み直して 描き直す★ので、待たずに押すと
+ *  ★押した後に 描き直されて 中身が消える★（実際に3回 赤が出た）。
+ *  ⇒ ★狙いの期間が画面に出るまで見張ってから押す★（時間で当てない）。 */
+const backMonths = (n, want, i) => (w) => {
+  for (let k = 0; k < n; k++) w.document.getElementById('b-prev').click();
+  let tries = 0;
+  const tick = () => {
+    const d = w.document;
+    const t = (d.getElementById('period') || {}).textContent || '';
+    /* ★「押せた」ではなく「開いたまま残った」まで見る★
+       ＝期間の字は 表より先に変わるので、先に押すと ★後の描き直しで閉じられる★（実測） */
+    if (t.indexOf(want) >= 0 && d.querySelectorAll('#cal [data-day]').length) {
+      if (!d.getElementById('cal-day').hidden) return;      /* 開いたまま＝終わり */
+      openDay(i)(w);
+    }
+    if (tries++ < 60) setTimeout(tick, 50);
+  };
+  tick();
+};
+const CASES = [
+  ['末日締め・31日の月', { days: 31, ym: '2026-08', closeDay: 31, mix: true }, openDay(2), 0, true],
+  ['締め日20（7/21〜8/20）', { days: 31, ym: '2026-08', closeDay: 20, mix: true }, openDay(2), 2, true],
+  ['2月・締め日30（末日に寄る）', { days: 28, ym: '2026-02', closeDay: 30, mix: true }, backMonths(6, '2026-02-28', 2), 2, true],
+  ['法定休日を決めていない会社', { days: 31, ym: '2026-08', closeDay: 31 }, openDay(2), 0, false],
+];
+let caseNo = 0;
+for (const [name, seed, after, wantMonth, wantHoliday] of CASES) {
+  caseNo++;
+  const html = await render('shukei.html', seed, after);
+  for (const wpx of [375, 390, 412]) {
+    const r = measure('cal' + caseNo, html, wpx, CAL_PROBE);
+    if (wpx === 390) {
+      /* ★何日ぶんのはずか は 画面の「対象」から出す★（数字を手で書かない＝別の物を測らない） */
+      const m = /(\d{4}-\d{2}-\d{2}) 〜 (\d{4}-\d{2}-\d{2})/.exec(r.対象 || '');
+      const want = m
+        ? Math.round((Date.parse(m[2] + 'T00:00:00Z') - Date.parse(m[1] + 'T00:00:00Z')) / 86400000) + 1 : -1;
+      console.log('    ' + name + ' … ' + (r.対象 || '（対象なし）'));
+      console.log('      マス ★' + r.マスの数 + '個★（頭の空き ' + r.空きマス + '）／最後のマス「'
+        + r.最後のマス.split(String.fromCharCode(10)).join(' ') + '」／月が出ているマス ' + r.月が出ているマス
+        + '／高さ ★' + r.カレンダーの高さ + 'px★');
+      console.log('      網: ' + Object.keys(r.網).map((k) => k + ' ' + r.網[k].n + '日(明るさ' + r.網[k].lum + ')').join(' / '));
+      say(r.締めの印, name + ' … ★締め日が いちばん最後のマス★');
+      say(r.マスの数 === want, name + ' … ★マスの数＝対象期間の日数★（実測 ' + r.マスの数 + '／' + want + '）');
+      say(r.月が出ているマス === wantMonth,
+        name + ' … ★またぐ時だけ 月が出る★（実測 ' + r.月が出ているマス + '／' + wantMonth + '）');
+      const hol = r.網['法定休日'];
+      if (wantHoliday) {
+        /* ★比べるのは 土日 と 法定休日★（平日と比べると ★2段を1段に戻しても気づけない★。
+           実際に「1段に戻して赤にならない」を踏んだ。2026-08-17） */
+        const w2 = r.網['土日'], sa = (w2 && hol) ? Math.round((w2.lum - hol.lum) * 100) / 100 : 0;
+        say(!!hol && !!w2 && sa >= 0.15,
+          name + ' … ★白黒にしても 土日と法定休日が別の濃さ★（差 ' + sa + '）');
+      } else {
+        say(!hol, '★法定休日を決めていない会社では 濃い網が0件★（実測 ' + (hol ? hol.n : 0) + '件）');
+      }
+      const o = r.押した中身;
+      say(o && o.行.length > 0, name + ' … ★日を押すと その日の中身が出る★（実測 ' + (o ? o.行.length : 0) + '行）');
+      say(o && o.空の仲間 === 0, name + ' … ★中身が空の仲間（見出しだけ）が0★（実測 ' + (o ? o.空の仲間 : '−') + '）');
+      say(o && o.黄のマス === 1, name + ' … ★黄で塗るのは 押した1マスだけ★（実測 ' + (o ? o.黄のマス : '−') + '）');
+      say(o && o.表に在るのに出ていない.length === 0,
+        name + ' … ★列を省いていない（表に在る値が全部 出ている）★'
+        + (o && o.表に在るのに出ていない.length ? '：出ていない ' + o.表に在るのに出ていない.join('・') : ''));
+      if (o) console.log('      押した日: ' + o.見出し + ' ／ 仲間 ' + JSON.stringify(o.仲間)
+        + ' ／ ' + o.行.length + '行');
+    }
+    say(r.はみ出し === 0, name + '・幅' + wpx + ' … ★横に動く量 0px★（実測 ' + r.はみ出し + 'px）');
+    say(r.カレンダーが見えている && r.表の列 === 0,
+      name + '・幅' + wpx + ' … ★狭い画面は カレンダーだけ（17列の表は出さない）★');
+  }
 }
-/* 広い画面では ★17列 全部★ 出る（隠しっぱなしにしない） */
-const rWide = measure('shuukei-hyou-hiroi', shukeiHtml, 1100, TABLE_PROBE);
-console.log('    幅1100 … 出ている列 ★' + rWide.列 + '列★ ／ 印: ' + (rWide.印 || '（出さない＝正）'));
-say(rWide.列 === 17, '広い画面では ★17列 全部 出る★（実測 ' + rWide.列 + '列）');
-say(!rWide.印, '広い画面では 「出していない列がある」と言わない');
+/* ★広い画面（900px以上）は 今までどおり17列 全部★ */
+const wideHtml = await render('shukei.html', { days: 31, ym: '2026-08', closeDay: 31, mix: true }, null);
+const rWide = measure('cal-hiroi', wideHtml, 1100, CAL_PROBE);
+console.log('    幅1100 … 表の列 ★' + rWide.表の列 + '列★／カレンダー ' + (rWide.カレンダーが見えている ? '出ている' : '出さない＝正'));
+say(rWide.表の列 === 17, '広い画面では ★17列 全部 出る★（実測 ' + rWide.表の列 + '列）');
+say(!rWide.カレンダーが見えている, '広い画面では カレンダーを出さない');
 
 /* ── ⑤ 一覧 ─────────────────────────────────────────────────── */
 console.log('\n⑤ 一覧（何が分かる画面か）');
