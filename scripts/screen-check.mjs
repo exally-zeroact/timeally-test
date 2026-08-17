@@ -262,7 +262,9 @@ const CAL_PROBE = VISIBLE + `
   /* ★押した日の中身★（1日目を押して数える） */
   var box = document.getElementById("cal-day");
   var opened = null;
-  if (days.length && !box.hidden) {
+  /* ★hidden属性ではなく「本当に見えているか」で数える★（2026-08-17 実配信で踏んだ）
+     ＝hidden を外しても CSS の display:none が残っていたら 人には見えない。 */
+  if (days.length && vis(box)) {
     opened = {
       見出し: (box.querySelector(".day-h")||{}).textContent || "",
       仲間: [].slice.call(box.querySelectorAll(".day-g")).map(function(e){return e.textContent;}),

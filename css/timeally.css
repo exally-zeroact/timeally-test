@@ -245,7 +245,10 @@ table.tc td.warn { color: #B3261E; }
    ★日を押すと その日の17項目が全部 出る★＝★省くのではなく 畳む★。 */
 .tc-cal, .tc-daybox, .tc-scrollhint { display: none; }
 @media (max-width: 899px) {
-  .tc-cal, .tc-scrollhint { display: block; }
+  /* ★.tc-daybox を書き忘れて 実配信で「押しても何も出ない」を作った★（2026-08-17）
+     ＝DOMには在って hidden も外れているのに ★display:none のまま★だった。
+     ★「在る」と「見える」は別★（うちで何度も踏んだ型）。 */
+  .tc-cal, .tc-scrollhint, .tc-daybox { display: block; }
   #daily-wrap { display: none; }              /* 狭い画面では 17列の表は出さない */
 }
 @media (min-width: 900px) {
