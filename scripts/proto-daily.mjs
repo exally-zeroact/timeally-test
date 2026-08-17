@@ -147,6 +147,40 @@ function planD(rows) {
     + '</tbody></table></div>';
 }
 
+/* ── 案E ★カレンダー＋月計★（freee人事労務の勤怠画面と同じ形） ── */
+function planE(rows) {
+  /* 2026-08-01 は土曜。頭の空きマスを作る */
+  const firstDow = new Date(Date.UTC(2026, 7, 1)).getUTCDay();
+  const cells = [];
+  for (let i = 0; i < firstDow; i++) cells.push('<div class="pE-c empty"></div>');
+  rows.forEach((r) => {
+    const j = val(r, '実労働');
+    cells.push('<div class="pE-c' + (r.rest ? ' rest' : '') + (j ? ' on' : '') + '">'
+      + '<span class="d">' + esc(val(r, '日付')) + '</span>'
+      + (j ? '<span class="h">' + esc(j) + '</span>' : '<span class="h none">－</span>')
+      + '</div>');
+  });
+  const dow = ['日', '月', '火', '水', '木', '金', '土'];
+  /* 月計（画面の下に出す＝freee と同じ） */
+  const sum = (k) => rows.reduce((a, r) => {
+    const m = /^(\d+):(\d\d)$/.exec(val(r, k)); return a + (m ? +m[1] * 60 + +m[2] : 0);
+  }, 0);
+  const hm = (m) => Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0');
+  const tot = [['総勤務', sum('実労働')], ['所定内', sum('所定内')], ['時間外', sum('法定外残業')],
+    ['休日', sum('休日')], ['深夜', sum('深夜')]];
+  return '<div class="pE">'
+    + '<div class="pE-g head">' + dow.map((d, i) =>
+      '<div class="pE-h' + (i === 0 ? ' sun' : i === 6 ? ' sat' : '') + '">' + d + '</div>').join('') + '</div>'
+    + '<div class="pE-g">' + cells.join('') + '</div>'
+    + '<div class="pE-sum">' + tot.map((t) =>
+      '<div class="pE-s"><span class="k">' + t[0] + '</span><span class="v">' + hm(t[1]) + '</span></div>').join('') + '</div>'
+    /* ★押した日★の中身（freee は日を押すと その日の詳しい所へ行く） */
+    + '<div class="pE-day"><div class="pE-dh">3日（月）を押した時</div><div class="det2">'
+    + HEAD.slice(2).map((k) => [k, val(rows[2], k)]).filter((x) => x[1]).map((x) =>
+      '<div class="dl"><span class="k">' + x[0] + '</span><span class="v">' + esc(x[1]) + '</span></div>').join('')
+    + '</div></div></div>';
+}
+
 const PROTO_CSS = `
 .pA-card{background:#FFFFFF;border:1px solid #F0E0B8;border-radius:12px;padding:8px 10px;margin:0 0 8px;}
 .pA-card.rest{background:#FFFBF0;}
@@ -179,6 +213,23 @@ table.pC tr.r1 td{border-bottom:0;}
 table.pC tr.r2 td{border-top:0;}
 table.pC .dw{color:#78705C;font-size:11px;}
 
+
+.pE-g{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.pE-h{text-align:center;font-size:11px;color:#78705C;padding:2px 0;}
+.pE-h.sun{color:#B3261E;} .pE-h.sat{color:#8F6200;}
+.pE-c{min-height:46px;border:1px solid #F0E0B8;border-radius:6px;background:#FFFFFF;
+  padding:2px 3px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;}
+.pE-c.empty{border:0;background:none;}
+.pE-c.rest{background:#FFFBF0;}
+.pE-c .d{font-size:11px;color:#78705C;}
+.pE-c .h{font-family:'DM Mono',ui-monospace,monospace;font-size:12px;font-weight:700;}
+.pE-c .h.none{color:#78705C;font-weight:400;}
+.pE-sum{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap;}
+.pE-s{flex:1 1 60px;border:1px solid #F0E0B8;border-radius:8px;background:#FFFFFF;padding:4px 6px;text-align:center;}
+.pE-s .k{display:block;font-size:10px;color:#78705C;}
+.pE-s .v{font-family:'DM Mono',ui-monospace,monospace;font-size:13px;font-weight:700;}
+.pE-day{border:1px solid #F0E0B8;border-radius:10px;background:#FFFFFF;padding:8px 10px;}
+.pE-dh{font-size:12px;color:#78705C;margin-bottom:4px;}
 .pD-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
 table.pD td.stick,table.pD th.stick{position:sticky;background:#FFFFFF;z-index:1;}
 table.pD .s0{left:0;} table.pD .s1{left:34px;}
@@ -216,7 +267,7 @@ const PROBE = `
     return r.width>0&&r.height>0&&cs.display!=="none"&&cs.visibility!=="hidden";}
   var W=document.documentElement.clientWidth;
   /* ★1日ぶんの箱★（案ごとに名前が違うので まとめて探す） */
-  var units=[].slice.call(document.querySelectorAll(".pA-card,.pB-row,table.pC tbody tr.r1,table.pD tbody tr"));
+  var units=[].slice.call(document.querySelectorAll(".pA-card,.pB-row,table.pC tbody tr.r1,table.pD tbody tr,.pE-c:not(.empty)"));
   var first=units[0]?units[0].getBoundingClientRect():null;
   var mieru=units.filter(function(e){return e.getBoundingClientRect().bottom<=innerHeight;}).length;
   /* ★横に動く量★（表の箱の中も 画面ぜんぶも 両方見る） */
@@ -280,6 +331,7 @@ const PLANS = [
   ['B', '案B 1行＋押すと開く（給与アプリと同じ形）', planB(rows), 0],
   ['C', '案C 1日を2行（表のまま折り返す）', planC(rows), 0],
   ['D', '案D 今までの17列＋日付を貼り付け（参考）', planD(rows), 0],
+  ['E', '案E カレンダー＋月計（freee人事労務と同じ形）', planE(rows), 0],
 ];
 const table = [];
 for (const [id, title, body] of PLANS) {
