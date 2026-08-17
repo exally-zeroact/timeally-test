@@ -19,6 +19,9 @@
   function q(id) { return d.getElementById(id); }
   function pad2(n) { return ('0' + n).slice(-2); }
   function thisYm() { return (DB.nowJst() || '2026-01').slice(0, 7); }
+  /* ★今日★ … 数える所へ渡すのは ★「今日はまだ働いている」を聞かない為だけ★。
+     lib/ は 時計を持たない（毎回 同じ答えになる）ので、画面が渡す。 */
+  function todayJst() { return (DB.nowJst() || '').slice(0, 10) || null; }
   function stamp() { return (DB.nowJst() || '').replace(/[-T:]/g, '').slice(0, 13).replace(/^(\d{8})(\d{4})$/, '$1_$2'); }
 
   /** ★ログインが切れていたら 入口へ送る★
@@ -251,7 +254,7 @@
   }
 
   function one(punches, day) {
-    var s = global.TcCalc.summarize({ ym: day.slice(0, 7), punches: punches, shifts: [], fixes: [], company: coOpts() });
+    var s = global.TcCalc.summarize({ ym: day.slice(0, 7), punches: punches, shifts: [], fixes: [], company: coOpts(), today: todayJst() });
     return s.days.filter(function (x) { return x.d === day; })[0] || { workMin: 0 };
   }
   function nameOf(empId) {
@@ -271,7 +274,7 @@
         DB.loadShifts(p.employee_id, per.from, per.to),
       ]).then(function (r) {
         var s = global.TcCalc.summarize({
-          ym: st.ym, punches: r[0], shifts: r[1], fixes: [],
+          ym: st.ym, punches: r[0], shifts: r[1], fixes: [], today: todayJst(),
           company: Object.assign(coOpts(), { hourlyYen: p.hourly_yen, personHolidayDow: p.legal_holiday_dow }),
         });
         return { p: p, s: s };
@@ -822,7 +825,7 @@
       DB.listFixes('approved'),
     ]).then(function (r) {
       st.sum = global.TcCalc.summarize({
-        ym: st.ym, punches: r[0], shifts: r[1],
+        ym: st.ym, punches: r[0], shifts: r[1], today: todayJst(),
         fixes: (r[2] || []).filter(function (f) { return f.employee_id === p.employee_id; })
           .map(function (f) { return { d: f.d, beforeMin: f.before_min, afterMin: f.after_min, reason: f.reason, status: f.status }; }),
         company: Object.assign(coOpts(), {
@@ -1019,7 +1022,7 @@
         return {
           p: p,
           s: global.TcCalc.summarize({
-            ym: st.ym, punches: r[0], shifts: r[1], fixes: [],
+            ym: st.ym, punches: r[0], shifts: r[1], fixes: [], today: todayJst(),
             company: Object.assign(coOpts(), { hourlyYen: p.hourly_yen, personHolidayDow: p.legal_holiday_dow }),
           }),
         };
@@ -1203,7 +1206,9 @@
     for (var i = 0; i < days[0].dow; i++) cells.push('<div class="cal-c out"></div>');
     days.forEach(function (d, idx) {
       var v = dayValues(d, crossMonth);
-      var half = (!!d.inAt) !== (!!d.outAt);         /* ★打刻が片方だけ★ */
+      /* ★打刻が片方だけ★／★同じ時刻に出勤と退勤が並んで決められない★ … どちらも「？」
+         ★決められない日を「−（打刻なし）」に見せない★（打刻は在る。決まっていないだけ） */
+      var half = (!!d.inAt) !== (!!d.outAt) || d.undecided;
       var main = half ? '？'
         : d.dayKind === 'paid_leave' ? '有'
           : d.dayKind === 'absent' ? '欠'
@@ -1228,6 +1233,31 @@
         + '</button>');
     });
     return '<div class="cal-g head">' + head + '</div><div class="cal-g">' + cells.join('') + '</div>';
+  }
+
+  /** ★その日の結論を1行★（2026-08-18 指示役）
+   *  ★「08/17 は 08:00〜17:03（実労働 8:03）として数えます」★ を必ず出す。
+   *  ★決められない日は「決められません」と 理由まで出す★
+   *    ＝勝手に0にしない・黙って空にしない（★空になって合計が黙って小さくなる★を作らない）。
+   *  ★言葉は lib/tc-clean.js が持つ★（従業員の画面と同じ文＝食い違わない）。
+   *  ★長さを足すのは 社長の画面だけ★（従業員には時刻しか出さない）。 */
+  function dayLine(d) {
+    var CL = global.TcClean, CSV = global.TcCsv;
+    var info = {
+      undecided: d.undecided, asks: d.asks || [],
+      pairs: d.inAt ? [{ inAt: d.inAt, outAt: d.outAt }] : [],
+    };
+    var s = CL.daySentence(info, d.d);
+    if (!d.undecided && d.inAt && d.outAt) {
+      s = s.replace('として記録します', '（実労働 ' + CSV.hhmm(d.workMin) + '）として数えます');
+    }
+    var more = (d.asks || []).filter(function (a) { return a.type !== 'both'; })
+      .map(function (a) { return a.text; }).join(' / ');
+    return '<div class="tc-note' + (d.undecided ? ' warn' : '') + '">' + U.esc(s)
+      + (more ? '<br>' + U.esc(more) : '')
+      + ((d.asks || []).length ? '<br>本人の画面で答えると、お願いとして上がってきます。' : '')
+      + (d.merged ? '<br>' + U.esc('同じ打刻としてまとめた打刻が ' + d.merged + '本あります（原本は残っています）') : '')
+      + '</div>';
   }
 
   /** ★押した日の中身★（★17項目を 仲間ごと・1カラム・ラベル左/値右★）
@@ -1273,7 +1303,7 @@
         }).join('');
     });
     box.innerHTML = '<div class="day-h">' + U.esc(v[0]) + '（' + U.esc(v[1]) + '）'
-      + (d.isLegalHoliday ? '　法定休日' : '') + '</div>' + html;
+      + (d.isLegalHoliday ? '　法定休日' : '') + '</div>' + dayLine(d) + html;
     box.hidden = false;
     Array.prototype.forEach.call(q('cal').querySelectorAll('[data-day]'), function (b) {
       b.setAttribute('aria-selected', String(Number(b.getAttribute('data-day')) === idx));
@@ -1298,6 +1328,7 @@
        率は ★LAW の数から作る★（説明文に直書きしない） */
     st.totalRows = totalRowsOf(p, s);
     q('total').innerHTML = st.totalRows.map(function (r) { return tr(r[0], r[1]); }).join('');
+    drawUndecided(s);
     drawCutBox(s);
     U.nameHint(q('namehint'), fileName(p, 'csv'));
   }
@@ -1328,6 +1359,21 @@
       ['有給残', String(yukyuLeft(p, s))],
       ['欠勤', String(m2.kekkin)],
     ];
+  }
+
+  /* ★決められない日は 給与へ渡す前に言う★（2026-08-18 指示役）
+     ＝★合計が小さいのに 理由が分からない★を作らない。日にちまで出して カレンダーへ誘導する。
+     ★中身が無い時は 箱ごと出さない★（空の赤い枠を見せない）。 */
+  function drawUndecided(s) {
+    var box = q('undecided');
+    if (!box) return;
+    var bad = (s.days || []).filter(function (d) { return d.undecided; });
+    if (!bad.length) { box.hidden = true; box.textContent = ''; return; }
+    box.hidden = false;
+    box.textContent = '決められない日が ' + bad.length + '日あります（'
+      + bad.map(function (d) { return (+d.d.slice(5, 7)) + '/' + (+d.d.slice(8, 10)); }).join('・')
+      + '）。同じ時刻に出勤と退勤が並んでいます。本人が自分の記録の画面で答えると、'
+      + '「直しのお願い」として上がってきます。この日は まだ数えていません。';
   }
 
   /* ★切り捨てた時間と金額は必ず出す（黙って消さない）★ */

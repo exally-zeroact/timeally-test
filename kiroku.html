@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="format-detection" content="telephone=no" />
     <title>Timeally — 自分の記録</title>
-    <link rel="icon" href="icons/favicon-32.png?v=927dcfbe" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=927dcfbe" />
+    <link rel="icon" href="icons/favicon-32.png?v=d9fe40ab" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=d9fe40ab" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=927dcfbe" />
+    <link rel="stylesheet" href="css/timeally.css?v=d9fe40ab" />
   </head>
   <body>
     <div class="tc-appbar">
@@ -26,7 +26,11 @@
     </div>
 
     <div class="tc-wrap" id="main" hidden>
-      <div class="tc-note">あなたが打った時刻を、そのまま並べています。</div>
+      <div class="tc-note">
+        あなたが打った時刻を、そのまま並べています。<br />
+        同じ時刻に何回も押した分は「同じ打刻としてまとめました」と付けて、薄いままで残しています。<br />
+        おかしい所があれば、その日のところで聞きます。押すだけで出せます（会社が見てから記録に入ります）。
+      </div>
 
       <!-- ★締め切りの知らせ★ 打った時刻は締め切った後も そのまま見えたまま -->
       <div class="tc-alert" id="closed-note" hidden></div>
@@ -85,12 +89,17 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=927dcfbe"></script>
-    <script src="js/env-badge.js?v=927dcfbe"></script>
-    <script src="lib/tc-pin.js?v=927dcfbe"></script>
-    <script src="js/tc-ui.js?v=927dcfbe"></script>
-    <script src="js/tc-db.js?v=927dcfbe"></script>
-    <script src="js/emp-app.js?v=927dcfbe"></script>
+    <script src="js/supa-config.js?v=d9fe40ab"></script>
+    <script src="js/env-badge.js?v=d9fe40ab"></script>
+    <script src="lib/tc-pin.js?v=d9fe40ab"></script>
+    <!-- ★打った物の「使う／使わない」と「聞く事」を決める1本★
+         ★長さ（働いた分・追加ぶん・夜の分・お金）は1つも数えない★ので この画面から読んでよい。
+         社長の画面も 数える所も ★同じこの1本★を見る＝食い違わない。
+         （★この画面に 数える道具の名前すら書かない★＝見張りが名前で数えているため） -->
+    <script src="lib/tc-clean.js?v=d9fe40ab"></script>
+    <script src="js/tc-ui.js?v=d9fe40ab"></script>
+    <script src="js/tc-db.js?v=d9fe40ab"></script>
+    <script src="js/emp-app.js?v=d9fe40ab"></script>
     <script>
       EmpApp.startKiroku();
     </script>

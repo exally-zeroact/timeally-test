@@ -220,6 +220,22 @@ table.tc td.warn { color: #B3261E; }
 .tc-card .tc-cardhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .tc-card .tc-cardhead .tc-spacer { flex: 1 1 auto; }
 
+/* ── ★連打・打ち間違いを 画面が先に言う★（2026-08-18 司さんの実機の形） ────
+   ★まとめた物も消さずに残す★（薄くして札を付ける）／
+   ★決められない日は 赤で言う★（★黙って0にして小さくする★のが いちばん怖い）／
+   ★聞く所は 押すだけで決まる★（空欄を並べて埋めさせない）。
+   色は承認済みの物だけ（#78705C 補助文字 ／ #B3261E 注意 ／ #F0E0B8 淡境界）。 */
+.tc-dim { color: #78705C; }
+.tc-note.warn { color: #B3261E; border-color: #B3261E; }
+.tc-card.ask { border-color: #B3261E; }
+.tc-ask { margin-top: 8px; padding-top: 8px; border-top: 1px dotted #F0E0B8; }
+.tc-askq { font-size: 14px; font-weight: 700; color: #2B2418; margin-bottom: 6px; }
+/* ★押すと どうなるかを ボタンのすぐ下に出す★（根拠を見せてから押させる） */
+.tc-askwhy { display: block; font-size: 12px; color: #78705C; margin: 2px 0 8px; }
+.tc-askpick { display: block; margin: 6px 0; }
+/* ★時刻の欄は 幅いっぱいにしない★（すぐ右のボタンと1行に並べる。字は16pxのまま） */
+.tc-askpick input { display: inline-block; width: auto; margin-right: 8px; }
+
 /* ── ★1人1行★（従業員が増えても画面が伸びない・2026-08-16 司さんの指摘） ──
    前は 1人 194px（390×844 に ★2人★しか入らなかった＝実測）。
    ★氏名＋状態＋「›」だけ★にして、押した人の分だけ 下を開く。 */

@@ -4,17 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <title>Timeally — 集計・印刷</title>
-    <link rel="icon" href="icons/favicon-32.png?v=927dcfbe" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=927dcfbe" />
+    <link rel="icon" href="icons/favicon-32.png?v=d9fe40ab" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=d9fe40ab" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
     <meta name="theme-color" content="#FFC72C" />
-    <link rel="manifest" href="manifest.json?v=927dcfbe" />
+    <link rel="manifest" href="manifest.json?v=d9fe40ab" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=927dcfbe" />
+    <link rel="stylesheet" href="css/timeally.css?v=d9fe40ab" />
   </head>
   <body>
     <div class="tc-appbar">
@@ -22,7 +22,7 @@
       <span class="tc-sub">集計・印刷</span>
       <span class="tc-spacer"></span>
       <!-- ★別のページへ移る物は いつでも 帯のいちばん右★（置き場所は1つ・2026-08-16） -->
-      <a class="tc-btn sub tc-nav" href="index.html?v=927dcfbe">← 今月の勤務へ</a>
+      <a class="tc-btn sub tc-nav" href="index.html?v=d9fe40ab">← 今月の勤務へ</a>
     </div>
 
     <div class="tc-wrap" id="main" hidden>
@@ -64,13 +64,17 @@
       <div class="tc-alert" id="cutbox" hidden></div>
 
       <h2>日ごと</h2>
+      <!-- ★決められない日は 数える前に言う★（2026-08-18 指示役）
+           ＝同じ時刻に出勤と退勤が並んだ日は ★0にして黙らない★。
+           ★中身が空なら 箱ごと出さない★（[hidden] が効く形にしてある）。 -->
+      <div class="tc-alert" id="undecided" hidden></div>
       <!-- ★狭い画面＝カレンダー／広い画面＝17列の表★（2026-08-17 司さんの決定）
            ★列は1つも省きません★＝日を押すと その日の17項目が全部 出ます（畳んでいるだけ）。
            ★カレンダーは締め期間★＝締め日の翌日から 締め日まで（締め日が いつも最後のマス）。 -->
       <div class="tc-cal" id="cal"></div>
       <p class="tc-scrollhint">
         日を押すと、その日の全部が下に出ます。どの列も見られます／その日に無い物は出しません。<br />
-        ？＝打刻が片方だけ（直すまで数字が出ません）　有＝有給　欠＝欠勤　−＝打刻なし　締＝締め日<br />
+        ？＝打刻が片方だけ／決められない（直すまで数字が出ません）　有＝有給　欠＝欠勤　−＝打刻なし　締＝締め日<br />
         濃い網＝法定休日（休日の割増が付く日）　薄い網＝土日
       </p>
       <div class="tc-daybox" id="cal-day" hidden></div>
@@ -113,18 +117,21 @@
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=927dcfbe"></script>
-    <script src="js/env-badge.js?v=927dcfbe"></script>
-    <script src="lib/tc-law.js?v=927dcfbe"></script>
-    <script src="lib/tc-calc.js?v=927dcfbe"></script>
-    <script src="lib/tc-close.js?v=927dcfbe"></script>
-    <script src="lib/tc-csv.js?v=927dcfbe"></script>
-    <script src="lib/tc-name.js?v=927dcfbe"></script>
-    <script src="lib/tc-hours.js?v=927dcfbe"></script>
-    <script src="js/file-out.js?v=927dcfbe"></script>
-    <script src="js/tc-ui.js?v=927dcfbe"></script>
-    <script src="js/tc-db.js?v=927dcfbe"></script>
-    <script src="js/owner-app.js?v=927dcfbe"></script>
+    <script src="js/supa-config.js?v=d9fe40ab"></script>
+    <script src="js/env-badge.js?v=d9fe40ab"></script>
+    <script src="lib/tc-law.js?v=d9fe40ab"></script>
+    <!-- ★tc-calc より先に読む★（打った物の掃除＝連打をまとめる／決められない日を見つける。
+         tc-calc.js は これが無いと数えられない） -->
+    <script src="lib/tc-clean.js?v=d9fe40ab"></script>
+    <script src="lib/tc-calc.js?v=d9fe40ab"></script>
+    <script src="lib/tc-close.js?v=d9fe40ab"></script>
+    <script src="lib/tc-csv.js?v=d9fe40ab"></script>
+    <script src="lib/tc-name.js?v=d9fe40ab"></script>
+    <script src="lib/tc-hours.js?v=d9fe40ab"></script>
+    <script src="js/file-out.js?v=d9fe40ab"></script>
+    <script src="js/tc-ui.js?v=d9fe40ab"></script>
+    <script src="js/tc-db.js?v=d9fe40ab"></script>
+    <script src="js/owner-app.js?v=d9fe40ab"></script>
     <script>
       OwnerApp.startShukei();
     </script>

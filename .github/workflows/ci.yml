@@ -47,6 +47,13 @@ jobs:
         run: node tests/tc-calc.test.mjs
       - name: ★計算の境界 (わざと混ぜて赤になるかの自己確認)
         run: node tests/tc-calc.test.mjs --self-test
+      # ★連打・打ち間違い（2026-08-18 司さんが実機で作った 08/17 の5本が見本）★
+      #   ＝「打った物をそのまま並べて 何も言わない」を潰す。★黙って0にしない★
+      - name: ★連打・打ち間違い (08/17の実物5本／同じ分の出勤と退勤／3連続／秒違い／日またぎ／0:00・23:59／0件)
+        run: node tests/tc-clean.test.mjs
+      - name: ★連打・打ち間違い (掃除しない前の姿/窓60分/黙って0にする作り物で赤になるかの自己確認・5通り)
+        run: node tests/tc-clean.test.mjs --self-test
+
       - name: ★丸めの保存則 (生 = 丸め後 + 切り捨て分 が none/month/daily30 の3つとも)
         run: node tests/tc-round.test.mjs
       - name: ★丸めの保存則 (わざと切り捨て分を捨てて赤になるかの自己確認)

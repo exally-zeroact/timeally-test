@@ -22,8 +22,10 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-/* ★従業員の画面（と、そこが読む物）★ */
-export const EMP_FILES = ['punch.html', 'kiroku.html', 'js/emp-app.js'];
+/* ★従業員の画面（と、そこが読む物）★
+   ★lib/tc-clean.js を足した（2026-08-18）★＝従業員の画面が読む物が1本 増えたので、
+   ★出す文も 同じ目で数える★（この1本は ★長さを1つも数えない★のが約束）。 */
+export const EMP_FILES = ['punch.html', 'kiroku.html', 'js/emp-app.js', 'lib/tc-clean.js'];
 
 /* ★出してはいけない言葉★（「数えた結果」と「法律の話」）
    ここに無い言い換えが増えたら足す。足す時は ★実物の画面を見てから★。 */

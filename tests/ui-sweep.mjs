@@ -524,6 +524,94 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
   });
 }
 
+/* ── ★連打・打ち間違いを 画面が先に言う（2026-08-18 司さんの実機の形）★ ─────
+   ★見本は 司さんが 08/17 に実機で作った 5本★（テスト倉庫からそのまま）。作り物で代用しない。
+   ★押す物の一覧を先に書く★（下の PLAN_ASK）。 */
+{
+  /* 08/17  08:00 出勤 ／ 08:00 退勤 ／ 08:00 出勤 ／ 17:03 退勤 ／ 21:44 出勤 */
+  const REAL = [['2026-08-17T08:00', 'in'], ['2026-08-17T08:00', 'out'], ['2026-08-17T08:00', 'in'],
+    ['2026-08-17T17:03', 'out'], ['2026-08-17T21:44', 'in']];
+  const PLAN_ASK = [
+    ['ask0-in', '「出勤でした」→ ★同じ時刻の退勤を使わない★お願いを1件 出す'],
+    ['ask1-pick', '21:44 の出勤に ★選んだ時刻の退勤★を入れるお願いを出す', { 'ask1-t': '22:30' }],
+    ['ask1-drop', '21:44 の ★出勤を取り消す★お願いを出す'],
+  ];
+  console.log('\n  kiroku.html（★08/17 の実物 5本★）で押す物');
+  PLAN_ASK.forEach(([id, why]) => console.log('    - #' + id + '  … ' + why));
+
+  const p = openPage('kiroku.html', '?t=11111111-1111-1111-1111-111111111111', { punches: REAL });
+  await wait(); await wait(); await wait();
+  const text0 = p.w.document.getElementById('list').textContent;
+
+  T('★★連打も 打ち間違いも 画面が先に言う（並べるだけで黙らない）★★', () => {
+    ok(/同じ打刻としてまとめました/.test(text0), '★まとめた事を言っていない★');
+    ok(/08:00 は 出勤と退勤が同じ時刻です。どちらでしたか？/.test(text0), '★どちらか聞いていない★');
+    ok(/21:44 の出勤に、まだ退勤が入っていません/.test(text0), '★閉じていない出勤を言っていない★');
+    ok(/決められません/.test(text0), '★その日の結論（決められない）を出していない★');
+    ok(/08:00〜17:03 になります/.test(text0), '★押すとどうなるか（根拠）を出していない★');
+    /* ★打った物は 5本とも 画面に残っている★（まとめた物も消さない） */
+    const times = (text0.match(/\d\d:\d\d/g) || []).filter((x) => x !== '17:03' || true);
+    ok(times.length >= 5, '打刻が消えている（見えた時刻 ' + times.length + '個）');
+    console.log('     実測: 見えた時刻 ' + times.length + '個／質問 '
+      + (p.w.document.querySelectorAll('.tc-ask').length) + '件');
+  });
+
+  T('★★従業員の画面に 数えた結果の言葉が1つも出ていない（時刻だけ）★★', () => {
+    ['実労働', '労働時間', '残業', '時間外', '深夜', '割増', '丸め', '金額', '時給', '法定']
+      .forEach((w) => ok(text0.indexOf(w) < 0, '★' + w + ' が出ている★'));
+  });
+
+  /* ★1問ごとに押して、1問ごとに保存されるか★（最後まで行かないと保存されない、を作らない） */
+  const missing = [], threw = [];
+  for (const [id, , fill] of PLAN_ASK) {
+    for (const [k, v] of Object.entries(fill || {})) {
+      const f = p.w.document.getElementById(k);
+      if (f) f.value = v;
+    }
+    const el = p.w.document.getElementById(id);
+    if (!el || typeof el.onclick !== 'function') { missing.push(id); continue; }
+    try { el.click(); } catch (e) { threw.push(id + ': ' + e.message); }
+    await wait(); await wait();
+  }
+
+  T('★★聞いた事に 押すだけで答えられる（空欄を出して打ち直させない）★★', () => {
+    ok(missing.length === 0, '見つからない/配線されていない: ' + missing.join(', '));
+    ok(threw.length === 0, '例外: ' + threw.join(' / '));
+    ok(p.errors.length === 0, '画面のエラー: ' + p.errors.join(' / '));
+  });
+
+  T('★★押した分だけ「お願い」が出た（1問ごとに保存・原本は1本も消していない）★★', () => {
+    const req = p.fake._store.fixReq;
+    ok(req.length === 3, 'お願いの数が3でない: ' + JSON.stringify(req.map((r) => r.p_reason)));
+    /* ①「出勤でした」＝同じ時刻の ★退勤の1本★ を使わない（★消さずに印だけ★） */
+    ok(/08:00 は 出勤でした/.test(req[0].p_reason), '理由が残っていない: ' + req[0].p_reason);
+    ok((req[0].p_void_ids || []).length === 1, '★使わない1本を渡していない★');
+    ok(req[0].p_punch_ids.length === 0, '要らない打刻を足している');
+    /* ②「この時刻に退勤」＝★後から入れる打刻は 必ずお願い扱い（calendar）★ */
+    const add = p.fake._store.punchAdd;
+    ok(add.length === 1, '後から入れた打刻が ' + add.length + '件');
+    ok(add[0].p_src === 'calendar', '★当日打刻として入れている（承認を通らない）★');
+    ok(add[0].p_kind === 'out', '入れた種類が ' + add[0].p_kind);
+    /* ★倉庫はUTCで持つ★ … 選んだ 22:30（JST）＝ 13:30Z。★9時間ずれた物を入れない★ */
+    ok(String(add[0].p_at).indexOf('2026-08-17T13:30') === 0,
+      '★選んだ時刻（22:30 JST＝13:30Z）で入れていない★: ' + add[0].p_at);
+    ok(req[1].p_punch_ids.length === 1, '入れた打刻をお願いに載せていない');
+    /* ③「出勤を取り消す」＝★消さない・使わない印だけ★ */
+    ok((req[2].p_void_ids || []).length === 1, '取り消しを渡していない');
+    ok(/取り消しました/.test(req[2].p_reason), req[2].p_reason);
+    /* ★どのお願いにも 消す指示は無い★（原本は消えない） */
+    ok(!p.fake._calls.some((c) => /tc_punch\.delete/.test(c)), '★打刻を消している★');
+    console.log('     実測: お願い ' + req.length + '件（使わない印 '
+      + req.filter((r) => (r.p_void_ids || []).length).length + '件 / 後入れ ' + add.length + '件）');
+  });
+
+  T('★★その日の答えが出るまで「決められない」と言い続ける（黙って0にしない）★★', () => {
+    /* 倉庫の中身は変えていない（承認前）ので、画面はまだ「決められません」のまま */
+    const now = p.w.document.getElementById('list').textContent;
+    ok(/決められません/.test(now), '★お願いを出した時点で 決まった事にしている★');
+  });
+}
+
 T('★従業員の追加・会社情報の保存が 実際に倉庫へ書きに行った', () => {
   const r = results.filter((x) => x.file === 'index.html')[0];
   const c = r.page.fake._calls;

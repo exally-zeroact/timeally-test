@@ -224,6 +224,96 @@
     st.ym = y + '-' + ('0' + m).slice(-2);
     draw();
   }
+  /* ── ★おかしい所は 画面が先に言う★（2026-08-18 司さんの実機の形） ──────
+     ★聞いてあげる。埋めさせない★＝空欄を出して打ち直させず、★押すだけで決まる★。
+     ★何がおかしいか の判定と 文は lib/tc-clean.js が1か所で持つ★
+     （社長の画面・数える所と ★同じ物★を見る＝食い違わない）。
+     ★1問ごとに保存★（最後まで行かないと保存されない、を作らない）。
+     ★出した物は「お願い中」の札が付き、会社が見てから記録に入る★（今までの作りと同じ）。 */
+  var _asks = [];                                   // 画面に出している質問（押した時に引く）
+
+  function askHtml(a, n, res) {
+    var head = '<div class="tc-askq">' + U.esc(a.text) + '</div>';
+    var btn = function (id, label, why) {
+      return '<button class="tc-btn sub" type="button" id="' + id + '">' + U.esc(label) + '</button>'
+        + (why ? '<span class="tc-askwhy">' + U.esc(why) + '</span>' : '');
+    };
+    var rows = '';
+    if (a.type === 'both') {
+      /* ★当てた物は根拠つきで見せる★＝押すと どうなるかを 先に出す */
+      rows = btn('ask' + n + '-in', '出勤でした', global.TcClean.previewOf(res, a, 'in'))
+        + btn('ask' + n + '-out', '退勤でした', global.TcClean.previewOf(res, a, 'out'));
+    } else if (a.type === 'open-in') {
+      /* ★「今 退勤にする」は 今日の分だけ★（前の日に「今」を入れると 日をまたぐ形になる） */
+      rows = (a.soft ? btn('ask' + n + '-now', '今 退勤にする', '') : '')
+        + '<span class="tc-askpick"><input type="time" step="60" id="ask' + n + '-t" />'
+        + btn('ask' + n + '-pick', 'この時刻に退勤', '') + '</span>'
+        + btn('ask' + n + '-drop', 'この出勤を取り消す', '');
+    } else {
+      rows = '<span class="tc-askpick"><input type="time" step="60" id="ask' + n + '-t" />'
+        + btn('ask' + n + '-pick', 'この時刻に出勤', '') + '</span>'
+        + btn('ask' + n + '-drop', 'この退勤を取り消す', '');
+    }
+    return '<div class="tc-ask">' + head + '<div class="tc-askrow">' + rows + '</div></div>';
+  }
+
+  /** ★お願いを1つ出す★（入れる打刻 と 使わない打刻 を まとめて1件で出す） */
+  function sendAsk(d, why, addKind, addWall, voidIds) {
+    var done = function () { U.toast('お願いを出しました。会社が見てから記録に入ります。'); draw(); };
+    var ng = function (e) { U.toast('つながりませんでした（' + e.message + '）'); };
+    if (!addKind) {
+      return DB.Emp.fixRequest(st.token, st.device, st.pw, d, null, null, why, [], voidIds || [])
+        .then(function (r) { if (!r || !r.ok) { U.toast(reason(r)); return; } done(); }, ng);
+    }
+    return DB.Emp.punch(st.token, st.device, st.pw, addWall, addKind, 'calendar')
+      .then(function (r) {
+        if (!r || !r.ok) { U.toast(reason(r)); return; }
+        return DB.Emp.fixRequest(st.token, st.device, st.pw, d, null, null, why, [r.id], voidIds || [])
+          .then(function (f) { if (!f || !f.ok) { U.toast(reason(f)); return; } done(); });
+      }, ng);
+  }
+
+  function bindAsks() {
+    _asks.forEach(function (a, n) {
+      var K = global.TcClean.KIND_LABEL;
+      var on = function (suffix, fn) {
+        var b = q('ask' + n + '-' + suffix);
+        if (b) b.onclick = fn;
+      };
+      var pick = function () { return (q('ask' + n + '-t') || {}).value || ''; };
+      if (a.type === 'both') {
+        on('in', function () {
+          sendAsk(a.d, a.hm + ' は ' + K.in + 'でした（' + K.out + 'は使いません）', null, null, [a.outId]);
+        });
+        on('out', function () {
+          sendAsk(a.d, a.hm + ' は ' + K.out + 'でした（' + K.in + 'は使いません）', null, null, [a.inId]);
+        });
+      } else if (a.type === 'open-in') {
+        on('now', function () {
+          var hm = (DB.nowJst() || '').slice(11, 16);
+          sendAsk(a.d, a.hm + ' の' + K.in + 'に ' + hm + ' の' + K.out + 'を入れました', 'out', a.d + 'T' + hm, []);
+        });
+        on('pick', function () {
+          var hm = pick();
+          if (!hm) { U.toast('時刻を選んでください'); return; }
+          sendAsk(a.d, a.hm + ' の' + K.in + 'に ' + hm + ' の' + K.out + 'を入れました', 'out', a.d + 'T' + hm, []);
+        });
+        on('drop', function () {
+          sendAsk(a.d, a.hm + ' の' + K.in + 'を取り消しました', null, null, [a.id]);
+        });
+      } else {
+        on('pick', function () {
+          var hm = pick();
+          if (!hm) { U.toast('時刻を選んでください'); return; }
+          sendAsk(a.d, a.hm + ' の' + K.out + 'に ' + hm + ' の' + K.in + 'を入れました', 'in', a.d + 'T' + hm, []);
+        });
+        on('drop', function () {
+          sendAsk(a.d, a.hm + ' の' + K.out + 'を取り消しました', null, null, [a.id]);
+        });
+      }
+    });
+  }
+
   function draw() {
     var lab = q('ymlabel');
     if (lab) lab.textContent = st.ym.replace('-', '年') + '月';
@@ -239,21 +329,38 @@
       var box = q('list');
       if (!box) return;
       if (!r || r.unauth) { box.innerHTML = '<div class="tc-alert">もう一度 暗証番号を入れてください。</div>'; return; }
+      /* ★掃除の判定は lib/tc-clean.js（社長の画面・数える所と同じ1本）★
+         ここで「使う／使わない」を書き直さない。★出すのは 時刻と言葉だけ★。 */
+      var res = global.TcClean.clean(r.punches || [], { today: (DB.nowJst() || '').slice(0, 10) });
       var byDay = {};
-      (r.punches || []).forEach(function (p) {
-        var day = p.at.slice(0, 10);
-        (byDay[day] = byDay[day] || []).push(p);
+      res.punches.forEach(function (p) {
+        (byDay[p.at.slice(0, 10)] = byDay[p.at.slice(0, 10)] || []).push(p);
       });
       var days = Object.keys(byDay).sort();
       if (!days.length) { box.innerHTML = '<div class="tc-note">この月はまだ何も打っていません。</div>'; return; }
+      _asks = res.asks.slice();
       box.innerHTML = days.map(function (day) {
+        var info = res.byDay[day] || { asks: [] };
+        /* ★まとめた物も 画面には残す★（薄く・札つき）＝消したように見せない */
         var rows = byDay[day].map(function (p) {
-          return '<div>' + U.esc(p.at.slice(11, 16)) + '　' + U.esc(KIND_LABEL[p.kind] || p.kind)
-            + (p.pending ? ' <span class="tc-tag pending">お願い中</span>' : '') + '</div>';
+          var merged = p.why === 'merged';
+          return '<div' + (merged ? ' class="tc-dim"' : '') + '>'
+            + U.esc(p.at.slice(11, 16)) + '　' + U.esc(KIND_LABEL[p.kind] || p.kind)
+            + (p.pending ? ' <span class="tc-tag pending">お願い中</span>' : '')
+            + (merged ? ' <span class="tc-tag">同じ打刻としてまとめました</span>' : '')
+            + '</div>';
         }).join('');
-        return '<div class="tc-card"><div class="tc-cardhead"><b class="num">'
-          + U.esc(day.slice(5).replace('-', '/')) + '（' + U.dowOf(day) + '）</b></div>' + rows + '</div>';
+        /* ★その日の結論を1行★（★決められない日は 決められないと出す★・時刻だけ） */
+        var line = '<div class="tc-note' + (info.undecided ? ' warn' : '') + '">'
+          + U.esc(global.TcClean.daySentence(info, day)) + '</div>';
+        var qs = (info.asks || []).map(function (a) {
+          return askHtml(a, _asks.indexOf(a), res);
+        }).join('');
+        return '<div class="tc-card' + (qs ? ' ask' : '') + '"><div class="tc-cardhead"><b class="num">'
+          + U.esc(day.slice(5).replace('-', '/')) + '（' + U.dowOf(day) + '）</b></div>'
+          + rows + line + qs + '</div>';
       }).join('');
+      bindAsks();
     }).catch(function (e) { U.toast('つながりませんでした（' + e.message + '）'); });
   }
 

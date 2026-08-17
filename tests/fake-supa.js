@@ -10,6 +10,16 @@
  */
 'use strict';
 
+/** JSTの壁時計 ['YYYY-MM-DDTHH:mm', kind] → 倉庫の1行（UTCで持つ） */
+function punchRow(id, r) {
+  var wall = r[0], kind = r[1];
+  var t = Date.UTC(+wall.slice(0, 4), +wall.slice(5, 7) - 1, +wall.slice(8, 10),
+    +wall.slice(11, 13), +wall.slice(14, 16)) - 9 * 3600000;
+  var at = new Date(t).toISOString();
+  return { id: id, account_id: 'u1', employee_id: 'E1', at: at, kind: kind, src: r[2] || 'punch',
+    device: null, approved_at: r[2] === 'calendar' ? null : at, voided_at: null, created_at: at };
+}
+
 function rowsFor(table, seed, store) {
   var s = seed || {};
   /* ★締めの記録は「入れた物が読める」ようにする★
@@ -71,6 +81,10 @@ function rowsFor(table, seed, store) {
     }];
   }
   if (table === 'tc_punch') {
+    /* ★seed.punches … 実物の打刻をそのまま入れる★（2026-08-18 追加）
+       ＝★司さんが実機で作った 08/17 の5本★を そのまま試すため（作り物で代用しない）。
+       形は [['2026-08-17T08:00','in'], …]（JSTの壁時計）。 */
+    if (s.punches) return s.punches.map(function (r, i) { return punchRow('sp' + i, r); });
     /* ★seed.noPunch=true … 打刻が1つも無い会社★（2026-08-16 追加）
        ＝入れたばかりの会社は ★必ずこの姿から始まる★。作らないと
        ★「黙って空の表が出る」を 見張りが素通りする★（指示役⑤）。 */
@@ -199,6 +213,8 @@ function createFake(seed) {
   var tick = 0;
   var store = {
     tc_close: (seed.closeLog || []).slice(),
+    /* ★従業員が出した「お願い」と「後から入れた打刻」★（2026-08-18） */
+    fixReq: [], punchAdd: [],
     clock: function () { tick++; return '2026-08-15T' + ('0' + (9 + tick)).slice(-2) + ':00:00Z'; },
   };
   return {
@@ -234,6 +250,14 @@ function createFake(seed) {
       }
       if (name === 'tc_punch_add') out = { ok: true, id: 'p9', pending: args && args.p_src === 'calendar' };
       if (name === 'tc_my_punches') {
+        /* ★seed.punches … 実物の打刻をそのまま返す★（従業員の画面を実物で押すため） */
+        if (seed.punches) {
+          out = { name: '山田 太郎', punches: seed.punches.map(function (r, i) {
+            var row = punchRow('sp' + i, r);
+            return { id: row.id, at: row.at, kind: row.kind, src: row.src, pending: !row.approved_at };
+          }) };
+          return Promise.resolve({ data: out, error: null });
+        }
         out = {
           name: '山田 太郎',
           punches: [
@@ -243,7 +267,9 @@ function createFake(seed) {
           ],
         };
       }
-      if (name === 'tc_fix_request') out = { ok: true, id: 'f9' };
+      /* ★出したお願いを 溜めておく★（押しただけで終わっていないか・中身が正しいかを数える） */
+      if (name === 'tc_fix_request') { store.fixReq.push(args || {}); out = { ok: true, id: 'f9' }; }
+      if (name === 'tc_punch_add') store.punchAdd.push(args || {});
       return Promise.resolve({ data: out, error: null });
     },
     auth: {
@@ -261,4 +287,4 @@ function createFake(seed) {
   };
 }
 
-module.exports = { createFake: createFake, rowsFor: rowsFor };
+module.exports = { createFake: createFake, rowsFor: rowsFor, punchRow: punchRow };

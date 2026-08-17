@@ -164,10 +164,22 @@
     }).eq('id', id).select().then(function (r) {
       if (r.error) throw new Error(r.error.message);
       var row = (r.data || [])[0];
-      if (!row || !row.punch_ids || !row.punch_ids.length) return row;
+      if (!row) return row;
+      var jobs = [];
       /* 申請で入れた打刻を「確定」にする（原本の時刻は1分も動かさない） */
-      return client().from('tc_punch').update({ approved_at: new Date().toISOString() })
-        .in('id', row.punch_ids).then(function () { return row; });
+      if (row.punch_ids && row.punch_ids.length) {
+        jobs.push(client().from('tc_punch').update({ approved_at: new Date().toISOString() })
+          .in('id', row.punch_ids));
+      }
+      /* ★「この1本は使わない」に印を付ける★（2026-08-18）
+         ★消さない・時刻も種類も1分も動かさない★＝voided_at を立てるだけ。
+         読む側（loadPunches / tc_my_punches）が voided_at is null で外す。 */
+      if (row.void_ids && row.void_ids.length) {
+        jobs.push(client().from('tc_punch').update({ voided_at: new Date().toISOString() })
+          .in('id', row.void_ids));
+      }
+      if (!jobs.length) return row;
+      return Promise.all(jobs).then(function () { return row; });
     });
   }
   function rejectFix(id, byUid) {
@@ -262,10 +274,12 @@
           return r;
         });
     },
-    fixRequest: function (token, device, pw, d, beforeMin, afterMin, reason, punchIds) {
+    /** @param {Array} [voidIds] ★「この1本は使わない」というお願い★（承認で印が付く・原本は残る） */
+    fixRequest: function (token, device, pw, d, beforeMin, afterMin, reason, punchIds, voidIds) {
       return rpc('tc_fix_request', {
         p_token: token, p_device: device, p_pw: pw, p_d: d,
         p_before: beforeMin, p_after: afterMin, p_reason: reason, p_punch_ids: punchIds || [],
+        p_void_ids: voidIds || [],
       });
     },
   };
