@@ -431,9 +431,11 @@
   function fixPanelHtml(p, res) {
     var K = KIND_LABEL[p.kind] || p.kind;
     var cands = global.TcClean.fixCandidates(_all, p, { nowHm: (DB.nowJst() || '').slice(11, 16) });
+    /* ★候補は「時刻（理由）」で1つのボタンにする★（2026-08-18 実配信の画で見た）
+       ＝理由を下の行に出すと ★候補3つで画面が縦に伸びる★。押す物は1行1つに。 */
     var btns = cands.map(function (c, i) {
       return '<button class="tc-btn sub" type="button" id="fix-c' + i + '" data-hm="' + U.esc(c.hm) + '">'
-        + U.esc(c.hm) + '</button><span class="tc-askwhy">' + U.esc(c.why) + '</span>';
+        + U.esc(c.hm + '（' + c.why + '）') + '</button>';
     }).join('');
     return '<div class="tc-ask">'
       + '<div class="tc-askq">' + U.esc(global.TcClean.mdOf(global.TcClean.dayOf(p.at)) + ' の '

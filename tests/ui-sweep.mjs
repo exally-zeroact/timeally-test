@@ -854,6 +854,23 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
     ok(m[1] !== m[2], '★使わない印を数に入れていない（元と後が同じ）★: ' + m[0]);
     console.log('     実測: ' + m[0]);
   });
+
+}
+
+/* ★数字が動かない直し★（まだ退勤が入っていない日の「時刻の直し」）は
+   ★0分→0分 と出さずに 何が起きるかを言う★（2026-08-18 実配信で見た） */
+{
+  const day = '2026-08-03';
+  const p = openPage('index.html', '', { fixSame: true, sameDay: day, punches: [[day + 'T09:00', 'in']] });
+  await wait(); await wait(); await wait();
+  T('★★数字が動かない直しは「0分→0分」と出さない（何が起きるかを言う）★★', () => {
+    const t = p.w.document.getElementById('fixes').textContent;
+    ok(!/元は 0分 → 承認すると 0分/.test(t), '★0→0 のまま出している★: ' + t.slice(0, 140));
+    ok(/数字は変わりません/.test(t), '★何が起きるかを言っていない★: ' + t.slice(0, 140));
+    ok(/まだ退勤が入っていません/.test(t), '理由が出ていない: ' + t.slice(0, 140));
+    const line = (t.split('\n').filter((x) => /数字は変わりません/.test(x))[0] || '').trim();
+    console.log('     実測: ' + line.slice(0, 100));
+  });
 }
 
 T('★従業員の追加・会社情報の保存が 実際に倉庫へ書きに行った', () => {

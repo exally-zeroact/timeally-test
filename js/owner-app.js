@@ -211,8 +211,14 @@
            （実際に変わるのは そこ）。★数えるのは いつもの summarize 1本のまま★。 */
         var kill = f.void_ids || [];
         var after = p[1].filter(function (x) { return kill.indexOf(x.id) < 0; });
-        f._before = one(p[0], f.d).workMin;
-        f._after = one(after, f.d).workMin;
+        var b4 = one(p[0], f.d), af = one(after, f.d);
+        f._before = b4.workMin;
+        f._after = af.workMin;
+        /* ★数字が動かない直しも在る★（2026-08-18 実配信で見た）
+           ＝まだ退勤が入っていない日の「時刻の直し」は 前も後も0分。
+           ★0→0 と出すと「何も起きない」に見える★ので、何が起きるのかを言う。 */
+        f._same = (b4.workMin === af.workMin);
+        f._open = !!(af.incomplete || af.undecided);
         return f;
       }).catch(function () { f._before = null; f._after = null; return f; });
     })).then(function (rows) {
@@ -225,7 +231,9 @@
           + '<button class="tc-btn danger" type="button" data-ng="' + U.esc(f.id) + '">戻す</button>'
           + '</div><div>'
           + (f._before == null ? '（数えられませんでした）'
-            : '元は ' + f._before + '分 → 承認すると ' + f._after + '分')
+            : !f._same ? '元は ' + f._before + '分 → 承認すると ' + f._after + '分'
+              : f._open ? '数字は変わりません（この日は まだ退勤が入っていません）'
+                : '数字は変わりません（時刻の直し）')
           + (f.reason ? '　理由: ' + U.esc(f.reason) : '') + '</div></div>';
       }).join('') + done.map(function (f) {
         return '<div class="tc-card"><div class="tc-cardhead"><b>' + U.esc(nameOf(f.employee_id)) + '</b>'
