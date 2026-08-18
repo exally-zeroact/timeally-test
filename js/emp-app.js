@@ -170,6 +170,17 @@
   var GREY = { out: ['out'], in: [], away: ['out'], brk: [] };
   var _now = null;        // いまの状態（TcClean.stateOf の返り値）
   var _undo = null;       // 打った直後の取り消し {id, kind, hm, until, timer}
+  var _tTouched = false;  // ★時刻欄を人が自分で選んだか★（選んだ物は上書きしない）
+
+  /** 人が触っていない時刻欄を「いま」に合わせる（合ったら描き直す） */
+  function tickNow() {
+    var t = q('t');
+    if (!t || _tTouched) return;
+    var hm = (DB.nowJst() || '').slice(11, 16);
+    if (!hm || t.value === hm) return;
+    t.value = hm;
+    drawPunch();
+  }
 
   function startPunch() {
     begin(function () {
@@ -180,9 +191,14 @@
       var t = q('t');
       if (t) {
         if (!t.value) t.value = (DB.nowJst() || '').slice(11, 16);   // ★いまの時刻。直せる★
-        t.onchange = drawPunch;
-        t.oninput = drawPunch;
+        t.onchange = function () { _tTouched = true; drawPunch(); };
+        t.oninput = function () { _tTouched = true; drawPunch(); };
       }
+      /* ★人が触っていない間は 時刻欄を「いま」に追従させる★（2026-08-18 実配信で見つけた）
+         ＝出勤した直後は ★同じ分★なので「最後より後」を満たさず 退勤が押せない。
+           1分たてば押せるが、★欄が止まっていると いつまでも押せない★。
+           ★人が自分で選んだ時刻は 上書きしない★（_tTouched） */
+      if (global.setInterval) global.setInterval(tickNow, 15000);
       PUNCH_BTN.forEach(function (p) {
         var b = q(p[0]);
         if (b) b.onclick = function () { push(p[1], p[2], b); };
@@ -293,6 +309,8 @@
           until: Date.now() + global.TcClean.UNDO_SEC * 1000, timer: null,
         };
         _undo.timer = global.setInterval(drawUndo, 1000);
+        /* ★打ったら 時刻欄は「いま」に戻す★（次の1本は いまの時刻から選ぶ） */
+        _tTouched = false;
         return loadState();
       })
       .catch(function (e) { U.toast('つながりませんでした（' + e.message + '）'); })
