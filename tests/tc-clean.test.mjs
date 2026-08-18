@@ -109,7 +109,15 @@ if (process.argv.includes('--self-test')) {
     const noMark = long.map((x) => ({ id: x.id, at: x.at, kind: x.kind }));
     ok(CLEAN.timeIssues(noMark, { today: '2026-08-19' }).length === 1, '作り物で聞かなくなっている');
   });
-  console.log('\n[self-test] ' + sp + ' passed, ' + sf + ' failed（★9通り★）');
+  S('⑩ ★全部お願いにする作り（前の姿）★は 締めていない月でも 会社を待たせる', () => {
+    ok(CLEAN.fixWay({ state: 'open' }).way === 'self', '★本物が まだ全部お願いにしている★');
+    ok(CLEAN.fixWay({ state: 'pending' }).way === 'self', '★締め待ちで お願いにしている★');
+  });
+  S('⑪ ★締めた月まで自分で直せる作り物★は 給与の確定後に勤怠が動く', () => {
+    ok(CLEAN.fixWay({ state: 'closed' }).way === 'company', '★締めた月を 自分で直せてしまう★');
+    ok(CLEAN.fixWay({ state: 'open', add: true }).way === 'company', '★足す物まで その場で入れている★');
+  });
+  console.log('\n[self-test] ' + sp + ' passed, ' + sf + ' failed（★11通り★）');
   if (sf) process.exit(1);
 }
 
@@ -468,6 +476,33 @@ T('★時刻★ ★決められない日には 時刻の確かめを積み上げ
   const iss = CLEAN.timeIssues(REAL_0817, { today: TODAY, dayStdMin: 480 });
   eq(iss.length, 0, '★決められない日に 時刻の確かめまで出している★: ' + JSON.stringify(iss.map((x) => x.text)));
   eq(dayOf(sum(REAL_0817), '2026-08-17').asks.length, 2, 'その日の聞く事は 2つのまま');
+});
+
+/* ── (6) ★直す道は3つ★（2026-08-18 夜2 司さん「願いを出さな修正できんのはどうかと思う」） */
+T('★線★ 締めていない月は ★自分で直せる（お願い 不要）★', () => {
+  eq(CLEAN.fixWay({ state: 'open' }).way, 'self');
+  eq(CLEAN.fixWay({ state: 'pending' }).way, 'self', '★締め待ちで 会社を待たせている★');
+  ok(/会社の承認は要りません/.test(CLEAN.fixWay({ state: 'open' }).why));
+});
+
+T('★線★ 締めた月は ★会社に出す★（給与が確定した後に 勤怠を動かさない）', () => {
+  eq(CLEAN.fixWay({ state: 'closed' }).way, 'company');
+  ok(/締め切った月/.test(CLEAN.fixWay({ state: 'closed' }).why));
+});
+
+T('★線★ ★無から足す物（あとから入れる）は いつでも会社に出す★', () => {
+  eq(CLEAN.fixWay({ state: 'open', add: true }).way, 'company');
+  eq(CLEAN.fixWay({ state: 'pending', add: true }).way, 'company');
+  ok(/新しく足す/.test(CLEAN.fixWay({ state: 'open', add: true }).why));
+  console.log('     実測: 開いている=自分で直す／締め待ち=自分で直す／締めた=会社／足す=会社');
+});
+
+T('★線★ 紙とCSVの備考に ★誰が直したか★が残る（null分→null分 と刷らない）', () => {
+  const d = { fixes: [{ status: 'approved', beforeMin: null, afterMin: null, requestedBy: 'employee' }] };
+  eq(CSV.note(d), '本人が直しました');
+  const d2 = { fixes: [{ status: 'approved', beforeMin: null, afterMin: null, requestedBy: 'owner' }] };
+  eq(CSV.note(d2), '会社が直しました');
+  ok(!/null/.test(CSV.note(d)), '★null分→null分 と刷っている★');
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

@@ -238,7 +238,9 @@
       }).join('') + done.map(function (f) {
         return '<div class="tc-card"><div class="tc-cardhead"><b>' + U.esc(nameOf(f.employee_id)) + '</b>'
           + ' <span class="num">' + U.esc(f.d) + '</span>'
-          + '<span class="tc-tag">' + (f.status === 'approved' ? '承認済' : '戻した') + '</span>'
+          + '<span class="tc-tag">' + (f.status !== 'approved' ? '戻した'
+            : (f.requested_by === 'employee' && f.approved_by === 'employee') ? '本人が直した' : '承認済')
+          + '</span>'
           + (f.approved_by === 'self' ? '<span class="tc-tag">自己承認</span>' : '')
           + '</div><div>' + (f.before_min == null ? '' : '元は ' + f.before_min + '分 → ' + f.after_min + '分')
           + (f.reason ? '　理由: ' + U.esc(f.reason) : '') + '</div></div>';
@@ -840,7 +842,10 @@
       st.sum = global.TcCalc.summarize({
         ym: st.ym, punches: r[0], shifts: r[1], today: todayJst(),
         fixes: (r[2] || []).filter(function (f) { return f.employee_id === p.employee_id; })
-          .map(function (f) { return { d: f.d, beforeMin: f.before_min, afterMin: f.after_min, reason: f.reason, status: f.status }; }),
+          .map(function (f) {
+            return { d: f.d, beforeMin: f.before_min, afterMin: f.after_min, reason: f.reason,
+              status: f.status, requestedBy: f.requested_by, approvedBy: f.approved_by };
+          }),
         company: Object.assign(coOpts(), {
           hourlyYen: p.hourly_yen, grantDays: grantDaysOf(p), personHolidayDow: p.legal_holiday_dow,
         }),

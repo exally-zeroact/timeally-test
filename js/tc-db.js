@@ -271,6 +271,15 @@
     undo: function (token, device, pw, id) {
       return rpc('tc_punch_undo', { p_token: token, p_device: device, p_pw: pw, p_id: id });
     },
+    /** ★自分で直す（お願い 不要）★（2026-08-18 夜）
+        wallTime を渡すと ★その時刻の行を1本 足して 元の行に「使わない」印★／
+        null なら ★取り消す（印だけ）★。★締めた月は倉庫が断る★（closed が返る）。 */
+    edit: function (token, device, pw, id, wallTime, why) {
+      return rpc('tc_punch_edit', {
+        p_token: token, p_device: device, p_pw: pw, p_id: id,
+        p_at: wallTime ? fromJst(wallTime) : null, p_reason: why || '',
+      });
+    },
     /** ★「この時刻で合っている」と答える★（印を1つ足すだけ＝打刻は1文字も動かない） */
     okTime: function (token, device, pw, id, type) {
       return rpc('tc_punch_ok', { p_token: token, p_device: device, p_pw: pw, p_id: id, p_type: type });

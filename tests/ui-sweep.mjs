@@ -692,16 +692,15 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
   const a0 = p.w.document.getElementById('ask0-in');
   if (a0) a0.click();
   await wait(); await wait();
-  T('★★質問は 押すだけで答えられる／答えたら その場で「お願いを出しました」になる★★', () => {
+  T('★★質問の答えは ★その場で記録に入る★（お願いにしない・締めていない月）★★', () => {
     ok(a0, '#ask0-in が無い');
-    const req = p.fake._store.fixReq;
-    ok(req.length === 1, 'お願いが ' + req.length + '件');
-    ok(/08:00 は 出勤でした/.test(req[0].p_reason), req[0].p_reason);
-    ok((req[0].p_void_ids || []).length === 1, '★使わない1本を渡していない★');
-    const now = p.w.document.getElementById('list').textContent;
-    ok(/お願いを出しました/.test(now), '答えた事が画面に出ていない');
+    const ed = p.fake._store.edit, req = p.fake._store.fixReq;
+    ok(ed.length === 1, '★自分で直す道を通っていない★（' + ed.length + '件）');
+    ok(ed[0].p_at === null, '★取り消しなのに 時刻を送っている★');
+    ok(/08:00 は 出勤でした/.test(ed[0].p_reason), ed[0].p_reason);
+    ok(req.length === 0, '★お願いも出している（承認の山を作る）★: ' + req.length + '件');
     ok(!p.w.document.getElementById('ask0-in'), '★答えた後も 同じボタンが押せる★');
-    console.log('     実測: お願い ' + req.length + '件（使わない印 1本）');
+    console.log('     実測: 自分で直した 1件／お願い 0件');
   });
 
   /* ② 行を押す＝★2つだけ★ */
@@ -736,23 +735,28 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
   T('★★「時刻を直す」を押してから 候補が出る／選ぶと1行 出て そこで初めて押せる★★', () => {
     ok(c0, '★候補が出ていない★');
     const box = pb.w.document.getElementById('fix-why');
-    ok(/に直すお願いを出します/.test(box.textContent), '★出す前の1行が無い★: ' + box.textContent);
-    ok(!pb.w.document.getElementById('fix-send').disabled, '★選んだのに押せない★');
-    const sends = visBtns(pb.w).filter((b) => /お願いを出す/.test(b.textContent));
-    ok(sends.length === 1, '★「お願いを出す」が ' + sends.length + '個★');
-    console.log('     実測: ' + box.textContent + '／「お願いを出す」' + sends.length + '個');
+    ok(/に直します$/.test(box.textContent.trim()), '★出す前の1行が無い（または言葉が道と合っていない）★: ' + box.textContent);
+    const send = pb.w.document.getElementById('fix-send');
+    ok(!send.disabled, '★選んだのに押せない★');
+    ok(send.textContent.trim() === '直す', '★承認が要らないのに「お願い」と書いている★: ' + send.textContent);
+    /* ★出す物＝押すと記録が動く物★（行の「直す」は 開くだけなので数えない） */
+    const sends = visBtns(pb.w).filter((b) => /tc-btn/.test(b.className || '')
+      && /^(直す|会社に出す|お願いを出す)$/.test((b.textContent || '').trim()));
+    ok(sends.length === 1, '★出す物が ' + sends.length + '個★');
+    console.log('     実測: ' + box.textContent + '／出す物 ' + sends.length + '個（' + send.textContent + '）');
   });
 
   const sendBtn = pb.w.document.getElementById('fix-send');
   if (sendBtn && !sendBtn.disabled) sendBtn.click();
   await wait(); await wait();
-  T('★★出すと「新しい時刻＝お願い中」＋「元の行は使わない印」で1件★★', () => {
-    const req = pb.fake._store.fixReq, add2 = pb.fake._store.punchAdd;
-    ok(req.length === 1, 'お願いが ' + req.length + '件');
-    ok(add2.length === 1 && add2[0].p_src === 'calendar', '★新しい時刻がお願い扱いで入っていない★');
-    ok((req[0].p_void_ids || []).length === 1, '★元の行に「使わない」印を渡していない★');
+  T('★★「直す」を押すと その場で入る（お願いを作らない・元の行は消さない）★★', () => {
+    const ed = pb.fake._store.edit, req = pb.fake._store.fixReq;
+    ok(ed.length === 1, '★自分で直す道を通っていない★（' + ed.length + '件）');
+    ok(ed[0].p_at, '★新しい時刻を送っていない★');
+    ok(ed[0].p_id, '★どの打刻を直すのか渡していない★');
+    ok(req.length === 0, '★お願いも出している★: ' + req.length + '件');
     ok(!pb.fake._calls.some((c) => /tc_punch\.delete/.test(c)), '★打刻を消している★');
-    console.log('     実測: お願い1件（新しい時刻1本＋使わない印1本）／消した打刻 0本');
+    console.log('     実測: 自分で直した 1件（新しい時刻つき）／お願い 0件／消した打刻 0本');
   });
 
   /* ④ ★同じ事をするボタンが2つ在ったら赤★ */
@@ -785,6 +789,48 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
     console.log('     実測: 開いた後の「お願いを出す」' + sends.length + '個');
   });
 }
+/* ── ★★締めた月は「会社に出す」に戻る★★（2026-08-18 夜2 司さんの線③）
+   ★給与が確定した後に 勤怠が動くと 計算が狂う★ので、締めた月だけは 会社が見る。 */
+{
+  const SEED = { punches: [['2026-08-17T09:00', 'in'], ['2026-08-17T18:00', 'out']], empClosed: true };
+  const T_URL2 = '?t=11111111-1111-1111-1111-111111111111';
+
+  /* ① 言葉が「会社に出す」になっているか（行を開く → 時刻を直す → 出す物の字を読む） */
+  const pA = openPage('kiroku.html', T_URL2, SEED);
+  await wait(); await wait(); await wait();
+  const rA = pA.w.document.querySelector('[data-pid]');
+  if (rA) rA.click();
+  await wait(); await wait();
+  const foA = pA.w.document.getElementById('fix-open');
+  if (foA) foA.click();
+  await wait(); await wait();
+  T('★★締めた月では 言葉も道も「会社に出す」になる★★', () => {
+    const send = pA.w.document.getElementById('fix-send');
+    ok(send, '出す物が無い');
+    ok(send.textContent.trim() === '会社に出す',
+      '★締めた月なのに「直す」と書いている★: ' + send.textContent);
+    console.log('     実測: 締めた月の出す物「' + send.textContent.trim() + '」');
+  });
+
+  /* ② 「これは間違い」も お願いとして出る（その場で消さない） */
+  const pB = openPage('kiroku.html', T_URL2, SEED);
+  await wait(); await wait(); await wait();
+  const rB = pB.w.document.querySelector('[data-pid]');
+  if (rB) rB.click();
+  await wait(); await wait();
+  const dropB = pB.w.document.getElementById('fix-drop');
+  if (dropB) dropB.click();
+  await wait(); await wait();
+  T('★★締めた月の「これは間違い」は 会社に出す（その場で消さない）★★', () => {
+    ok(dropB, '「これは間違い」が無い');
+    const req = pB.fake._store.fixReq, ed = pB.fake._store.edit;
+    ok(req.length === 1, '★会社に出していない★（' + req.length + '件）');
+    ok((req[0].p_void_ids || []).length === 1, '使わない印を渡していない');
+    ok(ed.length === 0, '★締めた月なのに その場で直そうとしている★（' + ed.length + '件）');
+    console.log('     実測: 会社に出した 1件／その場の直し 0件');
+  });
+}
+
 /* ── ★社長の「承認する前に どうなるか」★（★使わない印のお願いも数に入る★・2026-08-18） ── */
 {
   const p = openPage('index.html', '', { fixVoid: true });

@@ -560,6 +560,55 @@ begin
   return jsonb_build_object('ok',true);
 end $$;
 
+-- ★自分で直す（お願い 不要）★（2026-08-18 夜 司さん「願いを出さな修正できんのはどうかと思う」）
+--   ★線は3つ★ … ①その場60秒は取り消し（tc_punch_undo）／★②これ＝自分で直す★／③会社に出す(tc_fix)
+--   ②の条件（★倉庫の側でも全部 見る★・画面だけで止めない）:
+--     ・自分の打刻だけ ・まだ取り消していない ・★締めた月は駄目★（給与が確定した後に動かさない）
+--   ★元の値は消さない★:
+--     ・直す   … ★元の行に voided_at の印★＋★新しい時刻の行を1本 足す★（at も kind も作り替えない）
+--     ・取り消す… ★元の行に voided_at の印だけ★
+--   ★後から必ず見える★:
+--     ・tc_fix に ★status='approved' / requested_by='employee' / approved_by='employee'★ で1行 残す
+--       ＝会社の画面（直しの箱）に ★「自分で直した」★として出る。誰が・いつ・何を、が消えない。
+create or replace function public.tc_punch_edit(p_token uuid, p_device text, p_pw text,
+                                                p_id uuid, p_at timestamptz, p_reason text)
+returns jsonb language plpgsql security definer set search_path=public, extensions, timeally as $$
+declare v_pub timeally.tc_pub; v_row timeally.tc_punch; v_st text; v_new uuid; v_d date;
+begin
+  select * into v_pub from timeally.tc_pub where token=p_token;
+  if v_pub.token is null or not v_pub.active then return jsonb_build_object('ok',false,'unauth',true); end if;
+  if not timeally.tc_ok(v_pub, p_device, p_pw) then return jsonb_build_object('ok',false,'unauth',true); end if;
+  select * into v_row from timeally.tc_punch
+   where id = p_id and account_id = v_pub.account_id and employee_id = v_pub.employee_id;
+  if v_row.id is null then return jsonb_build_object('ok',false,'not_mine',true); end if;
+  if v_row.voided_at is not null then return jsonb_build_object('ok',false,'already',true); end if;
+  v_d := ((v_row.at at time zone 'Asia/Tokyo')::date);
+  v_st := timeally.tc_state(v_pub.account_id, v_d);
+  -- ★締めた月は 自分では直せない★（会社に出す道＝tc_fix_request へ回す）
+  if v_st = 'closed' then return jsonb_build_object('ok',false,'closed',true,'state',v_st); end if;
+  -- ★これから先の時刻は入れない★（原本を汚さない・打刻を入れる時と同じ線）
+  if p_at is not null and p_at > now() + interval '5 minutes' then
+    return jsonb_build_object('ok',false,'future',true); end if;
+  -- ★直す時は 新しい時刻の行を足す（その場で記録に入る＝approved_at を入れる）★
+  if p_at is not null then
+    if ((p_at at time zone 'Asia/Tokyo')::date) <> v_d then
+      return jsonb_build_object('ok',false,'other_day',true); end if;
+    insert into timeally.tc_punch(account_id, employee_id, at, kind, src, device, approved_at)
+    values (v_pub.account_id, v_pub.employee_id, p_at, v_row.kind, 'punch',
+            left(coalesce(p_device,''),64), now())
+    returning id into v_new;
+  end if;
+  -- ★元の行は消さない。印を立てるだけ★
+  update timeally.tc_punch set voided_at = now() where id = p_id;
+  -- ★跡を残す（会社の画面に出る）★
+  insert into timeally.tc_fix(account_id, employee_id, d, before_min, after_min, reason,
+                              requested_by, approved_by, approved_at, status, punch_ids, void_ids)
+  values (v_pub.account_id, v_pub.employee_id, v_d, null, null, coalesce(p_reason,''),
+          'employee', 'employee', now(), 'approved',
+          case when v_new is null then '{}'::uuid[] else array[v_new] end, array[p_id]);
+  return jsonb_build_object('ok',true,'id',v_new);
+end $$;
+
 -- ★「この時刻で合っている」と答える★（2026-08-18）
 --   機械が気づいて聞いた事に本人が答える。★答えたら 二度と聞かない★（印を1つ足すだけ）。
 --   ★打刻は1文字も動かない★（at も kind も そのまま。消しもしない）。
@@ -689,6 +738,7 @@ grant execute on function
   public.tc_punch_add(uuid,text,text,timestamptz,text,text),
   public.tc_punch_undo(uuid,text,text,uuid),
   public.tc_punch_ok(uuid,text,text,uuid,text),
+  public.tc_punch_edit(uuid,text,text,uuid,timestamptz,text),
   public.tc_my_punches(uuid,text,text,date,date),
   public.tc_fix_request(uuid,text,text,date,int,int,text,uuid[],uuid[]),
   public.tc_pub_info(uuid,date)
