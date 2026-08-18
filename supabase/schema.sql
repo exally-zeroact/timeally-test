@@ -202,6 +202,12 @@ create table if not exists timeally.tc_punch (
 );
 create index if not exists idx_tc_punch_emp_at on timeally.tc_punch(account_id, employee_id, at);
 
+-- ★「この時刻で合っている」と本人が答えた印★（2026-08-18 司さん「時刻を間違えた時」）
+--   機械が「長すぎ/短すぎ/退勤が先」に気づいて聞いた時、★合っていると答えたら 二度と聞かない★。
+--   ★中身は「聞いた事の種類」★（too-long / too-short / out-before-in）。
+--   ★打刻そのものは1文字も動かない★（at も kind も そのまま）。
+alter table timeally.tc_punch add column if not exists ok_types text[] not null default '{}';
+
 -- ─────────────────────────────────────────────────────────────────────────
 -- ④ tc_fix … 直しの申請と承認
 --    ★社長1人の会社は「自己承認」と残す★（承認が無かった事にしない）
@@ -554,6 +560,31 @@ begin
   return jsonb_build_object('ok',true);
 end $$;
 
+-- ★「この時刻で合っている」と答える★（2026-08-18）
+--   機械が気づいて聞いた事に本人が答える。★答えたら 二度と聞かない★（印を1つ足すだけ）。
+--   ★打刻は1文字も動かない★（at も kind も そのまま。消しもしない）。
+--   ★同じ物を2回 足さない★（array に無い時だけ足す）。
+create or replace function public.tc_punch_ok(p_token uuid, p_device text, p_pw text,
+                                              p_id uuid, p_type text)
+returns jsonb language plpgsql security definer set search_path=public, extensions, timeally as $$
+declare v_pub timeally.tc_pub; v_row timeally.tc_punch; v_st text;
+begin
+  select * into v_pub from timeally.tc_pub where token=p_token;
+  if v_pub.token is null or not v_pub.active then return jsonb_build_object('ok',false,'unauth',true); end if;
+  if not timeally.tc_ok(v_pub, p_device, p_pw) then return jsonb_build_object('ok',false,'unauth',true); end if;
+  if p_type is null or p_type not in ('too-long','too-short','out-before-in') then
+    return jsonb_build_object('ok',false,'bad_type',true); end if;
+  select * into v_row from timeally.tc_punch
+   where id = p_id and account_id = v_pub.account_id and employee_id = v_pub.employee_id;
+  if v_row.id is null then return jsonb_build_object('ok',false,'not_mine',true); end if;
+  v_st := timeally.tc_state(v_pub.account_id, ((v_row.at at time zone 'Asia/Tokyo')::date));
+  if v_st = 'closed' then return jsonb_build_object('ok',false,'closed',true,'state',v_st); end if;
+  update timeally.tc_punch
+     set ok_types = (select array_agg(distinct x) from unnest(ok_types || array[p_type]) as x)
+   where id = p_id;
+  return jsonb_build_object('ok',true);
+end $$;
+
 -- ★自分の記録を返す。返すのは「打った生の時刻」だけ★
 --   実労働・残業・丸め・金額は ★1つも返さない★（従業員は嘘の数字を一度も見ない）
 create or replace function public.tc_my_punches(p_token uuid, p_device text, p_pw text,
@@ -566,7 +597,9 @@ begin
   if not timeally.tc_ok(v_pub, p_device, p_pw) then return jsonb_build_object('unauth',true); end if;
   select coalesce(jsonb_agg(jsonb_build_object(
            'id', id, 'at', at, 'kind', kind, 'src', src,
-           'pending', (approved_at is null)) order by at), '[]')
+           'pending', (approved_at is null),
+           -- ★「合っている」と答えた印★（時刻の確かめを二度と聞かない為。数えた結果ではない）
+           'ok_types', ok_types) order by at), '[]')
     into v_rows
     from timeally.tc_punch
    where account_id = v_pub.account_id and employee_id = v_pub.employee_id
@@ -626,8 +659,10 @@ begin
   --   ★notice は そのまま画面に出す文★＝従業員に見せる文を作るのは ここ1か所。
   --   ★割増・丸め・切り捨て・金額の言葉は 1文字も入れない★
   --   （lib/tc-close.js の employeeNotice と ★同じ文★。tests/tc-close が突き合わせている）
+  -- ★day_std_min は「会社の1日の所定（分）」★＝★長すぎの線を 画面と数える所で同じにする★ため。
+  --   ★丸め方・率・金額は 今までどおり1つも返さない★（これは設定であって 数えた結果ではない）。
   return jsonb_build_object('found',true,'company', coalesce(v_co.name,''), 'name', v_pub.name,
-    'state', v_st, 'ym', v_ym,
+    'state', v_st, 'ym', v_ym, 'day_std_min', coalesce(v_co.daily_std_min, 480),
     'notice', case when v_st = 'closed'
       then ltrim(right(v_ym, 2), '0') || '月は締め切りました。直しは会社へ言ってください'
       else '' end);
@@ -653,6 +688,7 @@ grant execute on function
   public.tc_verify(uuid,text),
   public.tc_punch_add(uuid,text,text,timestamptz,text,text),
   public.tc_punch_undo(uuid,text,text,uuid),
+  public.tc_punch_ok(uuid,text,text,uuid,text),
   public.tc_my_punches(uuid,text,text,date,date),
   public.tc_fix_request(uuid,text,text,date,int,int,text,uuid[],uuid[]),
   public.tc_pub_info(uuid,date)

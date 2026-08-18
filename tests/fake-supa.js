@@ -220,7 +220,7 @@ function createFake(seed) {
   var store = {
     tc_close: (seed.closeLog || []).slice(),
     /* ★従業員が出した「お願い」と「後から入れた打刻」と「打った直後の取り消し」★（2026-08-18） */
-    fixReq: [], punchAdd: [], undo: [],
+    fixReq: [], punchAdd: [], undo: [], okTime: [],
     clock: function () { tick++; return '2026-08-15T' + ('0' + (9 + tick)).slice(-2) + ':00:00Z'; },
   };
   return {
@@ -244,7 +244,8 @@ function createFake(seed) {
       }
       /* ★notice は倉庫が作る文★（画面が組み立てない）。seed.empClosed=true で締め切った後を作る */
       if (name === 'tc_pub_info') {
-        out = { found: true, company: 'テスト商事', name: '山田 太郎', state: 'open', ym: '2026-08', notice: '' };
+        out = { found: true, company: 'テスト商事', name: '山田 太郎', state: 'open', ym: '2026-08',
+          notice: '', day_std_min: 480 };
         if (seed.empClosed) { out.state = 'closed'; out.notice = '7月は締め切りました。直しは会社へ言ってください'; out.ym = '2026-07'; }
       }
       if (name === 'tc_verify') out = { ok: true, device_token: 'dev1', name: '山田 太郎' };
@@ -260,16 +261,17 @@ function createFake(seed) {
         if (seed.punches) {
           out = { name: '山田 太郎', punches: seed.punches.map(function (r, i) {
             var row = punchRow('sp' + i, r);
-            return { id: row.id, at: row.at, kind: row.kind, src: row.src, pending: !row.approved_at };
+            return { id: row.id, at: row.at, kind: row.kind, src: row.src, pending: !row.approved_at,
+              ok_types: r[3] || [] };
           }) };
           return Promise.resolve({ data: out, error: null });
         }
         out = {
           name: '山田 太郎',
           punches: [
-            { id: 'p1', at: '2026-08-03T00:00:00Z', kind: 'in', src: 'punch', pending: false },
-            { id: 'p2', at: '2026-08-03T11:00:00Z', kind: 'out', src: 'punch', pending: false },
-            { id: 'p3', at: '2026-08-04T00:30:00Z', kind: 'in', src: 'calendar', pending: true },
+            { id: 'p1', at: '2026-08-03T00:00:00Z', kind: 'in', src: 'punch', pending: false, ok_types: [] },
+            { id: 'p2', at: '2026-08-03T11:00:00Z', kind: 'out', src: 'punch', pending: false, ok_types: [] },
+            { id: 'p3', at: '2026-08-04T00:30:00Z', kind: 'in', src: 'calendar', pending: true, ok_types: [] },
           ],
         };
       }
@@ -278,6 +280,8 @@ function createFake(seed) {
       if (name === 'tc_punch_add') store.punchAdd.push(args || {});
       /* ★打った直後の取り消し★（2026-08-18）… ★倉庫は消さず voided_at の印を立てるだけ★。
          seed.undoTooLate=true で「60秒を過ぎた」を作れる（画面が何と言うかを見る）。 */
+      /* ★「合っている」と答えた印★（2026-08-18）… 倉庫は打刻を1文字も動かさない */
+      if (name === 'tc_punch_ok') { store.okTime.push(args || {}); out = { ok: true }; }
       if (name === 'tc_punch_undo') {
         store.undo.push(args || {});
         out = seed.undoTooLate ? { ok: false, too_late: true } : { ok: true };

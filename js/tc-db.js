@@ -134,7 +134,9 @@
       return q;
     }).then(function (rows) {
       return rows.map(function (r) {
-        return { id: r.id, at: toJst(r.at), kind: r.kind, src: r.src, pending: !r.approved_at };
+        return { id: r.id, at: toJst(r.at), kind: r.kind, src: r.src, pending: !r.approved_at,
+          /* ★「合っている」と本人が答えた印★（社長の画面でも 同じ物を見る＝二度と聞かない） */
+          ok_types: r.ok_types || [] };
       });
     });
   }
@@ -269,12 +271,17 @@
     undo: function (token, device, pw, id) {
       return rpc('tc_punch_undo', { p_token: token, p_device: device, p_pw: pw, p_id: id });
     },
+    /** ★「この時刻で合っている」と答える★（印を1つ足すだけ＝打刻は1文字も動かない） */
+    okTime: function (token, device, pw, id, type) {
+      return rpc('tc_punch_ok', { p_token: token, p_device: device, p_pw: pw, p_id: id, p_type: type });
+    },
     mine: function (token, device, pw, from, to) {
       return rpc('tc_my_punches', { p_token: token, p_device: device, p_pw: pw, p_from: from, p_to: to })
         .then(function (r) {
           if (!r || r.unauth) return r;
           r.punches = (r.punches || []).map(function (p) {
-            return { id: p.id, at: toJst(p.at), kind: p.kind, src: p.src, pending: p.pending };
+            return { id: p.id, at: toJst(p.at), kind: p.kind, src: p.src, pending: p.pending,
+              ok_types: p.ok_types || [] };
           });
           return r;
         });

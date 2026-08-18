@@ -94,7 +94,22 @@ if (process.argv.includes('--self-test')) {
     ok(loose('2026-08-18T09:00'), '作り物が緩くなっていない');
     ok(!CLEAN.timeOk(s, '2026-08-18T09:00').ok, '★本物が同じ分を通している（08/17 の型が再発する）★');
   });
-  console.log('\n[self-test] ' + sp + ' passed, ' + sf + ' failed（★7通り★）');
+  S('⑧ ★線を 所定×1.5 に下げた作り物★は 実データの 750分の日にも聞いてしまう', () => {
+    const mk = (min) => [{ id: 'a', at: '2026-08-17T00:00', kind: 'in' },
+      { id: 'b', at: '2026-08-17T' + ('0' + Math.floor(min / 60)).slice(-2) + ':'
+        + ('0' + (min % 60)).slice(-2), kind: 'out' }];
+    ok(750 > 480 * 1.5, '作り物の線が下がっていない');
+    ok(CLEAN.timeIssues(mk(750), { dayStdMin: 480 }).length === 0,
+      '★本物の線(所定×2)が 実データに在る750分の日に聞いている★');
+  });
+  S('⑨ ★「合っている」の印を見ない作り物★は 何度でも同じ事を聞く', () => {
+    const long = [{ id: 'a', at: '2026-08-17T08:00', kind: 'in' },
+      { id: 'b', at: '2026-08-18T21:00', kind: 'out', ok_types: ['too-long'] }];
+    ok(CLEAN.timeIssues(long, { today: '2026-08-19' }).length === 0, '★本物が印を見ていない★');
+    const noMark = long.map((x) => ({ id: x.id, at: x.at, kind: x.kind }));
+    ok(CLEAN.timeIssues(noMark, { today: '2026-08-19' }).length === 1, '作り物で聞かなくなっている');
+  });
+  console.log('\n[self-test] ' + sp + ' passed, ' + sf + ' failed（★9通り★）');
   if (sf) process.exit(1);
 }
 
@@ -356,6 +371,103 @@ T('★実物★ 08/17 の5本を ★押した順★に門A＋門Eへ通すと 4�
 T('★門B★ 取り消せる長さは ★60秒★（実データの押し直し最大11.9秒の5倍以上）', () => {
   eq(CLEAN.UNDO_SEC, 60);
   ok(CLEAN.UNDO_SEC >= 11.9 * 5, '★実測の押し直し（最大11.9秒）に対して余裕が無い★');
+});
+
+/* ── (5) TIME ISSUES ★時刻そのものを間違えた時★（2026-08-18 夜 司さん） ────
+   ★線は実データで決めた★（拘束 106本： 最小420分／最大750分／50%が540分）
+     ・所定x2（960分）を超える … ★実データ 0本★（誤って聞かない）
+       ※所定x1.5（720分）だと ★49本★ 引っかかる＝線として使えない
+     ・15分未満 … ★実データ 0本★（0/5/10/30/60分 で数えても 全部0本）            */
+T('★時刻★ 退勤の打ち忘れ（翌日に押した）を 機械が見つけて聞く', () => {
+  const long = [p('2026-08-17T08:00', 'in', 'a'), p('2026-08-18T21:00', 'out', 'b')];
+  const iss = CLEAN.timeIssues(long, { today: '2026-08-19', dayStdMin: 480 });
+  eq(iss.length, 1); eq(iss[0].type, 'too-long');
+  eq(iss[0].id, 'b', '★印を付ける先が退勤の行でない★');
+  ok(/日をまたいでいます/.test(iss[0].text), iss[0].text);
+  ok(/時刻はこれで合っていますか/.test(iss[0].text), iss[0].text);
+  console.log('     実測: ' + iss[0].text);
+});
+
+T('★時刻★ 線の両側を測る（★所定x2 ちょうどは聞かない・1分超えたら聞く★）', () => {
+  const mk = (outHm) => [p('2026-08-17T00:00', 'in', 'a'),
+    { id: 'b', at: '2026-08-17T' + outHm, kind: 'out' }];
+  eq(CLEAN.timeIssues(mk('16:00'), { dayStdMin: 480 }).length, 0, '960分ちょうどで聞いている');
+  eq(CLEAN.timeIssues(mk('16:01'), { dayStdMin: 480 }).length, 1, '961分で聞いていない');
+  eq(CLEAN.timeIssues(mk('16:01'), { dayStdMin: 600 }).length, 0, '決まりが長い会社で誤って聞いている');
+});
+
+T('★時刻★ 短すぎ … ちょうど15分は聞かない・14分は聞く', () => {
+  const mk = (outHm) => [p('2026-08-17T09:00', 'in', 'a'),
+    { id: 'b', at: '2026-08-17T' + outHm, kind: 'out' }];
+  eq(CLEAN.timeIssues(mk('09:15'), {}).length, 0, '15分ちょうどで聞いている');
+  eq(CLEAN.timeIssues(mk('09:14'), {}).length, 1, '14分で聞いていない');
+  eq(CLEAN.timeIssues(mk('09:14'), {})[0].type, 'too-short');
+});
+
+T('★時刻★ 退勤が出勤より前（その日の最初が退勤）', () => {
+  const rev = [{ id: 'o', at: '2026-08-17T07:00', kind: 'out' }, p('2026-08-17T09:00', 'in', 'i')];
+  const iss = CLEAN.timeIssues(rev, { today: TODAY });
+  ok(iss.some((x) => x.type === 'out-before-in'), JSON.stringify(iss.map((x) => x.type)));
+  ok(/07:00 の退勤が 09:00 の出勤より前/.test(iss.filter((x) => x.type === 'out-before-in')[0].text));
+});
+
+T('★時刻★ ★「合っている」と答えた物は 二度と聞かない★（印は種類ごと）', () => {
+  const long = [p('2026-08-17T08:00', 'in', 'a'), p('2026-08-18T21:00', 'out', 'b')];
+  eq(CLEAN.timeIssues(long, { today: '2026-08-19' }).length, 1);
+  const answered = long.map((x) => (x.id === 'b' ? Object.assign({}, x, { ok_types: ['too-long'] }) : x));
+  eq(CLEAN.timeIssues(answered, { today: '2026-08-19' }).length, 0, '★答えたのに まだ聞いている★');
+  const other = long.map((x) => (x.id === 'b' ? Object.assign({}, x, { ok_types: ['too-short'] }) : x));
+  eq(CLEAN.timeIssues(other, { today: '2026-08-19' }).length, 1, '★別の種類まで黙らせている★');
+});
+
+T('★時刻★ 夜勤（22:00→翌05:00）は 聞かない／0:00・23:59 も 聞かない', () => {
+  const night = [p('2026-08-17T22:00', 'in', 'a'), p('2026-08-18T05:00', 'out', 'b')];
+  eq(CLEAN.timeIssues(night, { today: '2026-08-19' }).length, 0, '夜勤を おかしいと言っている');
+  /* ★日の端の時刻そのもの★は 何も起こさない（0:00 始まり・23:59 終わりでも 8時間なら聞かない） */
+  const edge1 = [p('2026-08-17T00:00', 'in', 'a'), p('2026-08-17T08:00', 'out', 'b')];
+  const edge2 = [p('2026-08-17T15:59', 'in', 'a'), p('2026-08-17T23:59', 'out', 'b')];
+  eq(CLEAN.timeIssues(edge1, { today: TODAY }).length, 0, '0:00 始まりで聞いている');
+  eq(CLEAN.timeIssues(edge2, { today: TODAY }).length, 0, '23:59 終わりで聞いている');
+  /* ★0:00〜23:59（1439分）は 聞く★＝退勤の打ち忘れの典型（黙って24時間にしない） */
+  const allDay = [p('2026-08-17T00:00', 'in', 'a'), p('2026-08-17T23:59', 'out', 'b')];
+  eq(CLEAN.timeIssues(allDay, { today: TODAY }).length, 1, '★丸1日を黙って通している★');
+});
+
+T('★時刻★ 「お願い中」と本記録が同じ日／取り消した行 の扱い', () => {
+  const mixed = [p('2026-08-17T09:00', 'in', 'a'),
+    { id: 'b', at: '2026-08-17T09:05', kind: 'out', src: 'calendar', pending: true }];
+  eq(CLEAN.timeIssues(mixed, { today: TODAY }).length, 1, 'お願い中を見ていない');
+  eq(CLEAN.timeIssues([mixed[0]], { today: TODAY }).length, 0, '取り消した後（渡らない）で聞いている');
+});
+
+T('★時刻★ 直す候補を先に出す（★空欄を出さない★）', () => {
+  const hist = [p('2026-08-10T09:00', 'in'), p('2026-08-11T09:00', 'in'), p('2026-08-17T08:00', 'in', 'x')];
+  const c = CLEAN.fixCandidates(hist, { at: '2026-08-17T08:00', kind: 'in' }, { nowHm: '14:30' });
+  eq(c[0].hm, '09:00'); eq(c[0].why, 'いつもの時刻');
+  ok(c.some((x) => x.hm === '07:45'), JSON.stringify(c));
+  ok(c.some((x) => x.hm === '08:15'), JSON.stringify(c));
+  ok(c.some((x) => x.hm === '14:30'), JSON.stringify(c));
+  ok(!c.some((x) => x.hm === '08:00'), '元の時刻を候補に出している');
+  const thin = CLEAN.fixCandidates([p('2026-08-10T07:00', 'in')], { at: '2026-08-17T08:00', kind: 'in' }, {});
+  ok(!thin.some((x) => x.why === 'いつもの時刻'), '1回だけの物を「いつもの」と言っている');
+  console.log('     実測: ' + c.map((x) => x.hm + '(' + x.why + ')').join(' / '));
+});
+
+T('★時刻★ 直しても ★元の打刻は1文字も動かない★（使わない印＋新しい時刻のお願い）', () => {
+  /* 直した後の姿＝元は voided（読む側が外す）／新しい時刻は お願い中で入る */
+  const after = [p('2026-08-17T08:00', 'in', 'a'),
+    { id: 'n', at: '2026-08-17T20:45', kind: 'out', src: 'calendar', pending: true }];
+  const d = dayOf(sum(after), '2026-08-17');
+  eq(d.inAt, '2026-08-17T08:00', '元の出勤が動いている');
+  eq(CLEAN.timeIssues(after, { today: TODAY, dayStdMin: 480 }).length, 0, '直した後も まだ聞いている');
+});
+
+T('★時刻★ ★決められない日には 時刻の確かめを積み上げない★（先に決める事が1つ）', () => {
+  /* 08/17 は「08:00 は出勤か退勤か」が先。ここで「17:03 の退勤が 21:44 の出勤より前」を
+     一緒に聞くと ★同じ日に質問が3つ★になる（実データで捕まえた） */
+  const iss = CLEAN.timeIssues(REAL_0817, { today: TODAY, dayStdMin: 480 });
+  eq(iss.length, 0, '★決められない日に 時刻の確かめまで出している★: ' + JSON.stringify(iss.map((x) => x.text)));
+  eq(dayOf(sum(REAL_0817), '2026-08-17').asks.length, 2, 'その日の聞く事は 2つのまま');
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

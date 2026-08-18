@@ -753,6 +753,96 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
   });
 }
 
+/* ── ★★時刻そのものを間違えた時★★（2026-08-18 夜 司さん）────────────────
+   ★押す物の一覧を先に書く★:
+     ① 機械が気づいて聞く … #iss0-ok（合っている）／#iss0-fix（直す）
+     ② 打刻の行を押す     … [data-pid]（開く）→ #fix-c0（候補）→ #fix-send（お願いを出す）
+     ③ これは間違い       … #fix-drop → #fix-send は要らず その場で出る */
+{
+  const nowJst2 = new Date(Date.now() + 9 * 3600000).toISOString();
+  const today2 = nowJst2.slice(0, 10);
+  const yday2 = new Date(Date.parse(today2 + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+  const T_URL2 = '?t=11111111-1111-1111-1111-111111111111';
+  /* ★退勤の打ち忘れ→翌日 押した★（1日の決まり480分の2倍を超える）＝いちばん多い形 */
+  const LONG = [[yday2 + 'T08:00', 'in'], [today2 + 'T21:00', 'out']];
+  console.log('\n  kiroku.html（★時刻そのものを間違えた時★）で押す物');
+  ['#iss0-ok（合っている）', '#iss0-fix（直す）', '[data-pid]（行を開く）',
+    '#fix-c0（候補）', '#fix-send（お願いを出す）', '#fix-drop（これは間違い）']
+    .forEach((x) => console.log('    - ' + x));
+
+  const pa = openPage('kiroku.html', T_URL2, { punches: LONG });
+  await wait(); await wait(); await wait();
+
+  T('★★機械が先に気づいて聞く（長すぎ・日またぎ）★★', () => {
+    const t = pa.w.document.getElementById('list').textContent;
+    ok(/間がとても長いです。時刻はこれで合っていますか？/.test(t), '★長すぎを聞いていない★: ' + t.slice(0, 160));
+    ok(/日をまたいでいます/.test(t), '日またぎを言っていない');
+    ok(pa.w.document.getElementById('iss0-ok') && pa.w.document.getElementById('iss0-fix'),
+      '★［合っている］［直す］が無い★');
+    /* ★長さ（何時間）は 従業員の画面に出さない★＝時刻だけで聞く */
+    ok(!/時間|分間/.test((/間がとても長いです[^」]*/.exec(t) || [''])[0]), '★長さを出している★');
+    const line = (t.split('\n').filter((x) => /間がとても長いです/.test(x))[0] || '').trim();
+    console.log('     実測: ' + line.slice(0, 120));
+  });
+
+  T('★★「合っている」を押すと 印だけ残る（打刻は1文字も動かない）★★', () => {
+    pa.w.document.getElementById('iss0-ok').click();
+    const ok1 = pa.fake._store.okTime;
+    ok(ok1.length === 1, '★印を倉庫へ出していない★');
+    ok(ok1[0].p_type === 'too-long', '種類が違う: ' + ok1[0].p_type);
+    ok(pa.fake._store.fixReq.length === 0, '★合っているのに お願いを出している★');
+    ok(pa.fake._store.punchAdd.length === 0, '★合っているのに 打刻を足している★');
+    console.log('     実測: 印 1件（' + ok1[0].p_type + '）／お願い 0件／足した打刻 0件');
+  });
+
+  /* ② 打刻の行を押して 時刻を直す */
+  const pb = openPage('kiroku.html', T_URL2, { punches: LONG });
+  await wait(); await wait(); await wait();
+  const rows = () => [...pb.w.document.querySelectorAll('[data-pid]')];
+
+  /* ★押した後は 描き直しを待つ★（押した瞬間に読むと まだ前の画面を見ている） */
+  const rowCount = rows().length;
+  if (rows()[1]) rows()[1].click();                     // 21:00 の退勤を開く
+  await wait(); await wait();
+
+  T('★★打刻の行を押すと「この時刻を直す」が開く（候補つき・空欄を出さない）★★', () => {
+    ok(rowCount === 2, '押せる行が ' + rowCount + '本');
+    const box = pb.w.document.getElementById('fix-why');
+    ok(box, '★開いていない★');
+    ok(/直したい時刻を選んでください/.test(box.textContent), box.textContent);
+    ok(pb.w.document.getElementById('fix-send').disabled, '★選ぶ前から押せる★');
+    const cands = [...pb.w.document.querySelectorAll('[id^="fix-c"]')];
+    ok(cands.length >= 2, '候補が ' + cands.length + '個（空欄だけになっている）');
+    console.log('     実測: 候補 ' + cands.map((c) => c.textContent).join(' / '));
+  });
+
+  const c0 = pb.w.document.querySelector('[id^="fix-c"]');
+  if (c0) c0.click();
+  await wait();
+
+  T('★★候補を押すと 出す前に1行 出て、そこで初めて押せる★★', () => {
+    ok(c0, '候補のボタンが無い');
+    const box = pb.w.document.getElementById('fix-why');
+    ok(/に直すお願いを出します/.test(box.textContent), '★出す前の1行が出ていない★: ' + box.textContent);
+    ok(!pb.w.document.getElementById('fix-send').disabled, '★選んだのに押せない★');
+    console.log('     実測: ' + box.textContent);
+  });
+
+  const sendBtn = pb.w.document.getElementById('fix-send');
+  if (sendBtn && !sendBtn.disabled) sendBtn.click();
+  await wait(); await wait();
+  T('★★出すと「新しい時刻＝お願い中」＋「元の行は使わない印」で1件★★', () => {
+    const req = pb.fake._store.fixReq, add2 = pb.fake._store.punchAdd;
+    ok(req.length === 1, 'お願いが ' + req.length + '件');
+    ok(add2.length === 1 && add2[0].p_src === 'calendar', '★新しい時刻がお願い扱いで入っていない★');
+    ok(add2[0].p_kind === 'out', '種類が変わっている: ' + add2[0].p_kind);
+    ok((req[0].p_void_ids || []).length === 1, '★元の行に「使わない」印を渡していない★');
+    ok(req[0].p_punch_ids.length === 1, '新しい時刻をお願いに載せていない');
+    ok(!pb.fake._calls.some((c) => /tc_punch\.delete/.test(c)), '★打刻を消している★');
+    console.log('     実測: お願い1件（新しい時刻1本＋使わない印1本）／消した打刻 0本');
+  });
+}
+
 /* ── ★社長の「承認する前に どうなるか」★（★使わない印のお願いも数に入る★・2026-08-18） ── */
 {
   const p = openPage('index.html', '', { fixVoid: true });

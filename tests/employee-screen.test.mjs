@@ -115,7 +115,8 @@ T('★倉庫のRPCが 時刻しか返さない（画面を作り直しても漏�
   ok(m, 'tc_my_punches が読めない');
   const body = m[1];
   const keys = (body.match(/'([a-z_]+)',\s*[a-z_(]/g) || []).map((s) => s.split("'")[1]);
-  const allowed = new Set(['id', 'at', 'kind', 'src', 'pending', 'punches', 'name', 'unauth']);
+  /* 2026-08-18 ★ok_types★ を足した＝「この時刻で合っている」と答えた印（時刻の話・数えた結果ではない） */
+  const allowed = new Set(['id', 'at', 'kind', 'src', 'pending', 'ok_types', 'punches', 'name', 'unauth']);
   const extra = keys.filter((k) => !allowed.has(k));
   ok(extra.length === 0, '★時刻以外を返している: ' + extra.join(', ') + '★');
   /* 数える言葉がSQLの返り値に混ざっていないか（min / total などの名前も見る） */
@@ -131,7 +132,7 @@ T('★従業員が触れるRPCの一覧に「数える物」が無い（anon に
   /* 2026-08-18 ★tc_punch_undo★（打った直後60秒だけ 自分で取り消す）を足した。
      ★返すのは ok / 断った理由だけ★＝数えた結果は1つも返さない。 */
   const allowed = ['tc_auth', 'tc_pin_set', 'tc_verify', 'tc_punch_add', 'tc_punch_undo',
-    'tc_my_punches', 'tc_fix_request', 'tc_pub_info'];
+    'tc_punch_ok', 'tc_my_punches', 'tc_fix_request', 'tc_pub_info'];
   const extra = names.filter((n) => allowed.indexOf(n) < 0);
   ok(extra.length === 0, '想定外のRPCを従業員に渡している: ' + extra.join(', '));
   console.log('     実測: 従業員が呼べるRPC ' + names.length + '本（' + names.join(' / ') + '）');

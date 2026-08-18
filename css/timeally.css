@@ -252,6 +252,18 @@ table.tc td.warn { color: #B3261E; }
 /* ★時刻の欄は 幅いっぱいにしない★（すぐ右のボタンと1行に並べる。字は16pxのまま） */
 .tc-askpick input { display: inline-block; width: auto; margin-right: 8px; }
 
+/* ★打刻の行を押すと「この時刻を直す」が開く★（2026-08-18 司さん「時刻を間違えた時」）
+   ★行そのものを押せる物にする★（別の所へ探しに行かせない）。 */
+.tc-punchrow { border-bottom: 1px dotted #F0E0B8; }
+.tc-rowbtn {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  min-height: 44px; padding: 4px 2px;
+  background: none; border: 0; font: inherit; color: #2B2418; text-align: left; cursor: pointer;
+}
+.tc-rowbtn .tc-punchline { flex: 1 1 auto; }
+.tc-rowbtn .tc-caret { flex: 0 0 auto; font-size: 12px; color: #8F6200; }
+.tc-rowbtn[aria-expanded='true'] { background: #FFE08A; }
+
 /* ── ★1人1行★（従業員が増えても画面が伸びない・2026-08-16 司さんの指摘） ──
    前は 1人 194px（390×844 に ★2人★しか入らなかった＝実測）。
    ★氏名＋状態＋「›」だけ★にして、押した人の分だけ 下を開く。 */

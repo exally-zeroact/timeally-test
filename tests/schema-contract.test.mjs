@@ -203,22 +203,25 @@ T('★upsert の onConflict が 実在する一意制約と合っている', () 
    ＝★打った直後60秒だけ 自分で取り消せる★（★消す道ではない★＝voided_at の印を立てるだけ・行は残る）。
    ★門は倉庫の側★（自分の物・その場の打刻・60秒以内・まだ取り消していない・締めていない）。
    足した理由: 司さん「ミスがあったからの対処やなく、ミスのないような対処をさせろ」 */
+/* 2026-08-18（夜）★tc_punch_ok★ を1本 足した（8→9本）
+   ＝機械が「長すぎ/短すぎ/退勤が先」に気づいて聞いた事に ★合っていると答える★口。
+   ★印を1つ足すだけ＝打刻は1文字も動かない★（二度と聞かない為）。 */
 export const PUBLIC_RPCS = ['tc_auth', 'tc_fix_request', 'tc_my_punches', 'tc_pin_set',
-  'tc_pub_info', 'tc_punch_add', 'tc_punch_undo', 'tc_verify'];
+  'tc_pub_info', 'tc_punch_add', 'tc_punch_ok', 'tc_punch_undo', 'tc_verify'];
 /* 部屋の中の補助（★definer にしない★＝決まりを素通りできない）
    tc_ok        … 端末記憶 or 暗証番号（RPC 3本から呼ぶ）
    tc_period_ym … その日が どの締めに入るか（2026-08-15）
    tc_state     … 受付中/締め待ち/確定（2026-08-15・★画面と同じ線を倉庫でも引く★） */
 export const INNER_FUNCS = ['tc_ok', 'tc_period_ym', 'tc_state'];
 
-T('★★関数は11本（public 8本＝全部 definer / 部屋の中 3本＝1つも definer でない）★★', () => {
+T('★★関数は12本（public 9本＝全部 definer / 部屋の中 3本＝1つも definer でない）★★', () => {
   const pub = (SQL.match(/create or replace function public\.(tc_[a-z_]+)/g) || [])
     .map((s) => s.split('.')[1]).sort();
   const inner = (SQL.match(/create or replace function timeally\.(tc_[a-z_]+)/g) || [])
     .map((s) => s.split('.')[1]).sort();
   eq(pub.join(','), PUBLIC_RPCS.join(','), '★public の関数が増減している★: ' + pub.join(','));
   eq(inner.join(','), INNER_FUNCS.slice().sort().join(','), '★部屋の中の関数が増減している★: ' + inner.join(','));
-  eq(pub.length + inner.length, 11, '関数の合計が11本でない');
+  eq(pub.length + inner.length, 12, '関数の合計が12本でない');
 
   /* ★definer かどうかを1本ずつ見る★（definer は決まりを素通りできる） */
   const bodies = SQL.split('create or replace function ').slice(1);
@@ -230,9 +233,10 @@ T('★★関数は11本（public 8本＝全部 definer / 部屋の中 3本＝1�
   });
 
   /* ★tc_ok は RLS ではなく RPC の中から呼ばれている★（呼び元を数える） */
-  /* 2026-08-18 ★tc_punch_undo★ が増えて 4本になった（打刻を入れる/取り消す/読む/直しを出す） */
+  /* 2026-08-18 ★tc_punch_undo と tc_punch_ok★ が増えて 5本になった
+     （打刻を入れる／取り消す／合っていると答える／読む／直しを出す） */
   const calls = (SQL.match(/timeally\.tc_ok\(/g) || []).length - 1;   // 定義の1回を引く
-  eq(calls, 4, 'tc_ok の呼び元が ' + calls + '箇所（4本のRPCのはず）');
+  eq(calls, 5, 'tc_ok の呼び元が ' + calls + '箇所（5本のRPCのはず）');
   ok(!/create policy[\s\S]{0,300}tc_ok/.test(SQL), '★tc_ok を決まり(RLS)から呼んでいる★');
   console.log('     実測: public ' + pub.length + '本(全部definer) / 部屋の中 ' + inner.length
     + '本(definerでない) / tc_ok の呼び元 ' + calls + 'か所（RPCの中）');
