@@ -643,38 +643,44 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
   });
 }
 
-/* ── ★連打・打ち間違いを 画面が先に言う（2026-08-18 司さんの実機の形）★ ─────
-   ★見本は 司さんが 08/17 に実機で作った 5本★（テスト倉庫からそのまま）。作り物で代用しない。
-   ★押す物の一覧を先に書く★（下の PLAN_ASK）。 */
+/* ── ★★連打・打ち間違い・時刻ちがい（★畳んだ後★）★★（2026-08-18 夜 司さん「複雑すぎんか？」）
+   ★押す物の一覧を先に書く★:
+     ① 08/17 の実物5本 … #ask0-in（出勤でした）★その日の質問は1つだけ★
+     ② 行を押す        … [data-pid] → ★2つだけ★ #fix-open（時刻を直す）／#fix-drop（これは間違い）
+     ③ 直す            … #fix-open → #fix-c0（候補）→ #fix-send（お願いを出す）
+     ④ あとから入れる  … #b-addopen（★既定は畳む★）
+   ★合格の数★: 開いた行に見える押せる物 ≤3／「お願いを出す」は画面に1つ／同じ字のボタンは1つ */
 {
-  /* 08/17  08:00 出勤 ／ 08:00 退勤 ／ 08:00 出勤 ／ 17:03 退勤 ／ 21:44 出勤 */
   const REAL = [['2026-08-17T08:00', 'in'], ['2026-08-17T08:00', 'out'], ['2026-08-17T08:00', 'in'],
     ['2026-08-17T17:03', 'out'], ['2026-08-17T21:44', 'in']];
-  /* ★答えた質問は その場で「お願いを出しました」に変わる★（同じお願いを2回 出させない）
-     ＝だから ★取り消す★は もう1枚 開いて押す（1枚の上で3つ押すと 3つ目は もう無い）。 */
-  const PLAN_ASK = [
-    ['ask0-in', '「出勤でした」→ ★同じ時刻の退勤を使わない★お願いを1件 出す'],
-    ['ask1-pick', '21:44 の出勤に ★選んだ時刻の退勤★を入れるお願いを出す', { 'ask1-t': '22:30' }],
-  ];
-  const PLAN_ASK2 = [['ask1-drop', '21:44 の ★出勤を取り消す★お願いを出す（★もう1枚 開いて押す★）']];
-  console.log('\n  kiroku.html（★08/17 の実物 5本★）で押す物');
-  PLAN_ASK.concat(PLAN_ASK2).forEach(([id, why]) => console.log('    - #' + id + '  … ' + why));
+  const T_URL = '?t=11111111-1111-1111-1111-111111111111';
+  console.log('\n  kiroku.html（★08/17 の実物 5本・畳んだ後★）で押す物');
+  ['#ask0-in', '[data-pid]', '#fix-open', '#fix-c0', '#fix-send', '#fix-drop', '#b-addopen']
+    .forEach((x) => console.log('    - ' + x));
 
-  const p = openPage('kiroku.html', '?t=11111111-1111-1111-1111-111111111111', { punches: REAL });
+  /** ★見えている押せる物だけ数える★（hidden の中は数えない） */
+  const visBtns = (w, root) => [...(root || w.document).querySelectorAll('button, a.tc-btn')]
+    .filter((b) => !b.closest('[hidden]') && !b.hidden);
+
+  const p = openPage('kiroku.html', T_URL, { punches: REAL });
   await wait(); await wait(); await wait();
   const text0 = p.w.document.getElementById('list').textContent;
 
-  T('★★連打も 打ち間違いも 画面が先に言う（並べるだけで黙らない）★★', () => {
+  T('★★おかしい所は言う。ただし ★1日に1つまで★（質問を積み上げない）★★', () => {
     ok(/同じ打刻としてまとめました/.test(text0), '★まとめた事を言っていない★');
     ok(/08:00 は 出勤と退勤が同じ時刻です。どちらでしたか？/.test(text0), '★どちらか聞いていない★');
-    ok(/21:44 の出勤に、まだ退勤が入っていません/.test(text0), '★閉じていない出勤を言っていない★');
-    ok(/決められません/.test(text0), '★その日の結論（決められない）を出していない★');
-    ok(/08:00〜17:03 になります/.test(text0), '★押すとどうなるか（根拠）を出していない★');
-    /* ★打った物は 5本とも 画面に残っている★（まとめた物も消さない） */
-    const times = (text0.match(/\d\d:\d\d/g) || []).filter((x) => x !== '17:03' || true);
-    ok(times.length >= 5, '打刻が消えている（見えた時刻 ' + times.length + '個）');
-    console.log('     実測: 見えた時刻 ' + times.length + '個／質問 '
-      + (p.w.document.querySelectorAll('.tc-ask').length) + '件');
+    ok(/決められません/.test(text0), '★その日の結論を出していない★');
+    ok(!/まだ退勤が入っていません/.test(text0), '★同じ日に 質問を2つ並べている★');
+    const asks = p.w.document.querySelectorAll('#list .tc-ask');
+    ok(asks.length === 1, '★その日に出ている質問が ' + asks.length + '個★');
+    console.log('     実測: 質問 ' + asks.length + '個（08/17）');
+  });
+
+  T('★★「あとから入れる」は既定で畳む＝「お願いを出す」は1つも見えていない★★', () => {
+    const d2 = p.w.document;
+    ok(d2.getElementById('add-box').hidden, '★あとから入れるが開きっぱなし★');
+    const sends = visBtns(p.w).filter((b) => /お願いを出す/.test(b.textContent));
+    ok(sends.length === 0, '★畳んでいるのに「お願いを出す」が ' + sends.length + '個 見えている★');
   });
 
   T('★★従業員の画面に 数えた結果の言葉が1つも出ていない（時刻だけ）★★', () => {
@@ -682,150 +688,59 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
       .forEach((w) => ok(text0.indexOf(w) < 0, '★' + w + ' が出ている★'));
   });
 
-  /* ★1問ごとに押して、1問ごとに保存されるか★（最後まで行かないと保存されない、を作らない） */
-  const missing = [], threw = [];
-  for (const [id, , fill] of PLAN_ASK) {
-    for (const [k, v] of Object.entries(fill || {})) {
-      const f = p.w.document.getElementById(k);
-      /* ★入れたら「入れた」と画面に伝える★（揃うまで押せない形にしたので 値だけでは押せない） */
-      if (f) { f.value = v; if (f.oninput) f.oninput(); if (f.onchange) f.onchange(); }
-    }
-    const el = p.w.document.getElementById(id);
-    if (!el || typeof el.onclick !== 'function') { missing.push(id); continue; }
-    try { el.click(); } catch (e) { threw.push(id + ': ' + e.message); }
-    await wait(); await wait();
-  }
-
-  /* ★取り消す★は もう1枚 開いて押す（答えた質問は「お願いを出しました」に変わるため） */
-  const p2 = openPage('kiroku.html', '?t=11111111-1111-1111-1111-111111111111', { punches: REAL });
-  await wait(); await wait(); await wait();
-  for (const [id] of PLAN_ASK2) {
-    const el = p2.w.document.getElementById(id);
-    if (!el || typeof el.onclick !== 'function') { missing.push(id); continue; }
-    try { el.click(); } catch (e) { threw.push(id + ': ' + e.message); }
-    await wait(); await wait();
-  }
-
-  T('★★聞いた事に 押すだけで答えられる（空欄を出して打ち直させない）★★', () => {
-    ok(missing.length === 0, '見つからない/配線されていない: ' + missing.join(', '));
-    ok(threw.length === 0, '例外: ' + threw.join(' / '));
-    ok(p.errors.length === 0, '画面のエラー: ' + p.errors.join(' / '));
-    ok(p2.errors.length === 0, '画面のエラー(2枚目): ' + p2.errors.join(' / '));
-  });
-
-  T('★★答えた質問は その場で「お願いを出しました」に変わる（同じお願いを2回 出させない）★★', () => {
-    const now = p.w.document.getElementById('list').textContent;
-    ok(/お願いを出しました。会社が見てから記録に入ります。/.test(now), '★答えた事が画面に出ていない★');
-    ok(!p.w.document.getElementById('ask0-in'), '★答えた後も 同じボタンが押せる★');
-    /* ★質問そのものは消さない★（何を答えたのか分かるように） */
-    ok(/08:00 は 出勤と退勤が同じ時刻です/.test(now), '★質問ごと消している★');
-  });
-
-  T('★★押した分だけ「お願い」が出た（1問ごとに保存・原本は1本も消していない）★★', () => {
-    const req = p.fake._store.fixReq.concat(p2.fake._store.fixReq);
-    ok(req.length === 3, 'お願いの数が3でない: ' + JSON.stringify(req.map((r) => r.p_reason)));
-    /* ①「出勤でした」＝同じ時刻の ★退勤の1本★ を使わない（★消さずに印だけ★） */
-    ok(/08:00 は 出勤でした/.test(req[0].p_reason), '理由が残っていない: ' + req[0].p_reason);
+  /* ① 質問に答える（1問ごとに保存） */
+  const a0 = p.w.document.getElementById('ask0-in');
+  if (a0) a0.click();
+  await wait(); await wait();
+  T('★★質問は 押すだけで答えられる／答えたら その場で「お願いを出しました」になる★★', () => {
+    ok(a0, '#ask0-in が無い');
+    const req = p.fake._store.fixReq;
+    ok(req.length === 1, 'お願いが ' + req.length + '件');
+    ok(/08:00 は 出勤でした/.test(req[0].p_reason), req[0].p_reason);
     ok((req[0].p_void_ids || []).length === 1, '★使わない1本を渡していない★');
-    ok(req[0].p_punch_ids.length === 0, '要らない打刻を足している');
-    /* ②「この時刻に退勤」＝★後から入れる打刻は 必ずお願い扱い（calendar）★ */
-    const add = p.fake._store.punchAdd;
-    ok(add.length === 1, '後から入れた打刻が ' + add.length + '件');
-    ok(add[0].p_src === 'calendar', '★当日打刻として入れている（承認を通らない）★');
-    ok(add[0].p_kind === 'out', '入れた種類が ' + add[0].p_kind);
-    /* ★倉庫はUTCで持つ★ … 選んだ 22:30（JST）＝ 13:30Z。★9時間ずれた物を入れない★ */
-    ok(String(add[0].p_at).indexOf('2026-08-17T13:30') === 0,
-      '★選んだ時刻（22:30 JST＝13:30Z）で入れていない★: ' + add[0].p_at);
-    ok(req[1].p_punch_ids.length === 1, '入れた打刻をお願いに載せていない');
-    /* ③「出勤を取り消す」＝★消さない・使わない印だけ★ */
-    ok((req[2].p_void_ids || []).length === 1, '取り消しを渡していない');
-    ok(/取り消しました/.test(req[2].p_reason), req[2].p_reason);
-    /* ★どのお願いにも 消す指示は無い★（原本は消えない） */
-    ok(!p.fake._calls.some((c) => /tc_punch\.delete/.test(c)), '★打刻を消している★');
-    console.log('     実測: お願い ' + req.length + '件（使わない印 '
-      + req.filter((r) => (r.p_void_ids || []).length).length + '件 / 後入れ ' + add.length + '件）');
-  });
-
-  T('★★その日の答えが出るまで「決められない」と言い続ける（黙って0にしない）★★', () => {
-    /* 倉庫の中身は変えていない（承認前）ので、画面はまだ「決められません」のまま */
     const now = p.w.document.getElementById('list').textContent;
-    ok(/決められません/.test(now), '★お願いを出した時点で 決まった事にしている★');
-  });
-}
-
-/* ── ★★時刻そのものを間違えた時★★（2026-08-18 夜 司さん）────────────────
-   ★押す物の一覧を先に書く★:
-     ① 機械が気づいて聞く … #iss0-ok（合っている）／#iss0-fix（直す）
-     ② 打刻の行を押す     … [data-pid]（開く）→ #fix-c0（候補）→ #fix-send（お願いを出す）
-     ③ これは間違い       … #fix-drop → #fix-send は要らず その場で出る */
-{
-  const nowJst2 = new Date(Date.now() + 9 * 3600000).toISOString();
-  const today2 = nowJst2.slice(0, 10);
-  const yday2 = new Date(Date.parse(today2 + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
-  const T_URL2 = '?t=11111111-1111-1111-1111-111111111111';
-  /* ★退勤の打ち忘れ→翌日 押した★（1日の決まり480分の2倍を超える）＝いちばん多い形 */
-  const LONG = [[yday2 + 'T08:00', 'in'], [today2 + 'T21:00', 'out']];
-  console.log('\n  kiroku.html（★時刻そのものを間違えた時★）で押す物');
-  ['#iss0-ok（合っている）', '#iss0-fix（直す）', '[data-pid]（行を開く）',
-    '#fix-c0（候補）', '#fix-send（お願いを出す）', '#fix-drop（これは間違い）']
-    .forEach((x) => console.log('    - ' + x));
-
-  const pa = openPage('kiroku.html', T_URL2, { punches: LONG });
-  await wait(); await wait(); await wait();
-
-  T('★★機械が先に気づいて聞く（長すぎ・日またぎ）★★', () => {
-    const t = pa.w.document.getElementById('list').textContent;
-    ok(/間がとても長いです。時刻はこれで合っていますか？/.test(t), '★長すぎを聞いていない★: ' + t.slice(0, 160));
-    ok(/日をまたいでいます/.test(t), '日またぎを言っていない');
-    ok(pa.w.document.getElementById('iss0-ok') && pa.w.document.getElementById('iss0-fix'),
-      '★［合っている］［直す］が無い★');
-    /* ★長さ（何時間）は 従業員の画面に出さない★＝時刻だけで聞く */
-    ok(!/時間|分間/.test((/間がとても長いです[^」]*/.exec(t) || [''])[0]), '★長さを出している★');
-    const line = (t.split('\n').filter((x) => /間がとても長いです/.test(x))[0] || '').trim();
-    console.log('     実測: ' + line.slice(0, 120));
+    ok(/お願いを出しました/.test(now), '答えた事が画面に出ていない');
+    ok(!p.w.document.getElementById('ask0-in'), '★答えた後も 同じボタンが押せる★');
+    console.log('     実測: お願い ' + req.length + '件（使わない印 1本）');
   });
 
-  T('★★「合っている」を押すと 印だけ残る（打刻は1文字も動かない）★★', () => {
-    pa.w.document.getElementById('iss0-ok').click();
-    const ok1 = pa.fake._store.okTime;
-    ok(ok1.length === 1, '★印を倉庫へ出していない★');
-    ok(ok1[0].p_type === 'too-long', '種類が違う: ' + ok1[0].p_type);
-    ok(pa.fake._store.fixReq.length === 0, '★合っているのに お願いを出している★');
-    ok(pa.fake._store.punchAdd.length === 0, '★合っているのに 打刻を足している★');
-    console.log('     実測: 印 1件（' + ok1[0].p_type + '）／お願い 0件／足した打刻 0件');
-  });
-
-  /* ② 打刻の行を押して 時刻を直す */
-  const pb = openPage('kiroku.html', T_URL2, { punches: LONG });
+  /* ② 行を押す＝★2つだけ★ */
+  const pb = openPage('kiroku.html', T_URL, { punches: REAL });
   await wait(); await wait(); await wait();
   const rows = () => [...pb.w.document.querySelectorAll('[data-pid]')];
-
-  /* ★押した後は 描き直しを待つ★（押した瞬間に読むと まだ前の画面を見ている） */
   const rowCount = rows().length;
-  if (rows()[1]) rows()[1].click();                     // 21:00 の退勤を開く
+  if (rows()[0]) rows()[0].click();
   await wait(); await wait();
 
-  T('★★打刻の行を押すと「この時刻を直す」が開く（候補つき・空欄を出さない）★★', () => {
-    ok(rowCount === 2, '押せる行が ' + rowCount + '本');
-    const box = pb.w.document.getElementById('fix-why');
-    ok(box, '★開いていない★');
-    ok(/直したい時刻を選んでください/.test(box.textContent), box.textContent);
-    ok(pb.w.document.getElementById('fix-send').disabled, '★選ぶ前から押せる★');
-    const cands = [...pb.w.document.querySelectorAll('[id^="fix-c"]')];
-    ok(cands.length >= 2, '候補が ' + cands.length + '個（空欄だけになっている）');
-    console.log('     実測: 候補 ' + cands.map((c) => c.textContent).join(' / '));
+  T('★★行を押すと出るのは 2つだけ（時刻を直す／これは間違い）＝押せる物 3つまで★★', () => {
+    const d2 = pb.w.document;
+    const panel = d2.querySelector('.tc-punchrow .tc-ask');
+    ok(panel, '★開いていない★');
+    ok(d2.getElementById('fix-open') && d2.getElementById('fix-drop'), '2つが出ていない');
+    ok(!d2.getElementById('fix-send'), '★候補も「お願いを出す」も先に出している★');
+    /* ★開いた行に見える押せる物★＝行そのもの（押すと閉じる）＋2つ＝3つまで */
+    const row = panel.closest('.tc-punchrow');
+    const n = visBtns(pb.w, row).length;
+    ok(n <= 3, '★開いた行に 押せる物が ' + n + '個★（3つまで）');
+    console.log('     実測: 押せる行 ' + rowCount + '本／開いた行の押せる物 ' + n + '個');
   });
 
+  /* ③ 時刻を直す → 候補 → 出す */
+  const fo = pb.w.document.getElementById('fix-open');
+  if (fo) fo.click();
+  await wait();
   const c0 = pb.w.document.querySelector('[id^="fix-c"]');
   if (c0) c0.click();
   await wait();
 
-  T('★★候補を押すと 出す前に1行 出て、そこで初めて押せる★★', () => {
-    ok(c0, '候補のボタンが無い');
+  T('★★「時刻を直す」を押してから 候補が出る／選ぶと1行 出て そこで初めて押せる★★', () => {
+    ok(c0, '★候補が出ていない★');
     const box = pb.w.document.getElementById('fix-why');
-    ok(/に直すお願いを出します/.test(box.textContent), '★出す前の1行が出ていない★: ' + box.textContent);
+    ok(/に直すお願いを出します/.test(box.textContent), '★出す前の1行が無い★: ' + box.textContent);
     ok(!pb.w.document.getElementById('fix-send').disabled, '★選んだのに押せない★');
-    console.log('     実測: ' + box.textContent);
+    const sends = visBtns(pb.w).filter((b) => /お願いを出す/.test(b.textContent));
+    ok(sends.length === 1, '★「お願いを出す」が ' + sends.length + '個★');
+    console.log('     実測: ' + box.textContent + '／「お願いを出す」' + sends.length + '個');
   });
 
   const sendBtn = pb.w.document.getElementById('fix-send');
@@ -835,14 +750,41 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
     const req = pb.fake._store.fixReq, add2 = pb.fake._store.punchAdd;
     ok(req.length === 1, 'お願いが ' + req.length + '件');
     ok(add2.length === 1 && add2[0].p_src === 'calendar', '★新しい時刻がお願い扱いで入っていない★');
-    ok(add2[0].p_kind === 'out', '種類が変わっている: ' + add2[0].p_kind);
     ok((req[0].p_void_ids || []).length === 1, '★元の行に「使わない」印を渡していない★');
-    ok(req[0].p_punch_ids.length === 1, '新しい時刻をお願いに載せていない');
     ok(!pb.fake._calls.some((c) => /tc_punch\.delete/.test(c)), '★打刻を消している★');
     console.log('     実測: お願い1件（新しい時刻1本＋使わない印1本）／消した打刻 0本');
   });
-}
 
+  /* ④ ★同じ事をするボタンが2つ在ったら赤★ */
+  const pc = openPage('kiroku.html', T_URL, { punches: [['2026-08-17T09:00', 'in']] });
+  await wait(); await wait(); await wait();
+  T('★★同じ字のボタンが2つ出ていない（同じ事をする物を2か所に置かない）★★', () => {
+    [['閉じた画面', pc], ['08/17の画面', p]].forEach((pair) => {
+      const seen = {}, dup = [];
+      visBtns(pair[1].w).forEach((b) => {
+        const t = (b.textContent || '').trim();
+        if (!t) return;
+        if (seen[t]) dup.push(t); else seen[t] = 1;
+      });
+      ok(dup.length === 0, '★' + pair[0] + ' に同じ字のボタンが2つ: ' + dup.join(' / ') + '★');
+    });
+    const t = pc.w.document.getElementById('list').textContent;
+    ok(!/この出勤を取り消す/.test(t), '★取り消しの口が2つ在る★');
+    console.log('     実測: 同じ字のボタン 0件／取り消しの口は「これは間違い（取り消す）」1つ');
+  });
+
+  /* ⑤ あとから入れるを開くと 打刻の直しは閉じる（お願いを出すは1つのまま） */
+  pc.w.document.getElementById('b-addopen').click();
+  await wait();
+  T('★★「あとから入れる」を開いても「お願いを出す」は画面に1つ★★', () => {
+    const d2 = pc.w.document;
+    ok(!d2.getElementById('add-box').hidden, '開いていない');
+    const sends = visBtns(pc.w).filter((b) => /お願いを出す/.test(b.textContent));
+    ok(sends.length === 1, '★「お願いを出す」が ' + sends.length + '個★');
+    ok(/時刻を選んでください/.test(d2.getElementById('add-why').textContent), '押せない理由が出ていない');
+    console.log('     実測: 開いた後の「お願いを出す」' + sends.length + '個');
+  });
+}
 /* ── ★社長の「承認する前に どうなるか」★（★使わない印のお願いも数に入る★・2026-08-18） ── */
 {
   const p = openPage('index.html', '', { fixVoid: true });

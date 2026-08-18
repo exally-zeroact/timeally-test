@@ -355,6 +355,15 @@
       q('b-prev').onclick = function () { shift(-1); };
       q('b-next').onclick = function () { shift(1); };
       q('b-add').onclick = addLater;
+      /* ★あとから入れるは 既定で畳む★（押した時だけ開く・開いたら打刻の直しは閉じる） */
+      var ao = q('b-addopen');
+      if (ao) {
+        ao.onclick = function () {
+          _addOpen = !_addOpen;
+          if (_addOpen) { _openPid = null; _fixStep = 'menu'; draw(); }
+          drawAdd();
+        };
+      }
       /* ★D★ 日・時刻・どれ が揃うまで「お願いを出す」は押せない＋出す前に1行 見せる */
       ['at', 'ak', 'ar'].forEach(function (id) {
         var el = q(id);
@@ -390,6 +399,8 @@
   function askKey(a) { return a.type + '@' + a.at; }
   /* ★時刻そのものを直す★ … 開いている打刻／機械が見つけた分／自分の打刻ぜんぶ */
   var _openPid = null;
+  var _fixStep = 'menu';   // ★開いた打刻の段★（menu＝2つだけ／pick＝候補を出す）
+  var _addOpen = false;    // ★「あとから入れる」を開いているか★（既定は畳む）
   var _issues = [];
   var _all = [];
   var _dayStdMin = 0;     // 会社の1日の決まり（tc_pub_info が返す。長すぎの線に使う）
@@ -410,15 +421,15 @@
       rows = btn('ask' + n + '-in', '出勤でした', global.TcClean.previewOf(res, a, 'in'))
         + btn('ask' + n + '-out', '退勤でした', global.TcClean.previewOf(res, a, 'out'));
     } else if (a.type === 'open-in') {
-      /* ★「今 退勤にする」は 今日の分だけ★（前の日に「今」を入れると 日をまたぐ形になる） */
+      /* ★「今 退勤にする」は 今日の分だけ★（前の日に「今」を入れると 日をまたぐ形になる）
+         ★「この出勤を取り消す」はここに置かない★（2026-08-18 夜 司さん「複雑すぎんか？」）
+         ＝打刻の行を押した中の［これは間違い（取り消す）］と ★同じ事をする物が2つ★になる。 */
       rows = (a.soft ? btn('ask' + n + '-now', '今 退勤にする', '') : '')
         + '<span class="tc-askpick"><input type="time" step="60" id="ask' + n + '-t" />'
-        + btn('ask' + n + '-pick', 'この時刻に退勤', '') + '</span>'
-        + btn('ask' + n + '-drop', 'この出勤を取り消す', '');
+        + btn('ask' + n + '-pick', 'この時刻に退勤', '') + '</span>';
     } else {
       rows = '<span class="tc-askpick"><input type="time" step="60" id="ask' + n + '-t" />'
-        + btn('ask' + n + '-pick', 'この時刻に出勤', '') + '</span>'
-        + btn('ask' + n + '-drop', 'この退勤を取り消す', '');
+        + btn('ask' + n + '-pick', 'この時刻に出勤', '') + '</span>';
     }
     return '<div class="tc-ask">' + head + '<div class="tc-askrow">' + rows + '</div></div>';
   }
@@ -428,22 +439,31 @@
      ・★空欄を出さない★＝候補を先に出す（いつもの時刻／前後15分／いま）
      ・★選ぶまで「お願いを出す」は押せない★（Dと同じ）
      ・★出す前に1行★「8/17 の 08:00 出勤 を 07:30 に直すお願いを出します」 */
-  function fixPanelHtml(p, res) {
+  /* ★出す量を減らす（2026-08-18 夜 司さん「なんか複雑すぎんか？」）★
+     ・開いた時に出るのは ★2つだけ★（時刻を直す／これは間違い）
+     ・★候補は「時刻を直す」を押してから★出す（＝1画面に押せる物を積まない）
+     ・閉じるのは 行の右端の「×」 */
+  function fixPanelHtml(p) {
     var K = KIND_LABEL[p.kind] || p.kind;
+    var head = '<div class="tc-askq">'
+      + U.esc(global.TcClean.mdOf(global.TcClean.dayOf(p.at)) + ' の '
+        + global.TcClean.hmOf(p.at) + ' ' + K + ' を どうしますか？') + '</div>';
+    if (_fixStep !== 'pick') {
+      return '<div class="tc-ask">' + head + '<div class="tc-askrow">'
+        + '<button class="tc-btn sub" type="button" id="fix-open">時刻を直す</button>'
+        + '<button class="tc-btn danger" type="button" id="fix-drop">これは間違い（取り消す）</button>'
+        + '</div></div>';
+    }
     var cands = global.TcClean.fixCandidates(_all, p, { nowHm: (DB.nowJst() || '').slice(11, 16) });
-    /* ★候補は「時刻（理由）」で1つのボタンにする★（2026-08-18 実配信の画で見た）
-       ＝理由を下の行に出すと ★候補3つで画面が縦に伸びる★。押す物は1行1つに。 */
+    /* ★候補は「時刻（理由）」で1つのボタン★（理由を別の行に出すと 画面が縦に伸びる） */
     var btns = cands.map(function (c, i) {
       return '<button class="tc-btn sub" type="button" id="fix-c' + i + '" data-hm="' + U.esc(c.hm) + '">'
         + U.esc(c.hm + '（' + c.why + '）') + '</button>';
     }).join('');
-    return '<div class="tc-ask">'
-      + '<div class="tc-askq">' + U.esc(global.TcClean.mdOf(global.TcClean.dayOf(p.at)) + ' の '
-        + global.TcClean.hmOf(p.at) + ' ' + K + ' を どうしますか？') + '</div>'
+    return '<div class="tc-ask">' + head
       + '<div class="tc-askrow">' + btns
       + '<span class="tc-askpick"><input type="time" step="60" id="fix-t" />'
       + '<button class="tc-btn sub" type="button" id="fix-pick">この時刻にする</button></span>'
-      + '<button class="tc-btn danger" type="button" id="fix-drop">これは間違い（取り消す）</button>'
       + '</div>'
       + '<div class="tc-note" id="fix-why"></div>'
       + '<p><button class="tc-btn wide" type="button" id="fix-send" disabled>お願いを出す</button></p>'
@@ -481,6 +501,8 @@
       }
       if (send) send.disabled = !ok;
     };
+    var openBtn = q('fix-open');
+    if (openBtn) { openBtn.onclick = function () { _fixStep = 'pick'; draw(); }; }
     Array.prototype.forEach.call(d.querySelectorAll('[id^="fix-c"]'), function (b) {
       b.onclick = function () { picked.hm = b.getAttribute('data-hm'); draw2(); };
     });
@@ -511,6 +533,7 @@
     var day = global.TcClean.dayOf(p.at);
     var done = function () {
       _openPid = null;
+      _fixStep = 'menu';
       U.toast('お願いを出しました。会社が見てから記録に入ります。');
       draw();
     };
@@ -533,6 +556,8 @@
       b.onclick = function () {
         var id = b.getAttribute('data-pid');
         _openPid = (_openPid === id) ? null : id;
+        _fixStep = 'menu';                 // ★開いた時は いつも2つだけ★
+        if (_openPid) { _addOpen = false; drawAdd(); }   // ★「お願いを出す」を画面に1つに★
         draw();
       };
     });
@@ -675,19 +700,28 @@
             + '<button type="button" class="tc-rowbtn" data-pid="' + U.esc(p.id) + '"'
             + ' aria-expanded="' + (_openPid === p.id ? 'true' : 'false') + '">'
             + head + '<span class="tc-caret">' + (_openPid === p.id ? '×' : '直す') + '</span></button>'
-            + (_openPid === p.id ? fixPanelHtml(p, res) : '')
+            + (_openPid === p.id ? fixPanelHtml(p) : '')
             + '</div>';
         }).join('');
-        /* ★その日の結論を1行★（★決められない日は 決められないと出す★・時刻だけ） */
-        var line = '<div class="tc-note' + (info.undecided ? ' warn' : '') + '">'
-          + U.esc(global.TcClean.daySentence(info, day)) + '</div>';
-        var qs = (info.asks || []).map(function (a) {
-          return askHtml(a, _asks.indexOf(a), res);
-        }).join('');
-        /* ★機械が先に気づいて聞く★（長すぎ／短すぎ／退勤が出勤より前）
-           ★［合っている］を押したら 二度と聞かない★（印は倉庫に残る） */
-        qs += _issues.filter(function (x) { return global.TcClean.dayOf(x.at) === day; })
-          .map(function (x) { return issueHtml(x, _issues.indexOf(x)); }).join('');
+        /* ★その日の結論を1行★（★決められない日は 決められないと出す★・時刻だけ）
+           ★言う事が在る日だけ出す★（2026-08-18 夜 司さん「複雑すぎんか？」）
+           ＝出勤と退勤が並んでいる日は ★上の2行を読めば同じ事★。1日44pxを積まない。 */
+        var needLine = info.undecided || (info.asks || []).length || info.merged
+          || (info.pairs || []).some(function (x) { return !x.outAt; });
+        var line = needLine
+          ? '<div class="tc-note' + (info.undecided ? ' warn' : '') + '">'
+            + U.esc(global.TcClean.daySentence(info, day)) + '</div>'
+          : '';
+        /* ★聞く事は 1日に1つまで★（2026-08-18 夜 司さん「複雑すぎんか？」）
+           ＝決められない日に質問を3つ並べないのと ★同じ決め★を 打刻の直しにも当てる。
+           ★先に聞くのは「打った物の食い違い」★（tc-clean の asks）。
+           それが無い日だけ ★機械が見つけた「時刻ちがい」★を1つ出す。 */
+        var one1 = (info.asks || [])[0];
+        var qs = one1 ? askHtml(one1, _asks.indexOf(one1), res) : '';
+        if (!qs) {
+          var iss1 = _issues.filter(function (x) { return global.TcClean.dayOf(x.at) === day; })[0];
+          if (iss1) qs = issueHtml(iss1, _issues.indexOf(iss1));
+        }
         return '<div class="tc-card' + (qs ? ' ask' : '') + '"><div class="tc-cardhead"><b class="num">'
           + U.esc(day.slice(5).replace('-', '/')) + '（' + U.dowOf(day) + '）</b></div>'
           + rows + line + qs + '</div>';
@@ -709,6 +743,12 @@
     };
   }
   function drawAdd() {
+    var box = q('add-box'), open = q('b-addopen');
+    if (box) box.hidden = !_addOpen;
+    if (open) {
+      open.setAttribute('aria-expanded', String(_addOpen));
+      open.textContent = _addOpen ? '閉じる' : 'あとから入れる（打ち忘れた日）';
+    }
     var v = addLater0(), b = q('b-add'), note = q('add-why');
     var msg = '', ok = false;
     if (st.notice) msg = st.notice;                       // 締め切った月は そもそも出せない

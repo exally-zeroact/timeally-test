@@ -46,12 +46,14 @@ fs.mkdirSync(outDir, { recursive: true });
 
 /** アプリを本当に動かして、★描き終わった画面★を返す
  *  after(w) … 描き終わってから押す物（タブを開く など）。押した後の姿を測る。 */
-function render(file, seed, after) {
+function render(file, seed, after, search) {
   const html = fs.readFileSync(path.join(ROOT, file), 'utf8');
   const locals = [...html.matchAll(/<script src="((?!https?:)[^"]+)"/g)].map((m) => m[1].split('?')[0]);
   const inline = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
   const dom = new JSDOM(html.replace(/<script[\s\S]*?<\/script>/g, ''), {
-    url: 'https://timeally-test.vercel.app/' + file, pretendToBeVisual: true, virtualConsole: new VirtualConsole(),
+    /* ★従業員の画面は ?t=（入口のリンク）が無いと 何も出ない★ */
+    url: 'https://timeally-test.vercel.app/' + file + (search || ''),
+    pretendToBeVisual: true, virtualConsole: new VirtualConsole(),
   });
   const w = dom.window;
   w.supabase = { createClient: () => createFake(seed) };
@@ -464,5 +466,66 @@ const rights = [...new Set(inBar.map((n) => n.right))];
 say(inBar.length === 0 || rights.length === 1,
   '帯の中の行き来ボタンは ★全画面で同じ右端★（実測 ' + (rights.join('/') || '無し') + 'px・' + inBar.length + '個）');
 
+
+/* ── ⑦ ★記録の画面は 1画面に収まるか★（2026-08-18 夜 司さん「なんか複雑すぎんか？」）
+   ★合格の数（指示役）★:
+     ・打刻5本＋質問1つが ★幅390の1画面（844px）に収まる★
+     ・★開いた行に見える押せる物は 3つまで★
+     ・★「お願いを出す」は画面に1つ★（畳んでいる時は0）
+   ★窓の大きさでは測れない★ので 枠(iframe)の中で測る（Chromeは526pxより狭くできない）。 */
+console.log('\n⑦ 記録の画面（畳んだ後）');
+const KIROKU_PROBE = VISIBLE + `
+  var list = document.getElementById("list");
+  var rows = [].slice.call(document.querySelectorAll("#list .tc-punchrow")).filter(vis);
+  var rowTexts = rows.map(function(e){ return (e.textContent||"").trim().slice(0, 20); });
+  var asks = [].slice.call(document.querySelectorAll("#list .tc-ask")).filter(vis);
+  var btns = [].slice.call(document.querySelectorAll("button, a.tc-btn")).filter(vis);
+  var sends = btns.filter(function(b){ return /お願いを出す/.test(b.textContent); });
+  var r = list.getBoundingClientRect();
+  /* ★1画面に収まるか★＝記録の箱の一番下が 画面の高さの中に在るか */
+  return {
+    w: document.documentElement.clientWidth,
+    rows: rows.length, rowTexts: rowTexts, asks: asks.length,
+    listBottom: Math.round(r.bottom), screenH: window.innerHeight,
+    btns: btns.length, sends: sends.length,
+    addHidden: !!document.getElementById("add-box").hidden
+  };
+`;
+/* ★打刻5本＋質問1つ★（4日ぶん＝5本／最後の日は 出勤だけ＝質問が1つ出る） */
+const K5 = [['2026-08-14T09:00', 'in'], ['2026-08-14T18:00', 'out'],
+  ['2026-08-15T09:00', 'in'], ['2026-08-15T18:00', 'out'], ['2026-08-16T09:00', 'in']];
+const kh = await render('kiroku.html', { punches: K5 }, null, '?t=11111111-1111-1111-1111-111111111111');
+const k390 = measure('kiroku-390', kh, 390, KIROKU_PROBE);
+console.log('      並び: ' + JSON.stringify(k390.rowTexts));
+console.log('    実測: 打刻 ' + k390.rows + '本／質問 ' + k390.asks + '個／記録の下端 '
+  + k390.listBottom + 'px（画面 ' + k390.screenH + 'px）／押せる物 ' + k390.btns + '個');
+say(k390.rows >= 5, '★打刻が5本 出ている★（実測 ' + k390.rows + '本）');
+say(k390.asks === 1, '★質問は1つだけ★（実測 ' + k390.asks + '個）');
+say(k390.listBottom <= k390.screenH,
+  '★打刻5本＋質問1つが 1画面に収まる★（実測 下端 ' + k390.listBottom + 'px ≦ ' + k390.screenH + 'px）');
+say(k390.sends === 0 && k390.addHidden,
+  '★畳んでいる時は「お願いを出す」が0個★（実測 ' + k390.sends + '個／あとから入れるは畳み='
+  + k390.addHidden + '）');
+
+/* ★行を1つ開いた時★＝押せる物は3つまで／「お願いを出す」はまだ出さない */
+const khOpen = await render('kiroku.html', { punches: K5 }, (w) => {
+  const b = w.document.querySelector('[data-pid]');
+  if (b) b.click();
+}, '?t=11111111-1111-1111-1111-111111111111');
+const kOpen = measure('kiroku-390-open', khOpen, 390, VISIBLE + `
+  var row = document.querySelector(".tc-punchrow .tc-ask");
+  var box = row ? row.closest(".tc-punchrow") : null;
+  var inRow = box ? [].slice.call(box.querySelectorAll("button, a.tc-btn")).filter(vis) : [];
+  var sends = [].slice.call(document.querySelectorAll("button")).filter(vis)
+    .filter(function(b){ return /お願いを出す/.test(b.textContent); });
+  return { w: document.documentElement.clientWidth, opened: !!box,
+    inRow: inRow.length, labels: inRow.map(function(b){ return (b.textContent||"").trim(); }),
+    sends: sends.length };
+`);
+console.log('    実測: 開いた行の押せる物 ' + kOpen.inRow + '個 '
+  + JSON.stringify(kOpen.labels) + '／「お願いを出す」' + kOpen.sends + '個');
+say(kOpen.opened, '★行を押すと開く★');
+say(kOpen.inRow <= 3, '★開いた行に見える押せる物は3つまで★（実測 ' + kOpen.inRow + '個）');
+say(kOpen.sends === 0, '★開いただけでは「お願いを出す」を出さない★（実測 ' + kOpen.sends + '個）');
 console.log('\n' + (ng ? '★' + ng + '件 直っていません★' : '★全部 決まりどおり★') + '\n');
 process.exit(ng ? 1 : 0);
