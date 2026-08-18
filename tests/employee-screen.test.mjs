@@ -139,14 +139,28 @@ T('★従業員が触れるRPCの一覧に「数える物」が無い（anon に
   console.log('     実測: 従業員が呼べるRPC ' + names.length + '本（' + names.join(' / ') + '）');
 });
 
-T('★あとから入れた分は必ず「お願い（申請）」になる（当日打刻と別扱い）', () => {
+/* ★2026-08-18 夜3 司さん「シンプルイズベストでやらして」★
+   ＝★決まりは1つ（自分の打刻は自分で直せる・消せる。締めた後はできない）★。
+   ★お願い・承認・申請は 画面から消した★ が、★跡は必ず中で残す★。 */
+T('★直す・消す・足す は その場で入る／★跡は必ず残る★（画面に「お願い/承認」の言葉が0件）', () => {
   const sql = fs.readFileSync(path.join(ROOT, 'supabase/schema.sql'), 'utf8');
-  ok(/when v_src='punch' then now\(\) else null end/.test(sql),
-    "★calendar で入れた物に approved_at が入っている＝申請にならない★");
-  const app = fs.readFileSync(path.join(ROOT, 'js/emp-app.js'), 'utf8');
-  ok(/'calendar'/.test(app), '画面が calendar として送っていない');
-  const html = fs.readFileSync(path.join(ROOT, 'kiroku.html'), 'utf8');
-  ok(/tc-tag pending/.test(html), '★当日打刻と見た目で分けていない★');
+  const m = /create or replace function public\.tc_punch_edit[\s\S]*?\$\$([\s\S]*?)\$\$/.exec(sql);
+  ok(m, 'tc_punch_edit が読めない');
+  const body = m[1];
+  /* ★元の行は消さない（印だけ）★／★跡を tc_fix に残す★／★締めた月は断る★ */
+  ok(/set voided_at = now\(\)/.test(body), '★元の行に印を付けていない★');
+  ok(!/delete\s+from/i.test(body), '★消している★');
+  ok(/insert into timeally\.tc_fix/.test(body), '★跡を残していない★');
+  ok(/if v_st = 'closed' then return/.test(body), '★締めた月を断っていない★');
+  /* ★画面の言葉★ … 人が覚えるのは「直す・消す・足す」だけ */
+  const words = ['お願い', '承認', '申請', '会社に出す'];
+  const bad = [];
+  ['kiroku.html', 'punch.html', 'js/emp-app.js'].forEach((f) => {
+    const t = visibleText(fs.readFileSync(path.join(ROOT, f), 'utf8'), /\.html$/.test(f));
+    words.forEach((w) => { if (t.indexOf(w) >= 0) bad.push(f + ' → 「' + w + '」'); });
+  });
+  ok(bad.length === 0, '★画面に残っている言葉: ' + bad.join(' / ') + '★');
+  console.log('     実測: 「お願い/承認/申請/会社に出す」 0件／跡は tc_fix に残す');
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

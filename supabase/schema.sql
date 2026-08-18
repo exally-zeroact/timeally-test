@@ -571,41 +571,54 @@ end $$;
 --     ・tc_fix に ★status='approved' / requested_by='employee' / approved_by='employee'★ で1行 残す
 --       ＝会社の画面（直しの箱）に ★「自分で直した」★として出る。誰が・いつ・何を、が消えない。
 create or replace function public.tc_punch_edit(p_token uuid, p_device text, p_pw text,
-                                                p_id uuid, p_at timestamptz, p_reason text)
+                                                p_id uuid, p_at timestamptz, p_kind text, p_reason text)
 returns jsonb language plpgsql security definer set search_path=public, extensions, timeally as $$
-declare v_pub timeally.tc_pub; v_row timeally.tc_punch; v_st text; v_new uuid; v_d date;
+declare v_pub timeally.tc_pub; v_row timeally.tc_punch; v_st text; v_new uuid; v_d date; v_kind text;
 begin
   select * into v_pub from timeally.tc_pub where token=p_token;
   if v_pub.token is null or not v_pub.active then return jsonb_build_object('ok',false,'unauth',true); end if;
   if not timeally.tc_ok(v_pub, p_device, p_pw) then return jsonb_build_object('ok',false,'unauth',true); end if;
-  select * into v_row from timeally.tc_punch
-   where id = p_id and account_id = v_pub.account_id and employee_id = v_pub.employee_id;
-  if v_row.id is null then return jsonb_build_object('ok',false,'not_mine',true); end if;
-  if v_row.voided_at is not null then return jsonb_build_object('ok',false,'already',true); end if;
-  v_d := ((v_row.at at time zone 'Asia/Tokyo')::date);
+  -- ★足す（p_id が無い）★ … 打ち忘れた分も ★その場で入る★（2026-08-18 夜3 司さん）
+  --   ＝人が覚える言葉は「直す・消す・足す」の3つだけ。お願い・承認は もう出さない。
+  if p_id is null then
+    if p_at is null or p_kind not in ('in','out','break_in','break_out','away_in','away_out') then
+      return jsonb_build_object('ok',false,'bad_kind',true); end if;
+    v_d := ((p_at at time zone 'Asia/Tokyo')::date);
+  else
+    select * into v_row from timeally.tc_punch
+     where id = p_id and account_id = v_pub.account_id and employee_id = v_pub.employee_id;
+    if v_row.id is null then return jsonb_build_object('ok',false,'not_mine',true); end if;
+    if v_row.voided_at is not null then return jsonb_build_object('ok',false,'already',true); end if;
+    v_d := ((v_row.at at time zone 'Asia/Tokyo')::date);
+  end if;
   v_st := timeally.tc_state(v_pub.account_id, v_d);
   -- ★締めた月は 自分では直せない★（会社に出す道＝tc_fix_request へ回す）
   if v_st = 'closed' then return jsonb_build_object('ok',false,'closed',true,'state',v_st); end if;
   -- ★これから先の時刻は入れない★（原本を汚さない・打刻を入れる時と同じ線）
   if p_at is not null and p_at > now() + interval '5 minutes' then
     return jsonb_build_object('ok',false,'future',true); end if;
-  -- ★直す時は 新しい時刻の行を足す（その場で記録に入る＝approved_at を入れる）★
+  -- ★直す／足す時は 新しい行を1本 足す（その場で記録に入る＝approved_at を入れる）★
   if p_at is not null then
-    if ((p_at at time zone 'Asia/Tokyo')::date) <> v_d then
+    if p_id is not null and ((p_at at time zone 'Asia/Tokyo')::date) <> v_d then
       return jsonb_build_object('ok',false,'other_day',true); end if;
+    v_kind := case when p_id is null then p_kind else v_row.kind end;
     insert into timeally.tc_punch(account_id, employee_id, at, kind, src, device, approved_at)
-    values (v_pub.account_id, v_pub.employee_id, p_at, v_row.kind, 'punch',
+    values (v_pub.account_id, v_pub.employee_id, p_at, v_kind,
+            case when p_id is null then 'calendar' else 'punch' end,
             left(coalesce(p_device,''),64), now())
     returning id into v_new;
   end if;
-  -- ★元の行は消さない。印を立てるだけ★
-  update timeally.tc_punch set voided_at = now() where id = p_id;
+  -- ★元の行は消さない。印を立てるだけ★（足す時は 消す元が無い）
+  if p_id is not null then
+    update timeally.tc_punch set voided_at = now() where id = p_id;
+  end if;
   -- ★跡を残す（会社の画面に出る）★
   insert into timeally.tc_fix(account_id, employee_id, d, before_min, after_min, reason,
                               requested_by, approved_by, approved_at, status, punch_ids, void_ids)
   values (v_pub.account_id, v_pub.employee_id, v_d, null, null, coalesce(p_reason,''),
           'employee', 'employee', now(), 'approved',
-          case when v_new is null then '{}'::uuid[] else array[v_new] end, array[p_id]);
+          case when v_new is null then '{}'::uuid[] else array[v_new] end,
+          case when p_id is null then '{}'::uuid[] else array[p_id] end);
   return jsonb_build_object('ok',true,'id',v_new);
 end $$;
 
@@ -738,7 +751,7 @@ grant execute on function
   public.tc_punch_add(uuid,text,text,timestamptz,text,text),
   public.tc_punch_undo(uuid,text,text,uuid),
   public.tc_punch_ok(uuid,text,text,uuid,text),
-  public.tc_punch_edit(uuid,text,text,uuid,timestamptz,text),
+  public.tc_punch_edit(uuid,text,text,uuid,timestamptz,text,text),
   public.tc_my_punches(uuid,text,text,date,date),
   public.tc_fix_request(uuid,text,text,date,int,int,text,uuid[],uuid[]),
   public.tc_pub_info(uuid,date)
@@ -749,6 +762,8 @@ drop function if exists public.tc_pub_info(uuid);
 -- ★2026-08-18 tc_fix_request に p_void_ids を足した★＝★前の8引数の形は落とす★
 --   （残ると 古い形が呼べてしまい ★「使わない」を確かめない道★が生き続ける）
 drop function if exists public.tc_fix_request(uuid,text,text,date,int,int,text,uuid[]);
+-- ★2026-08-18 夜3 tc_punch_edit に p_kind を足した（足す道を1本にまとめた）★＝前の形は落とす
+drop function if exists public.tc_punch_edit(uuid,text,text,uuid,timestamptz,text);
 
 -- 初回コードの再発行（社長）はRLSで直接 update すればよい:
 --   update tc_pub set init_code='ABCD1234', pw_hash=null, device_tokens='{}', fail_count=0, locked_until=null

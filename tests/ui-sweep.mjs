@@ -337,9 +337,18 @@ T('★従業員の画面が 打刻を倉庫へ送った（押せる物だけ・�
     + ' / 押せなかった物 ' + JSON.stringify(r.sawDisabled));
 });
 
-T('★あとから入れる は お願い(申請)として送られる', () => {
+/* ★2026-08-18 夜3 司さん「シンプルイズベスト」★
+   ＝★決まりは1つ（自分の打刻は自分で直せる・消せる。締めた後はできない）★
+   あとから入れる分も ★その場で入る★（お願い・承認は画面から消えた）。 */
+T('★あとから入れる は その場で入る（お願いにしない・跡は中で残る）', () => {
   const r = results.filter((x) => x.file === 'kiroku.html')[0];
-  ok(r.page.fake._calls.indexOf('rpc:tc_fix_request') >= 0, '申請が送られていない');
+  const c = r.page.fake._calls;
+  ok(c.indexOf('rpc:tc_punch_edit') >= 0, '★その場で入れていない★');
+  ok(c.indexOf('rpc:tc_fix_request') < 0, '★まだ お願いを出している★');
+  const add = r.page.fake._store.edit.filter((x) => !x.p_id);
+  ok(add.length >= 1, '足した分が ' + add.length + '件');
+  ok(add[0].p_kind, '★種類を渡していない★');
+  console.log('     実測: 足した ' + add.length + '件（その場で入る）／お願い 0件');
 });
 
 /* ── 暗証番号（★従業員が持つ秘密は これ1つだけ★） ───────────────── */
@@ -780,54 +789,45 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
   /* ⑤ あとから入れるを開くと 打刻の直しは閉じる（お願いを出すは1つのまま） */
   pc.w.document.getElementById('b-addopen').click();
   await wait();
-  T('★★「あとから入れる」を開いても「お願いを出す」は画面に1つ★★', () => {
+  T('★★「あとから入れる」を開いても 押す物は画面に1つ（言葉は「足す」）★★', () => {
     const d2 = pc.w.document;
     ok(!d2.getElementById('add-box').hidden, '開いていない');
-    const sends = visBtns(pc.w).filter((b) => /お願いを出す/.test(b.textContent));
-    ok(sends.length === 1, '★「お願いを出す」が ' + sends.length + '個★');
+    const sends = visBtns(pc.w).filter((b) => /^(直す|消す|足す)$/.test((b.textContent || '').trim()));
+    ok(sends.length === 1, '★押す物が ' + sends.length + '個★');
+    ok(sends[0].textContent.trim() === '足す', '言葉が違う: ' + sends[0].textContent);
     ok(/時刻を選んでください/.test(d2.getElementById('add-why').textContent), '押せない理由が出ていない');
-    console.log('     実測: 開いた後の「お願いを出す」' + sends.length + '個');
+    console.log('     実測: 開いた後の押す物 ' + sends.length + '個（' + sends[0].textContent.trim() + '）');
   });
 }
-/* ── ★★締めた月は「会社に出す」に戻る★★（2026-08-18 夜2 司さんの線③）
-   ★給与が確定した後に 勤怠が動くと 計算が狂う★ので、締めた月だけは 会社が見る。 */
+/* ── ★★締めた月は 直せない（会社に言ってください）★★（2026-08-18 夜3 司さんの決まり）
+   ★給与が確定した後に 勤怠が動くと 計算が狂う★ので、締めた後だけは 押せない。 */
 {
   const SEED = { punches: [['2026-08-17T09:00', 'in'], ['2026-08-17T18:00', 'out']], empClosed: true };
   const T_URL2 = '?t=11111111-1111-1111-1111-111111111111';
-
-  /* ① 言葉が「会社に出す」になっているか（行を開く → 時刻を直す → 出す物の字を読む） */
   const pA = openPage('kiroku.html', T_URL2, SEED);
   await wait(); await wait(); await wait();
   const rA = pA.w.document.querySelector('[data-pid]');
   if (rA) rA.click();
   await wait(); await wait();
-  const foA = pA.w.document.getElementById('fix-open');
-  if (foA) foA.click();
+  const dropA = pA.w.document.getElementById('fix-drop');
+  if (dropA) dropA.click();
   await wait(); await wait();
-  T('★★締めた月では 言葉も道も「会社に出す」になる★★', () => {
-    const send = pA.w.document.getElementById('fix-send');
-    ok(send, '出す物が無い');
-    ok(send.textContent.trim() === '会社に出す',
-      '★締めた月なのに「直す」と書いている★: ' + send.textContent);
-    console.log('     実測: 締めた月の出す物「' + send.textContent.trim() + '」');
+
+  T('★★締めた月は 押しても入らない／理由を出す★★', () => {
+    const ed = pA.fake._store.edit, req = pA.fake._store.fixReq;
+    ok(ed.length === 0, '★締めた月なのに 倉庫へ送っている★（' + ed.length + '件）');
+    ok(req.length === 0, '★お願いの道が まだ生きている★（' + req.length + '件）');
+    const toast = (pA.w.document.querySelector('.tc-toast') || {}).textContent || '';
+    ok(/締めたので直せません/.test(toast), '★理由を出していない★: ' + toast);
+    console.log('     実測: 送った 0件／出た言葉「' + toast + '」');
   });
 
-  /* ② 「これは間違い」も お願いとして出る（その場で消さない） */
-  const pB = openPage('kiroku.html', T_URL2, SEED);
-  await wait(); await wait(); await wait();
-  const rB = pB.w.document.querySelector('[data-pid]');
-  if (rB) rB.click();
-  await wait(); await wait();
-  const dropB = pB.w.document.getElementById('fix-drop');
-  if (dropB) dropB.click();
-  await wait(); await wait();
-  T('★★締めた月の「これは間違い」は 会社に出す（その場で消さない）★★', () => {
-    ok(dropB, '「これは間違い」が無い');
-    const req = pB.fake._store.fixReq, ed = pB.fake._store.edit;
-    ok(req.length === 1, '★会社に出していない★（' + req.length + '件）');
-    ok((req[0].p_void_ids || []).length === 1, '使わない印を渡していない');
-    ok(ed.length === 0, '★締めた月なのに その場で直そうとしている★（' + ed.length + '件）');
-    console.log('     実測: 会社に出した 1件／その場の直し 0件');
+  T('★★締めた月は「足す」も押せない（理由つき）★★', () => {
+    const d2 = pA.w.document;
+    d2.getElementById('b-addopen').click();
+    ok(d2.getElementById('b-add').disabled, '★締めた月なのに 足せる★');
+    ok(/締めたので直せません/.test(d2.getElementById('add-why').textContent),
+      '理由が出ていない: ' + d2.getElementById('add-why').textContent);
   });
 }
 

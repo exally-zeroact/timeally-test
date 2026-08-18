@@ -271,13 +271,15 @@
     undo: function (token, device, pw, id) {
       return rpc('tc_punch_undo', { p_token: token, p_device: device, p_pw: pw, p_id: id });
     },
-    /** ★自分で直す（お願い 不要）★（2026-08-18 夜）
-        wallTime を渡すと ★その時刻の行を1本 足して 元の行に「使わない」印★／
-        null なら ★取り消す（印だけ）★。★締めた月は倉庫が断る★（closed が返る）。 */
-    edit: function (token, device, pw, id, wallTime, why) {
+    /** ★直す・消す・足す は この1本★（2026-08-18 夜3 司さん「シンプルイズベスト」）
+        ・直す … id と 新しい時刻 → ★新しい行を足して 元に印★
+        ・消す … id だけ            → ★元に印だけ★
+        ・足す … id を渡さず 時刻と種類 → ★新しい行を1本★
+        ★どれも その場で記録に入る★／★締めた月は倉庫が断る（closed）★ */
+    edit: function (token, device, pw, id, wallTime, kind, why) {
       return rpc('tc_punch_edit', {
-        p_token: token, p_device: device, p_pw: pw, p_id: id,
-        p_at: wallTime ? fromJst(wallTime) : null, p_reason: why || '',
+        p_token: token, p_device: device, p_pw: pw, p_id: id || null,
+        p_at: wallTime ? fromJst(wallTime) : null, p_kind: kind || null, p_reason: why || '',
       });
     },
     /** ★「この時刻で合っている」と答える★（印を1つ足すだけ＝打刻は1文字も動かない） */
@@ -294,14 +296,6 @@
           });
           return r;
         });
-    },
-    /** @param {Array} [voidIds] ★「この1本は使わない」というお願い★（承認で印が付く・原本は残る） */
-    fixRequest: function (token, device, pw, d, beforeMin, afterMin, reason, punchIds, voidIds) {
-      return rpc('tc_fix_request', {
-        p_token: token, p_device: device, p_pw: pw, p_d: d,
-        p_before: beforeMin, p_after: afterMin, p_reason: reason, p_punch_ids: punchIds || [],
-        p_void_ids: voidIds || [],
-      });
     },
   };
 

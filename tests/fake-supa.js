@@ -286,7 +286,7 @@ function createFake(seed) {
          seed.undoTooLate=true で「60秒を過ぎた」を作れる（画面が何と言うかを見る）。 */
       /* ★「合っている」と答えた印★（2026-08-18）… 倉庫は打刻を1文字も動かさない */
       if (name === 'tc_punch_ok') { store.okTime.push(args || {}); out = { ok: true }; }
-      /* ★自分で直す（お願い 不要）★（2026-08-18 夜）… ★締めた月は倉庫が断る★ */
+      /* ★直す・消す・足す は この1本★（2026-08-18 夜3）… ★締めた月は倉庫が断る★ */
       if (name === 'tc_punch_edit') {
         store.edit.push(args || {});
         out = seed.empClosed ? { ok: false, closed: true, state: 'closed' } : { ok: true, id: 'p9' };

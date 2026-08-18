@@ -69,9 +69,8 @@
       el.textContent = st.notice || '';
       el.hidden = !st.notice;
     }
-    /* ★締め切った月には「お願い」も出せない★
-       倉庫が断るので入りはしないが、★押せてしまうと「出したのに直らない」と思われる★
-       ★押せる/押せないを決めるのは drawAdd の1本だけ★（2026-08-18・ここで別々に決めない） */
+    /* ★締めた後は 足せない★（倉庫も断るが、押せてしまうと「入れたのに入らない」と思われる）
+       ★押せる/押せないを決めるのは drawAdd の1本だけ★ */
     if (q('b-add')) drawAdd();
   }
 
@@ -326,7 +325,7 @@
     if (b) b.disabled = true;
     DB.Emp.undo(st.token, st.device, st.pw, id).then(function (r) {
       if (!r || !r.ok) {
-        U.toast(r && r.too_late ? '取り消せる時間が過ぎました。「記録へ」からお願いを出してください。'
+        U.toast(r && r.too_late ? '取り消せる時間が過ぎました。「記録へ」から直せます。'
           : '取り消せませんでした。');
         clearUndo();
         return loadState();
@@ -364,7 +363,7 @@
           drawAdd();
         };
       }
-      /* ★D★ 日・時刻・どれ が揃うまで「お願いを出す」は押せない＋出す前に1行 見せる */
+      /* ★D★ 日・時刻・どれ が揃うまで「足す」は押せない＋押す前に1行 見せる */
       ['at', 'ak', 'ar'].forEach(function (id) {
         var el = q(id);
         if (el) { el.oninput = drawAdd; el.onchange = drawAdd; }
@@ -390,11 +389,11 @@
      ★何がおかしいか の判定と 文は lib/tc-clean.js が1か所で持つ★
      （社長の画面・数える所と ★同じ物★を見る＝食い違わない）。
      ★1問ごとに保存★（最後まで行かないと保存されない、を作らない）。
-     ★出した物は「お願い中」の札が付き、会社が見てから記録に入る★（今までの作りと同じ）。 */
+     ★押したら その場で記録に入る★（2026-08-18 夜3・決まりは1つ）。 */
   var _asks = [];                                   // 画面に出している質問（押した時に引く）
   /* ★もう答えた質問★（この画面を開いている間だけ覚える）
-     ＝答えても ★会社が見るまで 記録は変わらない★ ので、質問はそのまま残る。
-     何も言わないと ★同じお願いを何回も出してしまう★（連打を直す機能で連打を作らない）。 */
+     ＝答えると その場で記録が変わるが、★何を答えたかは そのまま残す★。
+     何も言わないと ★同じ物を何回も押してしまう★（連打を直す機能で連打を作らない）。 */
   var _answered = {};
   function askKey(a) { return a.type + '@' + a.at; }
   /* ★時刻そのものを直す★ … 開いている打刻／機械が見つけた分／自分の打刻ぜんぶ */
@@ -408,8 +407,7 @@
   function askHtml(a, n, res) {
     var head = '<div class="tc-askq">' + U.esc(a.text) + '</div>';
     if (_answered[askKey(a)]) {
-      return '<div class="tc-ask">' + head
-        + '<div class="tc-askwhy">お願いを出しました。会社が見てから記録に入ります。</div></div>';
+      return '<div class="tc-ask">' + head + '<div class="tc-askwhy">直しました。</div></div>';
     }
     var btn = function (id, label, why) {
       return '<button class="tc-btn sub" type="button" id="' + id + '">' + U.esc(label) + '</button>'
@@ -434,11 +432,11 @@
     return '<div class="tc-ask">' + head + '<div class="tc-askrow">' + rows + '</div></div>';
   }
 
-  /* ── ★時刻そのものを直す★（2026-08-18 司さん）────────────────────────
-     ・★元の行は消さない★＝新しい時刻を「お願い中」で出し、元には「使わない」印を付ける
+  /* ── ★時刻そのものを直す★（2026-08-18）────────────────────────
+     ・★元の行は消さない★＝新しい時刻の行を1本 足して、元には印を付ける
      ・★空欄を出さない★＝候補を先に出す（いつもの時刻／前後15分／いま）
-     ・★選ぶまで「お願いを出す」は押せない★（Dと同じ）
-     ・★出す前に1行★「8/17 の 08:00 出勤 を 07:30 に直すお願いを出します」 */
+     ・★選ぶまで「直す」は押せない★
+     ・★押す前に1行★「8/17 の 08:00 出勤 を 07:30 に直します」 */
   /* ★出す量を減らす（2026-08-18 夜 司さん「なんか複雑すぎんか？」）★
      ・開いた時に出るのは ★2つだけ★（時刻を直す／これは間違い）
      ・★候補は「時刻を直す」を押してから★出す（＝1画面に押せる物を積まない）
@@ -451,7 +449,7 @@
     if (_fixStep !== 'pick') {
       return '<div class="tc-ask">' + head + '<div class="tc-askrow">'
         + '<button class="tc-btn sub" type="button" id="fix-open">時刻を直す</button>'
-        + '<button class="tc-btn danger" type="button" id="fix-drop">これは間違い（取り消す）</button>'
+        + '<button class="tc-btn danger" type="button" id="fix-drop">消す</button>'
         + '</div></div>';
     }
     var cands = global.TcClean.fixCandidates(_all, p, { nowHm: (DB.nowJst() || '').slice(11, 16) });
@@ -466,9 +464,7 @@
       + '<button class="tc-btn sub" type="button" id="fix-pick">この時刻にする</button></span>'
       + '</div>'
       + '<div class="tc-note" id="fix-why"></div>'
-      + '<p><button class="tc-btn wide" type="button" id="fix-send" disabled>'
-      + U.esc(global.TcClean.fixWay({ state: st.state, add: false }).way === 'self' ? '直す' : '会社に出す')
-      + '</button></p>'
+      + '<p><button class="tc-btn wide" type="button" id="fix-send" disabled>直す</button></p>'
       + '</div>';
   }
 
@@ -476,7 +472,7 @@
   function issueHtml(x, n) {
     if (_answered['issue@' + x.type + '@' + x.at]) {
       return '<div class="tc-ask"><div class="tc-askq">' + U.esc(x.text) + '</div>'
-        + '<div class="tc-askwhy">お願いを出しました。会社が見てから記録に入ります。</div></div>';
+        + '<div class="tc-askwhy">直しました。</div></div>';
     }
     return '<div class="tc-ask"><div class="tc-askq">' + U.esc(x.text) + '</div>'
       + '<div class="tc-askrow">'
@@ -492,22 +488,16 @@
     var picked = { hm: '' };
     var send = q('fix-send'), note = q('fix-why'), tin = q('fix-t');
     var K = KIND_LABEL[p.kind] || p.kind;
-    var way = global.TcClean.fixWay({ state: st.state, add: false });
     var draw2 = function () {
       var ok = !!picked.hm;
       if (note) {
         note.textContent = ok
           ? global.TcClean.mdOf(global.TcClean.dayOf(p.at)) + ' の ' + global.TcClean.hmOf(p.at)
-            + ' ' + K + ' を ' + picked.hm + ' に'
-            + (way.way === 'self' ? '直します' : '直すよう 会社に出します')
+            + ' ' + K + ' を ' + picked.hm + ' に直します'
           : '直したい時刻を選んでください';
         note.hidden = false;
       }
-      /* ★承認が要らない道で「お願い」と書かない★（言葉も道に合わせる） */
-      if (send) {
-        send.disabled = !ok;
-        send.textContent = way.way === 'self' ? '直す' : '会社に出す';
-      }
+      if (send) send.disabled = !ok;
     };
     var openBtn = q('fix-open');
     if (openBtn) { openBtn.onclick = function () { _fixStep = 'pick'; draw(); }; }
@@ -521,54 +511,20 @@
       send.onclick = function () {
         if (!picked.hm) { draw2(); return; }
         var day = global.TcClean.dayOf(p.at);
-        sendFix(p, day + 'T' + picked.hm,
-          global.TcClean.mdOf(day) + ' の ' + global.TcClean.hmOf(p.at) + ' ' + K
-            + ' を ' + picked.hm + ' に直します');
+        apply({ id: p.id, at: day + 'T' + picked.hm, done: '直しました。',
+          why: global.TcClean.mdOf(day) + ' の ' + global.TcClean.hmOf(p.at) + ' ' + K
+            + ' を ' + picked.hm + ' に直しました' });
       };
     }
     var drop = q('fix-drop');
     if (drop) {
       drop.onclick = function () {
-        sendFix(p, null, global.TcClean.mdOf(global.TcClean.dayOf(p.at)) + ' の '
-          + global.TcClean.hmOf(p.at) + ' ' + K + ' は 間違いなので使いません');
+        apply({ id: p.id, done: '消しました。',
+          why: global.TcClean.mdOf(global.TcClean.dayOf(p.at)) + ' の '
+            + global.TcClean.hmOf(p.at) + ' ' + K + ' を 消しました' });
       };
     }
     draw2();
-  }
-
-  /** ★直す／取り消す★（2026-08-18 夜 司さん「願いを出さな修正できんのはどうかと思う」）
-   *  ★どの道かは lib/tc-clean.js の fixWay 1本が決める★（画面で言い換えない）
-   *    ・締めていない … ★自分で直せる（その場で記録に入る）★
-   *    ・締めた月     … ★会社に出す★（今までのお願い）
-   *  ★どちらでも 元の行は消さない★（voided_at の印＋新しい時刻の行） */
-  function sendFix(p, newWall, why) {
-    var day = global.TcClean.dayOf(p.at);
-    var way = global.TcClean.fixWay({ state: st.state, add: false }).way;
-    var done = function (msg) {
-      _openPid = null;
-      _fixStep = 'menu';
-      U.toast(msg);
-      draw();
-    };
-    var ng = function (e) { U.toast('つながりませんでした（' + e.message + '）'); };
-    if (way === 'self') {
-      return DB.Emp.edit(st.token, st.device, st.pw, p.id, newWall, why)
-        .then(function (r) {
-          if (!r || !r.ok) { U.toast(reason(r)); return; }
-          done('直しました。');
-        }, ng);
-    }
-    /* ★締めた月は 会社に出す★（今までどおり お願い） */
-    if (!newWall) {
-      return DB.Emp.fixRequest(st.token, st.device, st.pw, day, null, null, why, [], [p.id])
-        .then(function (r) { if (!r || !r.ok) { U.toast(reason(r)); return; } done('会社に出しました。'); }, ng);
-    }
-    return DB.Emp.punch(st.token, st.device, st.pw, newWall, p.kind, 'calendar')
-      .then(function (r) {
-        if (!r || !r.ok) { U.toast(reason(r)); return; }
-        return DB.Emp.fixRequest(st.token, st.device, st.pw, day, null, null, why, [r.id], [p.id])
-          .then(function (f) { if (!f || !f.ok) { U.toast(reason(f)); return; } done('会社に出しました。'); });
-      }, ng);
   }
 
   /** 打刻の行と 機械が見つけた聞く事を配線する */
@@ -578,7 +534,7 @@
         var id = b.getAttribute('data-pid');
         _openPid = (_openPid === id) ? null : id;
         _fixStep = 'menu';                 // ★開いた時は いつも2つだけ★
-        if (_openPid) { _addOpen = false; drawAdd(); }   // ★「お願いを出す」を画面に1つに★
+        if (_openPid) { _addOpen = false; drawAdd(); }   // ★押す物を画面に1つに★
         draw();
       };
     });
@@ -601,46 +557,21 @@
     if (_openPid) bindFixPanel();
   }
 
-  /** ★「この1本は使わない」だけの答え★（どちらでしたか／取り消す）
-   *  ★締めていなければ その場で記録に入る★（お願いにしない）。締めた月だけ 会社に出す。 */
-  function sendVoid(ask, voidId, why) {
-    var way = global.TcClean.fixWay({ state: st.state, add: false }).way;
-    var done = function (msg) {
-      _answered[askKey(ask)] = true;
-      U.toast(msg);
-      draw();
-    };
-    var ng = function (e) { U.toast('つながりませんでした（' + e.message + '）'); };
-    if (way === 'self') {
-      return DB.Emp.edit(st.token, st.device, st.pw, voidId, null, why)
-        .then(function (r) {
-          if (!r || !r.ok) { U.toast(reason(r)); return; }
-          done('直しました。');
-        }, ng);
-    }
-    return DB.Emp.fixRequest(st.token, st.device, st.pw, ask.d, null, null, why, [], [voidId])
-      .then(function (r) { if (!r || !r.ok) { U.toast(reason(r)); return; } done('会社に出しました。'); }, ng);
-  }
-
-  /** ★お願いを1つ出す★（入れる打刻 と 使わない打刻 を まとめて1件で出す） */
-  function sendAsk(ask, why, addKind, addWall, voidIds) {
-    var d = ask.d;
-    var done = function () {
-      _answered[askKey(ask)] = true;
-      U.toast('お願いを出しました。会社が見てから記録に入ります。');
-      draw();
-    };
-    var ng = function (e) { U.toast('つながりませんでした（' + e.message + '）'); };
-    if (!addKind) {
-      return DB.Emp.fixRequest(st.token, st.device, st.pw, d, null, null, why, [], voidIds || [])
-        .then(function (r) { if (!r || !r.ok) { U.toast(reason(r)); return; } done(); }, ng);
-    }
-    return DB.Emp.punch(st.token, st.device, st.pw, addWall, addKind, 'calendar')
+  /** ★直す・消す・足す は この1本★（2026-08-18 夜3 司さん「シンプルイズベスト」）
+   *  ★決まりは1つ★＝自分の打刻は 自分で直せる・消せる。締めた後はできない。
+   *  ★押したら その場で入る★（確認の一言も出さない）。跡は中で残る。 */
+  function apply(o) {
+    var fix = global.TcClean.canFix({ state: st.state });
+    if (!fix.ok) { U.toast(fix.why); return; }
+    return DB.Emp.edit(st.token, st.device, st.pw, o.id || null, o.at || null, o.kind || null, o.why || '')
       .then(function (r) {
         if (!r || !r.ok) { U.toast(reason(r)); return; }
-        return DB.Emp.fixRequest(st.token, st.device, st.pw, d, null, null, why, [r.id], voidIds || [])
-          .then(function (f) { if (!f || !f.ok) { U.toast(reason(f)); return; } done(); });
-      }, ng);
+        if (o.ask) _answered[askKey(o.ask)] = true;
+        _openPid = null;
+        _fixStep = 'menu';
+        U.toast(o.done);
+        draw();
+      }, function (e) { U.toast('つながりませんでした（' + e.message + '）'); });
   }
 
   function bindAsks() {
@@ -664,32 +595,31 @@
       if (a.type === 'both') {
         /* ★どちらでしたか＝片方を使わない＝「直す」の道★（締めていなければ その場で入る） */
         on('in', function () {
-          sendVoid(a, a.outId, a.hm + ' は ' + K.in + 'でした（' + K.out + 'は使いません）');
+          apply({ id: a.outId, ask: a, done: '直しました。',
+            why: a.hm + ' は ' + K.in + 'でした（' + K.out + 'を消しました）' });
         });
         on('out', function () {
-          sendVoid(a, a.inId, a.hm + ' は ' + K.out + 'でした（' + K.in + 'は使いません）');
+          apply({ id: a.inId, ask: a, done: '直しました。',
+            why: a.hm + ' は ' + K.out + 'でした（' + K.in + 'を消しました）' });
         });
       } else if (a.type === 'open-in') {
         on('now', function () {
           var hm = (DB.nowJst() || '').slice(11, 16);
-          sendAsk(a, a.hm + ' の' + K.in + 'に ' + hm + ' の' + K.out + 'を入れました', 'out', a.d + 'T' + hm, []);
+          apply({ at: a.d + 'T' + hm, kind: 'out', ask: a, done: '入れました。',
+            why: a.hm + ' の' + K.in + 'に ' + hm + ' の' + K.out + 'を足しました' });
         });
         on('pick', function () {
           var hm = pick();
           if (!hm) { U.toast('時刻を選んでください'); return; }
-          sendAsk(a, a.hm + ' の' + K.in + 'に ' + hm + ' の' + K.out + 'を入れました', 'out', a.d + 'T' + hm, []);
-        });
-        on('drop', function () {
-          sendAsk(a, a.hm + ' の' + K.in + 'を取り消しました', null, null, [a.id]);
+          apply({ at: a.d + 'T' + hm, kind: 'out', ask: a, done: '入れました。',
+            why: a.hm + ' の' + K.in + 'に ' + hm + ' の' + K.out + 'を足しました' });
         });
       } else {
         on('pick', function () {
           var hm = pick();
           if (!hm) { U.toast('時刻を選んでください'); return; }
-          sendAsk(a, a.hm + ' の' + K.out + 'に ' + hm + ' の' + K.in + 'を入れました', 'in', a.d + 'T' + hm, []);
-        });
-        on('drop', function () {
-          sendAsk(a, a.hm + ' の' + K.out + 'を取り消しました', null, null, [a.id]);
+          apply({ at: a.d + 'T' + hm, kind: 'in', ask: a, done: '入れました。',
+            why: a.hm + ' の' + K.out + 'に ' + hm + ' の' + K.in + 'を足しました' });
         });
       }
     });
@@ -732,11 +662,11 @@
           var merged = p.why === 'merged';
           /* ★時刻そのものを間違えた時★（2026-08-18 司さん）
              ＝打った直後の60秒を過ぎたら、★行を押して「この時刻を直す」★。
-             ★元の行は消さない★＝新しい時刻を「お願い中」で出し、元は「使わない」印を付ける。 */
+             ★元の行は消さない★＝新しい時刻の行を足して、元には印を付ける。 */
           var openable = !!p.id && !merged;
           var head = '<span class="tc-punchline' + (merged ? ' tc-dim' : '') + '">'
             + U.esc(p.at.slice(11, 16)) + '　' + U.esc(KIND_LABEL[p.kind] || p.kind)
-            + (p.pending ? ' <span class="tc-tag pending">お願い中</span>' : '')
+            + (p.pending ? ' <span class="tc-tag pending">まだ入っていません</span>' : '')
             + (merged ? ' <span class="tc-tag">同じ打刻としてまとめました</span>' : '') + '</span>';
           if (!openable) return '<div>' + head + '</div>';
           return '<div class="tc-punchrow">'
@@ -794,37 +724,29 @@
     }
     var v = addLater0(), b = q('b-add'), note = q('add-why');
     var msg = '', ok = false;
-    if (st.notice) msg = st.notice;                       // 締め切った月は そもそも出せない
+    var fix = global.TcClean.canFix({ state: st.state });
+    if (!fix.ok) msg = fix.why;                           // ★締めた後は 足せない★
     else if (!v.day) msg = '日を選んでください';
     else if (!v.hm) msg = '時刻を選んでください';
     else if (!v.kind) msg = 'どれかを選んでください';
     else {
       ok = true;
-      /* ★足す物は いつでも 会社が見る★（無から作る物だけは お願い・司さんの線） */
       msg = global.TcClean.mdOf(v.day) + ' ' + v.hm + ' に ' + (KIND_LABEL[v.kind] || v.kind)
-        + ' で ' + (global.TcClean.fixWay({ state: st.state, add: true }).way === 'self'
-          ? 'お願いを出します' : '会社に出します');
+        + ' を足します';
     }
     if (note) { note.textContent = msg; note.hidden = !msg; }
     if (b) b.disabled = !ok;
   }
 
-  /** あとから入れる＝★必ずお願い（申請）扱い★。当日打ったものと札で分ける。 */
+  /** ★足す★（打ち忘れた分）… ★その場で入る★（締めた後は押せない） */
   function addLater() {
     var v = addLater0();
-    var day = v.day, hm = v.hm, kind = v.kind || 'in', why = v.why;
-    /* ★押せない時は そもそも押せない★（ここは念のための二重の門） */
-    if (!day || !hm) { drawAdd(); return; }
-    var btn = q('b-add');
-    btn.disabled = true;
-    DB.Emp.punch(st.token, st.device, st.pw, day + 'T' + hm, kind, 'calendar')
-      .then(function (r) {
-        if (!r || !r.ok) { U.toast(reason(r)); return; }
-        return DB.Emp.fixRequest(st.token, st.device, st.pw, day, null, null, why, [r.id])
-          .then(function () { U.toast('お願いを出しました。会社が見てから記録に入ります。'); draw(); });
-      })
-      .catch(function (e) { U.toast('つながりませんでした（' + e.message + '）'); })
-      .then(function () { drawAdd(); });
+    if (!v.day || !v.hm) { drawAdd(); return; }
+    apply({
+      at: v.day + 'T' + v.hm, kind: v.kind || 'in', done: '入れました。',
+      why: global.TcClean.mdOf(v.day) + ' ' + v.hm + ' に '
+        + (KIND_LABEL[v.kind] || v.kind) + ' を足しました' + (v.why ? '（' + v.why + '）' : ''),
+    });
   }
 
   global.EmpApp = {

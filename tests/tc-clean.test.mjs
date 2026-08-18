@@ -110,12 +110,12 @@ if (process.argv.includes('--self-test')) {
     ok(CLEAN.timeIssues(noMark, { today: '2026-08-19' }).length === 1, '作り物で聞かなくなっている');
   });
   S('⑩ ★全部お願いにする作り（前の姿）★は 締めていない月でも 会社を待たせる', () => {
-    ok(CLEAN.fixWay({ state: 'open' }).way === 'self', '★本物が まだ全部お願いにしている★');
-    ok(CLEAN.fixWay({ state: 'pending' }).way === 'self', '★締め待ちで お願いにしている★');
+    ok(CLEAN.canFix({ state: 'open' }).ok, '★本物が まだ会社を待たせている★');
+    ok(CLEAN.canFix({ state: 'pending' }).ok, '★締め待ちで 止めている★');
   });
-  S('⑪ ★締めた月まで自分で直せる作り物★は 給与の確定後に勤怠が動く', () => {
-    ok(CLEAN.fixWay({ state: 'closed' }).way === 'company', '★締めた月を 自分で直せてしまう★');
-    ok(CLEAN.fixWay({ state: 'open', add: true }).way === 'company', '★足す物まで その場で入れている★');
+  S('⑪ ★締めた月まで直せる作り物★は 給与の確定後に勤怠が動く', () => {
+    ok(!CLEAN.canFix({ state: 'closed' }).ok, '★締めた月を 直せてしまう★');
+    ok(/会社に言ってください/.test(CLEAN.canFix({ state: 'closed' }).why), '理由の言葉が違う');
   });
   console.log('\n[self-test] ' + sp + ' passed, ' + sf + ' failed（★11通り★）');
   if (sf) process.exit(1);
@@ -478,26 +478,22 @@ T('★時刻★ ★決められない日には 時刻の確かめを積み上げ
   eq(dayOf(sum(REAL_0817), '2026-08-17').asks.length, 2, 'その日の聞く事は 2つのまま');
 });
 
-/* ── (6) ★直す道は3つ★（2026-08-18 夜2 司さん「願いを出さな修正できんのはどうかと思う」） */
-T('★線★ 締めていない月は ★自分で直せる（お願い 不要）★', () => {
-  eq(CLEAN.fixWay({ state: 'open' }).way, 'self');
-  eq(CLEAN.fixWay({ state: 'pending' }).way, 'self', '★締め待ちで 会社を待たせている★');
-  ok(/会社の承認は要りません/.test(CLEAN.fixWay({ state: 'open' }).why));
+/* ── (6) ★決まりは1つ★（2026-08-18 夜3 司さん「シンプルイズベストでやらして」）
+   ★自分の打刻は 自分で直せる・消せる。締めた後はできない★
+   ＝人が覚える言葉は「直す・消す・足す」の3つだけ（お願い・承認・申請は画面に出さない）。 */
+T('★決まり★ 締めていない間は ★直せる・消せる・足せる★（会社を待たない）', () => {
+  eq(CLEAN.canFix({ state: 'open' }).ok, true);
+  eq(CLEAN.canFix({ state: 'pending' }).ok, true, '★締め待ちで 止めている★');
+  eq(CLEAN.canFix({ state: 'open' }).why, '');
 });
 
-T('★線★ 締めた月は ★会社に出す★（給与が確定した後に 勤怠を動かさない）', () => {
-  eq(CLEAN.fixWay({ state: 'closed' }).way, 'company');
-  ok(/締め切った月/.test(CLEAN.fixWay({ state: 'closed' }).why));
+T('★決まり★ ★締めた後は できない★（理由は1つの言葉で出す）', () => {
+  eq(CLEAN.canFix({ state: 'closed' }).ok, false);
+  eq(CLEAN.canFix({ state: 'closed' }).why, '締めたので直せません。会社に言ってください');
+  console.log('     実測: 開いている/締め待ち=直せる ／ 締めた=' + CLEAN.canFix({ state: 'closed' }).why);
 });
 
-T('★線★ ★無から足す物（あとから入れる）は いつでも会社に出す★', () => {
-  eq(CLEAN.fixWay({ state: 'open', add: true }).way, 'company');
-  eq(CLEAN.fixWay({ state: 'pending', add: true }).way, 'company');
-  ok(/新しく足す/.test(CLEAN.fixWay({ state: 'open', add: true }).why));
-  console.log('     実測: 開いている=自分で直す／締め待ち=自分で直す／締めた=会社／足す=会社');
-});
-
-T('★線★ 紙とCSVの備考に ★誰が直したか★が残る（null分→null分 と刷らない）', () => {
+T('★決まり★ 紙とCSVの備考に ★誰が直したか★が残る（null分→null分 と刷らない）', () => {
   const d = { fixes: [{ status: 'approved', beforeMin: null, afterMin: null, requestedBy: 'employee' }] };
   eq(CSV.note(d), '本人が直しました');
   const d2 = { fixes: [{ status: 'approved', beforeMin: null, afterMin: null, requestedBy: 'owner' }] };
