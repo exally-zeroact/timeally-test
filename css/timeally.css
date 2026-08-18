@@ -237,11 +237,10 @@ table.tc td.warn { color: #B3261E; }
 .tc-card .tc-cardhead .tc-spacer { flex: 1 1 auto; }
 
 /* ── ★連打・打ち間違いを 画面が先に言う★（2026-08-18 司さんの実機の形） ────
-   ★まとめた物も消さずに残す★（薄くして札を付ける）／
+   ★数えない打刻は そもそも出さない★（2026-08-18 司さん「数えんのなら見せるなや」）／
    ★決められない日は 赤で言う★（★黙って0にして小さくする★のが いちばん怖い）／
    ★聞く所は 押すだけで決まる★（空欄を並べて埋めさせない）。
    色は承認済みの物だけ（#78705C 補助文字 ／ #B3261E 注意 ／ #F0E0B8 淡境界）。 */
-.tc-dim { color: #78705C; }
 .tc-note.warn { color: #B3261E; border-color: #B3261E; }
 .tc-card.ask { border-color: #B3261E; }
 .tc-ask { margin-top: 8px; padding-top: 8px; border-top: 1px dotted #F0E0B8; }

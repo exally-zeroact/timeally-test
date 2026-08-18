@@ -192,22 +192,26 @@
     };
   }
 
-  /* 直しのお願い（★未承認が上★）。★元は何分→何分★ を出してから承認する */
+  /* ★直した記録★（2026-08-18 司さんの決まり）
+     ＝従業員は もう「お願い」を出さない（自分で直せる＝その場で入る）。
+     ここに出るのは ★まだ入っていない古い分★と ★本人が直した跡★だけ。
+     ★0件なら 見出しごと出さない★（もう無い物のボタンを見せない）。 */
   function drawFixes(fixes) {
-    var box = q('fixes');
+    var box = q('fixes'), head = q('fixes-head');
     if (!box) return Promise.resolve();
     var pending = fixes.filter(function (f) { return f.status === 'pending'; });
     var done = fixes.filter(function (f) { return f.status !== 'pending'; }).slice(0, 20);
-    if (!pending.length && !done.length) { box.innerHTML = '<div class="tc-note">お願いはありません。</div>'; return Promise.resolve(); }
+    if (head) head.hidden = !(pending.length || done.length);
+    if (!pending.length && !done.length) { box.innerHTML = ''; return Promise.resolve(); }
 
-    /* 承認する前に「今どうなっていて、承認すると何分になるか」を実際に数えて見せる */
+    /* 入れる前に「今どうなっていて、入れると何分になるか」を実際に数えて見せる */
     return Promise.all(pending.map(function (f) {
       return Promise.all([
         DB.loadPunches(f.employee_id, f.d, f.d, { includePending: false }),
         DB.loadPunches(f.employee_id, f.d, f.d, { includePending: true }),
       ]).then(function (p) {
-        /* ★「この1本は使わない」お願い★（2026-08-18）＝承認すると その打刻が外れる。
-           ★外した姿で数えないと「元は0分 → 承認すると0分」と出て 何も変わらないように見える★
+        /* ★「この1本は使わない」古い分★（2026-08-18）＝入れると その打刻が外れる。
+           ★外した姿で数えないと「元は0分 → 入れると0分」と出て 何も変わらないように見える★
            （実際に変わるのは そこ）。★数えるのは いつもの summarize 1本のまま★。 */
         var kill = f.void_ids || [];
         var after = p[1].filter(function (x) { return kill.indexOf(x.id) < 0; });
@@ -226,22 +230,21 @@
         var name = nameOf(f.employee_id);
         return '<div class="tc-card pending"><div class="tc-cardhead">'
           + '<b>' + U.esc(name) + '</b> <span class="num">' + U.esc(f.d) + '</span>'
-          + '<span class="tc-tag pending">未承認</span><span class="tc-spacer"></span>'
-          + '<button class="tc-btn" type="button" data-ok="' + U.esc(f.id) + '">承認する</button>'
-          + '<button class="tc-btn danger" type="button" data-ng="' + U.esc(f.id) + '">戻す</button>'
+          + '<span class="tc-tag pending">まだ入っていません</span><span class="tc-spacer"></span>'
+          + '<button class="tc-btn" type="button" data-ok="' + U.esc(f.id) + '">入れる</button>'
+          + '<button class="tc-btn danger" type="button" data-ng="' + U.esc(f.id) + '">入れない</button>'
           + '</div><div>'
           + (f._before == null ? '（数えられませんでした）'
-            : !f._same ? '元は ' + f._before + '分 → 承認すると ' + f._after + '分'
+            : !f._same ? '元は ' + f._before + '分 → 入れると ' + f._after + '分'
               : f._open ? '数字は変わりません（この日は まだ退勤が入っていません）'
                 : '数字は変わりません（時刻の直し）')
           + (f.reason ? '　理由: ' + U.esc(f.reason) : '') + '</div></div>';
       }).join('') + done.map(function (f) {
         return '<div class="tc-card"><div class="tc-cardhead"><b>' + U.esc(nameOf(f.employee_id)) + '</b>'
           + ' <span class="num">' + U.esc(f.d) + '</span>'
-          + '<span class="tc-tag">' + (f.status !== 'approved' ? '戻した'
-            : (f.requested_by === 'employee' && f.approved_by === 'employee') ? '本人が直した' : '承認済')
+          + '<span class="tc-tag">' + (f.status !== 'approved' ? '入れなかった'
+            : (f.requested_by === 'employee' && f.approved_by === 'employee') ? '本人が直した' : '入れた')
           + '</span>'
-          + (f.approved_by === 'self' ? '<span class="tc-tag">自己承認</span>' : '')
           + '</div><div>' + (f.before_min == null ? '' : '元は ' + f.before_min + '分 → ' + f.after_min + '分')
           + (f.reason ? '　理由: ' + U.esc(f.reason) : '') + '</div></div>';
       }).join('');
@@ -249,19 +252,19 @@
       Array.prototype.forEach.call(box.querySelectorAll('[data-ok]'), function (b) {
         b.onclick = function () {
           var f = rows.filter(function (x) { return x.id === b.getAttribute('data-ok'); })[0];
-          /* ★社長1人の会社は「自己承認」と残す（承認が無かった事にしない）★ */
+          /* ★社長1人の会社は「自分で入れた」と残す（誰がやったかを消さない）★ */
           var self = f && f.requested_by === 'owner';
           DB.client().from('tc_fix').update({ before_min: f._before, after_min: f._after })
             .eq('id', f.id).then(function () {
               return DB.approveFix(f.id, st.user.id, self);
-            }).then(function () { U.toast('承認しました'); reload(); })
+            }).then(function () { U.toast('入れました'); reload(); })
             .catch(failed('できませんでした'));
         };
       });
       Array.prototype.forEach.call(box.querySelectorAll('[data-ng]'), function (b) {
         b.onclick = function () {
           DB.rejectFix(b.getAttribute('data-ng'), st.user.id)
-            .then(function () { U.toast('戻しました'); reload(); })
+            .then(function () { U.toast('入れませんでした'); reload(); })
             .catch(failed('できませんでした'));
         };
       });
@@ -1274,7 +1277,7 @@
       .map(function (a) { return a.text; }).join(' / ');
     return '<div class="tc-note' + (d.undecided ? ' warn' : '') + '">' + U.esc(s)
       + (more ? '<br>' + U.esc(more) : '')
-      + ((d.asks || []).length ? '<br>本人の画面で答えると、お願いとして上がってきます。' : '')
+      + ((d.asks || []).length ? '<br>本人が自分の画面で答えると、その場で直ります。' : '')
       + (d.merged ? '<br>' + U.esc('同じ時刻を2回 押した打刻が ' + d.merged + '本あります（数えていません・記録は残っています）') : '')
       + '</div>';
   }
@@ -1392,7 +1395,7 @@
     box.textContent = '決められない日が ' + bad.length + '日あります（'
       + bad.map(function (d) { return (+d.d.slice(5, 7)) + '/' + (+d.d.slice(8, 10)); }).join('・')
       + '）。同じ時刻に出勤と退勤が並んでいます。本人が自分の記録の画面で答えると、'
-      + '「直しのお願い」として上がってきます。この日は まだ数えていません。';
+      + 'その場で直ります。この日は まだ数えていません。';
   }
 
   /* ★切り捨てた時間と金額は必ず出す（黙って消さない）★ */

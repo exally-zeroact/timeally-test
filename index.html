@@ -4,17 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <title>Timeally — 一覧</title>
-    <link rel="icon" href="icons/favicon-32.png?v=711df8b1" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=711df8b1" />
+    <link rel="icon" href="icons/favicon-32.png?v=3bfde9f5" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=3bfde9f5" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
     <meta name="theme-color" content="#FFC72C" />
-    <link rel="manifest" href="manifest.json?v=711df8b1" />
+    <link rel="manifest" href="manifest.json?v=3bfde9f5" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=711df8b1" />
+    <link rel="stylesheet" href="css/timeally.css?v=3bfde9f5" />
   </head>
   <body>
     <div class="tc-appbar">
@@ -26,7 +26,7 @@
       <!-- ★別のページへ移る物は いつでも 帯のいちばん右★（2026-08-16 司さん
            「戻るが集計の時だけ右上にある」）＝★置き場所を1つに決める★。
            タブ（会社／従業員／今月の勤務）は同じページの中なので 帯には出さない。 -->
-      <a class="tc-btn go tc-nav" id="go-shukei" href="shukei.html?v=711df8b1">集計へ →</a>
+      <a class="tc-btn go tc-nav" id="go-shukei" href="shukei.html?v=3bfde9f5">集計へ →</a>
     </div>
 
     <div class="tc-wrap" id="main" hidden>
@@ -48,11 +48,14 @@
         </span>
       </div>
 
-      <!-- ① 一覧（★未承認のお願いが上★） -->
+      <!-- ① 一覧（★まだ入っていない直しが上★）
+           ★2026-08-18 司さんの決まり★＝従業員は もう「お願い」を出さない（その場で入る）。
+           ここに出るのは ★古い分（この決まりの前に出した物）★と ★本人が直した跡★だけ。
+           ★0件なら 箱ごと出さない★（もう無い物のボタンを見せない）。 -->
       <section id="pane-list">
         <!-- ★何が分かる画面かを 頭に1行★（2026-08-16 司さん「何のためにあるか分からない」） -->
-        <div class="tc-lead">今月 誰が何時間 働いたかを 全員ぶん並べます。直しのお願いは いちばん上に出ます。</div>
-        <h2>直しのお願い（未承認が上）</h2>
+        <div class="tc-lead">今月 誰が何時間 働いたかを 全員ぶん並べます。</div>
+        <h2 id="fixes-head" hidden>直した記録</h2>
         <div id="fixes"></div>
 
         <h2>今月の打刻</h2>
@@ -199,21 +202,21 @@
       </section>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=711df8b1"></script>
-    <script src="js/env-badge.js?v=711df8b1"></script>
-    <script src="lib/tc-law.js?v=711df8b1"></script>
+    <script src="js/supa-config.js?v=3bfde9f5"></script>
+    <script src="js/env-badge.js?v=3bfde9f5"></script>
+    <script src="lib/tc-law.js?v=3bfde9f5"></script>
     <!-- ★tc-calc より先に読む★（打った物の掃除＝連打をまとめる／決められない日を見つける。
          tc-calc.js は これが無いと数えられない） -->
-    <script src="lib/tc-clean.js?v=711df8b1"></script>
-    <script src="lib/tc-calc.js?v=711df8b1"></script>
-    <script src="lib/tc-csv.js?v=711df8b1"></script>
-    <script src="lib/tc-name.js?v=711df8b1"></script>
-    <script src="lib/tc-hours.js?v=711df8b1"></script>
-    <script src="lib/qr.js?v=711df8b1"></script>
-    <script src="js/file-out.js?v=711df8b1"></script>
-    <script src="js/tc-ui.js?v=711df8b1"></script>
-    <script src="js/tc-db.js?v=711df8b1"></script>
-    <script src="js/owner-app.js?v=711df8b1"></script>
+    <script src="lib/tc-clean.js?v=3bfde9f5"></script>
+    <script src="lib/tc-calc.js?v=3bfde9f5"></script>
+    <script src="lib/tc-csv.js?v=3bfde9f5"></script>
+    <script src="lib/tc-name.js?v=3bfde9f5"></script>
+    <script src="lib/tc-hours.js?v=3bfde9f5"></script>
+    <script src="lib/qr.js?v=3bfde9f5"></script>
+    <script src="js/file-out.js?v=3bfde9f5"></script>
+    <script src="js/tc-ui.js?v=3bfde9f5"></script>
+    <script src="js/tc-db.js?v=3bfde9f5"></script>
+    <script src="js/owner-app.js?v=3bfde9f5"></script>
     <script>
       OwnerApp.startIndex();
     </script>

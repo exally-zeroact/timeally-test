@@ -391,11 +391,9 @@
      ★1問ごとに保存★（最後まで行かないと保存されない、を作らない）。
      ★押したら その場で記録に入る★（2026-08-18 夜3・決まりは1つ）。 */
   var _asks = [];                                   // 画面に出している質問（押した時に引く）
-  /* ★もう答えた質問★（この画面を開いている間だけ覚える）
-     ＝答えると その場で記録が変わるが、★何を答えたかは そのまま残す★。
-     何も言わないと ★同じ物を何回も押してしまう★（連打を直す機能で連打を作らない）。 */
-  var _answered = {};
-  function askKey(a) { return a.type + '@' + a.at; }
+  /* ★「直しました」は 押した時に1回 出すだけ★（2026-08-18 司さん
+     「修正押した時だけ修正しましたとかにしろ」）＝画面に貼り付けない。
+     押せば その場で記録が変わるので、次の描き直しで 質問そのものが消える。 */
   /* ★時刻そのものを直す★ … 開いている打刻／機械が見つけた分／自分の打刻ぜんぶ */
   var _openPid = null;
   var _fixStep = 'menu';   // ★開いた打刻の段★（menu＝2つだけ／pick＝候補を出す）
@@ -406,9 +404,6 @@
 
   function askHtml(a, n, res) {
     var head = '<div class="tc-askq">' + U.esc(a.text) + '</div>';
-    if (_answered[askKey(a)]) {
-      return '<div class="tc-ask">' + head + '<div class="tc-askwhy">直しました。</div></div>';
-    }
     var btn = function (id, label, why) {
       return '<button class="tc-btn sub" type="button" id="' + id + '">' + U.esc(label) + '</button>'
         + (why ? '<span class="tc-askwhy">' + U.esc(why) + '</span>' : '');
@@ -470,10 +465,6 @@
 
   /** ★機械が先に気づいて聞く★（長すぎ／短すぎ／退勤が出勤より前） */
   function issueHtml(x, n) {
-    if (_answered['issue@' + x.type + '@' + x.at]) {
-      return '<div class="tc-ask"><div class="tc-askq">' + U.esc(x.text) + '</div>'
-        + '<div class="tc-askwhy">直しました。</div></div>';
-    }
     return '<div class="tc-ask"><div class="tc-askq">' + U.esc(x.text) + '</div>'
       + '<div class="tc-askrow">'
       + '<button class="tc-btn sub" type="button" id="iss' + n + '-ok">合っている</button>'
@@ -566,7 +557,6 @@
     return DB.Emp.edit(st.token, st.device, st.pw, o.id || null, o.at || null, o.kind || null, o.why || '')
       .then(function (r) {
         if (!r || !r.ok) { U.toast(reason(r)); return; }
-        if (o.ask) _answered[askKey(o.ask)] = true;
         _openPid = null;
         _fixStep = 'menu';
         U.toast(o.done);
@@ -648,27 +638,24 @@
       _issues = global.TcClean.timeIssues(_all, {
         today: (DB.nowJst() || '').slice(0, 10), dayStdMin: _dayStdMin,
       });
+      /* ★数えない打刻は 画面に出さない★（2026-08-18 司さん「そもそも数えんのなら見せるなや」）
+         ＝同じ時刻を2回 押した分（まとめた分）と、まだ入っていない分は ★出さない★。
+         ★記録は倉庫に残っている★（消してはいない）。人が見るのは ★数える打刻だけ★。 */
       var byDay = {};
-      res.punches.forEach(function (p) {
-        (byDay[p.at.slice(0, 10)] = byDay[p.at.slice(0, 10)] || []).push(p);
-      });
+      res.punches.filter(function (p) { return p.why !== 'merged' && !p.pending; })
+        .forEach(function (p) {
+          (byDay[p.at.slice(0, 10)] = byDay[p.at.slice(0, 10)] || []).push(p);
+        });
       var days = Object.keys(byDay).sort();
       if (!days.length) { box.innerHTML = '<div class="tc-note">この月はまだ何も打っていません。</div>'; return; }
       _asks = res.asks.slice();
       box.innerHTML = days.map(function (day) {
         var info = res.byDay[day] || { asks: [] };
-        /* ★まとめた物も 画面には残す★（薄く・札つき）＝消したように見せない */
-        var rows = byDay[day].map(function (p) {
-          var merged = p.why === 'merged';
-          /* ★時刻そのものを間違えた時★（2026-08-18 司さん）
-             ＝打った直後の60秒を過ぎたら、★行を押して「この時刻を直す」★。
-             ★元の行は消さない★＝新しい時刻の行を足して、元には印を付ける。 */
-          var openable = !!p.id && !merged;
-          var head = '<span class="tc-punchline' + (merged ? ' tc-dim' : '') + '">'
-            + U.esc(p.at.slice(11, 16)) + '　' + U.esc(KIND_LABEL[p.kind] || p.kind)
-            + (p.pending ? ' <span class="tc-tag pending">まだ入っていません</span>' : '')
-            + (merged ? ' <span class="tc-tag">2回 押しました（数えません）</span>' : '') + '</span>';
-          if (!openable) return '<div>' + head + '</div>';
+        /* ★出るのは 数える打刻だけ★（札も説明も要らない＝行を押せば 直す・消すが出る） */
+        var rows = (byDay[day] || []).map(function (p) {
+          var head = '<span class="tc-punchline">'
+            + U.esc(p.at.slice(11, 16)) + '　' + U.esc(KIND_LABEL[p.kind] || p.kind) + '</span>';
+          if (!p.id) return '<div>' + head + '</div>';
           return '<div class="tc-punchrow">'
             + '<button type="button" class="tc-rowbtn" data-pid="' + U.esc(p.id) + '"'
             + ' aria-expanded="' + (_openPid === p.id ? 'true' : 'false') + '">'
@@ -679,7 +666,7 @@
         /* ★その日の結論を1行★（★決められない日は 決められないと出す★・時刻だけ）
            ★言う事が在る日だけ出す★（2026-08-18 夜 司さん「複雑すぎんか？」）
            ＝出勤と退勤が並んでいる日は ★上の2行を読めば同じ事★。1日44pxを積まない。 */
-        var needLine = info.undecided || (info.asks || []).length || info.merged
+        var needLine = info.undecided || (info.asks || []).length
           || (info.pairs || []).some(function (x) { return !x.outAt; });
         var line = needLine
           ? '<div class="tc-note' + (info.undecided ? ' warn' : '') + '">'

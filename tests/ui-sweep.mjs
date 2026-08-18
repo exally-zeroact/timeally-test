@@ -563,9 +563,10 @@ T('★あとから入れる は その場で入る（お願いにしない・跡
   T('★★締め切った月でも 打った時刻は見えたまま（隠さない）★★', () => {
     const box = closedPages['kiroku.html'].w.document.getElementById('list');
     ok(/\d\d:\d\d/.test(box.textContent), '★時刻が消えている★');
+    /* ★数えない分（まだ入っていない打刻）は 出さない★ので、出るのは数える打刻だけ */
     const n = (box.textContent.match(/\d\d:\d\d/g) || []).length;
-    ok(n >= 3, '出ている時刻が ' + n + '個');
-    console.log('     実測: 締め切った後も 時刻 ' + n + '個が見えたまま');
+    ok(n >= 2, '出ている時刻が ' + n + '個');
+    console.log('     実測: 締め切った後も 数える打刻 ' + n + '個が見えたまま');
   });
 }
 
@@ -676,10 +677,14 @@ T('★あとから入れる は その場で入る（お願いにしない・跡
   const text0 = p.w.document.getElementById('list').textContent;
 
   T('★★おかしい所は言う。ただし ★1日に1つまで★（質問を積み上げない）★★', () => {
-    /* ★言葉は「見たまま」★（2026-08-18 司さん「同じ打刻としてってどうゆう意味ど」）
-       ＝何をしたか（2回押した）と どうなるか（数えない）を そのまま書く */
-    ok(/2回 押しました（数えません）/.test(text0), '★2回押した分だと分かる言葉になっていない★');
-    ok(!/まとめました/.test(text0), '★分かりにくい言い方が残っている★');
+    /* ★数えない打刻は 画面に出さない★（2026-08-18 司さん「そもそも数えんのなら見せるなや」）
+       ＝08/17 の5本のうち ★出るのは 数える物だけ★（同じ分に2回 押した分は出さない） */
+    ok(!/2回 押しました/.test(text0), '★数えない打刻を見せている★');
+    ok(!/まとめました/.test(text0), '★まとめた説明が残っている★');
+    /* ★打刻の行だけ数える★（説明の文にも時刻は出るので 行で数える） */
+    const shownRows = p.w.document.querySelectorAll('#list .tc-punchline').length;
+    ok(shownRows === 4, '★出ている打刻の行が ' + shownRows + '本★（数える4本のはず）');
+    console.log('     実測: 出ている打刻 ' + shownRows + '本（原本5本のうち 2回押した1本は出さない）');
     ok(/08:00 は 出勤と退勤が同じ時刻です。どちらでしたか？/.test(text0), '★どちらか聞いていない★');
     ok(/決められません/.test(text0), '★その日の結論を出していない★');
     ok(!/まだ退勤が入っていません/.test(text0), '★同じ日に 質問を2つ並べている★');
@@ -710,9 +715,14 @@ T('★あとから入れる は その場で入る（お願いにしない・跡
     ok(ed.length === 1, '★自分で直す道を通っていない★（' + ed.length + '件）');
     ok(ed[0].p_at === null, '★取り消しなのに 時刻を送っている★');
     ok(/08:00 は 出勤でした/.test(ed[0].p_reason), ed[0].p_reason);
-    ok(req.length === 0, '★お願いも出している（承認の山を作る）★: ' + req.length + '件');
-    ok(!p.w.document.getElementById('ask0-in'), '★答えた後も 同じボタンが押せる★');
-    console.log('     実測: 自分で直した 1件／お願い 0件');
+    ok(req.length === 0, '★会社を待たせる道を通っている★: ' + req.length + '件');
+    /* ★「直しました」は 押した時に1回 出すだけ★（画面に貼り付けない・司さんの決まり）
+       ※本物では 記録が変わるので 次の描き直しで質問そのものが消える。
+         ここは倉庫の代わりが 前の打刻を返し続けるので、★貼り付けていない事★だけを見る。 */
+    const toast = (p.w.document.querySelector('.tc-toast') || {}).textContent || '';
+    ok(/直しました/.test(toast), '★押した時に何も言っていない★: ' + toast);
+    ok(!/直しました/.test(p.w.document.getElementById('list').textContent), '★画面に貼り付けている★');
+    console.log('     実測: その場で直した 1件／言ったのは押した時の1回だけ');
   });
 
   /* ② 行を押す＝★2つだけ★ */
@@ -840,7 +850,7 @@ T('★あとから入れる は その場で入る（お願いにしない・跡
   await wait(); await wait(); await wait();
   T('★★「この1本は使わない」お願いも 承認前に 数で見せる（0→0 に見せない）★★', () => {
     const box = p.w.document.getElementById('fixes').textContent;
-    const m = /元は (\d+)分 → 承認すると (\d+)分/.exec(box);
+    const m = /元は (\d+)分 → 入れると (\d+)分/.exec(box);
     ok(m, '★承認する前の数が出ていない★: ' + box.slice(0, 120));
     ok(m[1] !== m[2], '★使わない印を数に入れていない（元と後が同じ）★: ' + m[0]);
     console.log('     実測: ' + m[0]);

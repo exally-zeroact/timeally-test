@@ -471,7 +471,7 @@ say(inBar.length === 0 || rights.length === 1,
    ★合格の数（指示役）★:
      ・打刻5本＋質問1つが ★幅390の1画面（844px）に収まる★
      ・★開いた行に見える押せる物は 3つまで★
-     ・★「お願いを出す」は画面に1つ★（畳んでいる時は0）
+     ・★押す物（直す・消す・足す）は画面に1つ★（畳んでいる時は0）
    ★窓の大きさでは測れない★ので 枠(iframe)の中で測る（Chromeは526pxより狭くできない）。 */
 console.log('\n⑦ 記録の画面（畳んだ後）');
 const KIROKU_PROBE = VISIBLE + `
@@ -480,7 +480,7 @@ const KIROKU_PROBE = VISIBLE + `
   var rowTexts = rows.map(function(e){ return (e.textContent||"").trim().slice(0, 20); });
   var asks = [].slice.call(document.querySelectorAll("#list .tc-ask")).filter(vis);
   var btns = [].slice.call(document.querySelectorAll("button, a.tc-btn")).filter(vis);
-  var sends = btns.filter(function(b){ return /お願いを出す/.test(b.textContent); });
+  var sends = btns.filter(function(b){ return /^(直す|消す|足す)$/.test((b.textContent||"").trim()); });
   var r = list.getBoundingClientRect();
   /* ★1画面に収まるか★＝記録の箱の一番下が 画面の高さの中に在るか */
   return {
@@ -504,10 +504,10 @@ say(k390.asks === 1, '★質問は1つだけ★（実測 ' + k390.asks + '個）
 say(k390.listBottom <= k390.screenH,
   '★打刻5本＋質問1つが 1画面に収まる★（実測 下端 ' + k390.listBottom + 'px ≦ ' + k390.screenH + 'px）');
 say(k390.sends === 0 && k390.addHidden,
-  '★畳んでいる時は「お願いを出す」が0個★（実測 ' + k390.sends + '個／あとから入れるは畳み='
+  '★畳んでいる時は 押す物が0個★（実測 ' + k390.sends + '個／あとから入れるは畳み='
   + k390.addHidden + '）');
 
-/* ★行を1つ開いた時★＝押せる物は3つまで／「お願いを出す」はまだ出さない */
+/* ★行を1つ開いた時★＝押せる物は3つまで／★押す物は開いた行の中だけ★（外に増やさない） */
 const khOpen = await render('kiroku.html', { punches: K5 }, (w) => {
   const b = w.document.querySelector('[data-pid]');
   if (b) b.click();
@@ -516,16 +516,20 @@ const kOpen = measure('kiroku-390-open', khOpen, 390, VISIBLE + `
   var row = document.querySelector(".tc-punchrow .tc-ask");
   var box = row ? row.closest(".tc-punchrow") : null;
   var inRow = box ? [].slice.call(box.querySelectorAll("button, a.tc-btn")).filter(vis) : [];
-  var sends = [].slice.call(document.querySelectorAll("button")).filter(vis)
-    .filter(function(b){ return /お願いを出す/.test(b.textContent); });
+  /* ★行の外に 押す物が増えていないか★＝開いた拍子に「あとから入れる」等が開いていないこと */
+  var outside = [].slice.call(document.querySelectorAll("button")).filter(vis)
+    .filter(function(b){ return /^(直す|消す|足す)$/.test((b.textContent||"").trim()); })
+    .filter(function(b){ return !box || !box.contains(b); });
   return { w: document.documentElement.clientWidth, opened: !!box,
     inRow: inRow.length, labels: inRow.map(function(b){ return (b.textContent||"").trim(); }),
-    sends: sends.length };
+    outside: outside.length,
+    outLabels: outside.map(function(b){ return (b.textContent||"").trim(); }) };
 `);
 console.log('    実測: 開いた行の押せる物 ' + kOpen.inRow + '個 '
-  + JSON.stringify(kOpen.labels) + '／「お願いを出す」' + kOpen.sends + '個');
+  + JSON.stringify(kOpen.labels) + '／行の外の押す物 ' + kOpen.outside + '個 '
+  + JSON.stringify(kOpen.outLabels));
 say(kOpen.opened, '★行を押すと開く★');
 say(kOpen.inRow <= 3, '★開いた行に見える押せる物は3つまで★（実測 ' + kOpen.inRow + '個）');
-say(kOpen.sends === 0, '★開いただけでは「お願いを出す」を出さない★（実測 ' + kOpen.sends + '個）');
+say(kOpen.outside === 0, '★押す物は 開いた行の中だけ★（行の外 実測 ' + kOpen.outside + '個）');
 console.log('\n' + (ng ? '★' + ng + '件 直っていません★' : '★全部 決まりどおり★') + '\n');
 process.exit(ng ? 1 : 0);
