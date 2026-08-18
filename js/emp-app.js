@@ -667,7 +667,7 @@
           var head = '<span class="tc-punchline' + (merged ? ' tc-dim' : '') + '">'
             + U.esc(p.at.slice(11, 16)) + '　' + U.esc(KIND_LABEL[p.kind] || p.kind)
             + (p.pending ? ' <span class="tc-tag pending">まだ入っていません</span>' : '')
-            + (merged ? ' <span class="tc-tag">同じ打刻としてまとめました</span>' : '') + '</span>';
+            + (merged ? ' <span class="tc-tag">2回 押しました（数えません）</span>' : '') + '</span>';
           if (!openable) return '<div>' + head + '</div>';
           return '<div class="tc-punchrow">'
             + '<button type="button" class="tc-rowbtn" data-pid="' + U.esc(p.id) + '"'

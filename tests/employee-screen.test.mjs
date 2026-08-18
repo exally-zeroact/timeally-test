@@ -155,7 +155,7 @@ T('★直す・消す・足す は その場で入る／★跡は必ず残る★
   /* ★画面の言葉★ … 人が覚えるのは「直す・消す・足す」だけ */
   const words = ['お願い', '承認', '申請', '会社に出す'];
   const bad = [];
-  ['kiroku.html', 'punch.html', 'js/emp-app.js'].forEach((f) => {
+  ['kiroku.html', 'punch.html', 'js/emp-app.js', 'lib/tc-clean.js'].forEach((f) => {
     const t = visibleText(fs.readFileSync(path.join(ROOT, f), 'utf8'), /\.html$/.test(f));
     words.forEach((w) => { if (t.indexOf(w) >= 0) bad.push(f + ' → 「' + w + '」'); });
   });

@@ -1275,7 +1275,7 @@
     return '<div class="tc-note' + (d.undecided ? ' warn' : '') + '">' + U.esc(s)
       + (more ? '<br>' + U.esc(more) : '')
       + ((d.asks || []).length ? '<br>本人の画面で答えると、お願いとして上がってきます。' : '')
-      + (d.merged ? '<br>' + U.esc('同じ打刻としてまとめた打刻が ' + d.merged + '本あります（原本は残っています）') : '')
+      + (d.merged ? '<br>' + U.esc('同じ時刻を2回 押した打刻が ' + d.merged + '本あります（数えていません・記録は残っています）') : '')
       + '</div>';
   }
 
