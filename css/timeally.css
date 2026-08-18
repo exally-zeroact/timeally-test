@@ -140,6 +140,22 @@ h3 { font-size: 14px; color: #8F6200; margin: 14px 0 6px; }
 /* 打刻の大きいボタン（従業員） */
 .tc-punchgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
 .tc-punchgrid .tc-btn { width: 100%; min-height: 64px; font-size: 17px; }
+/* ★いま押してよい物だけ 大きく★（2026-08-18 司さん「出勤押してもないのに退勤おせるとか」）
+   ＝押せる物は 2列ぶんに広げる。押せない物は 灰色のまま小さく残す（なぜ押せないかを覚えてもらう）。 */
+.tc-punchgrid .tc-btn.main { grid-column: 1 / -1; min-height: 84px; font-size: 20px; }
+/* ★いまの状態★（出勤中／まだ出勤していません） */
+.tc-statenow {
+  display: block; margin: 10px 0; padding: 10px 12px;
+  border: 1.5px solid #F0B400; border-radius: 10px; background: #FFFBF0;
+  color: #2B2418; font-weight: 700; font-size: 15px; text-align: center;
+}
+/* ★打った直後だけ出る「取り消す」★（ここで直せば 会社には何も出ない） */
+.tc-undo {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 10px 0; padding: 10px 12px;
+  border: 1.5px solid #B3261E; border-radius: 10px; background: #FFFFFF;
+}
+.tc-undo .tc-undo-what { flex: 1 1 auto; font-size: 14px; color: #2B2418; }
 
 /* ── 入力欄（★16px★ 小さいと iPhone が拡大する） ───────────────── */
 input[type='text'], input[type='email'], input[type='password'],

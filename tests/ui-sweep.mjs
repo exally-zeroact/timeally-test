@@ -168,13 +168,24 @@ for (const [file, list] of Object.entries(PLAN)) {
     fail++; console.log('  ✗ ' + file + ' を開けない — ' + e.message); continue;
   }
   await wait(); await wait();
-  /* 先に入れる（画面が描き終わってから＝後から描かれる欄にも入る） */
+  /* 先に入れる（画面が描き終わってから＝後から描かれる欄にも入る）
+     ★入れたら「入れた」と画面に伝える★（2026-08-18）
+     ＝本物の人が打つと oninput/onchange が走る。値だけ置くと
+     ★「揃うまで押せない」を入れた画面が ずっと押せないまま★になり、
+     ★押した気になって0回のまま緑★になる（実際に踏んだ）。 */
+  const fire = (el) => { if (!el) return; if (el.oninput) el.oninput(); if (el.onchange) el.onchange(); };
   for (const [id, v] of Object.entries(PREFILL[file] || {})) {
     const el = page.w.document.getElementById(id);
-    if (el) el.value = v;
+    if (el) { el.value = v; fire(el); }
   }
   const dateInput = page.w.document.querySelector('.tc-date-input');
-  if (dateInput) dateInput.value = '2026-08-04';
+  if (dateInput) {
+    dateInput.value = '2026-08-04';
+    /* 日付の欄は onchange を ★属性★で持っている（TcUi が組み立てる）→ 同じ物を直に呼ぶ */
+    if (page.w.TcUi && page.w.TcUi.onDateChange) page.w.TcUi.onDateChange(dateInput);
+    if (page.w.EmpApp && page.w.EmpApp.onAddChange) page.w.EmpApp.onAddChange();
+    fire(dateInput);
+  }
   const missing = [], threw = [], sawDisabled = [];
   for (const [id, , fill] of list) {
     const el = page.w.document.getElementById(id);
@@ -308,10 +319,22 @@ T('★印刷は「紙だけの新しい窓」で開く（中身が0枚なら開�
   ok(!/どう絞り込んだ|絞り込み|フィルタ/.test(body), '★紙に絞り込みの説明を刷っている★');
 });
 
-T('★従業員の画面が 打刻を倉庫へ送った（押しただけで終わっていない）', () => {
+/* ★2026-08-18 4つ全部は押せなくなった★（司さん「出勤押してもないのに退勤おせるとか」）
+   ＝★いまの状態で押してよい物だけ★出す。この画面の種は「出勤中」なので
+     押せるのは ★退勤 と 私用で外出 の2つだけ★（出勤・外出から戻るは その状態では出さない）。
+   ★押せなかった物は sawDisabled に出る★＝黙って0回になっていないかを ここで数える。 */
+T('★従業員の画面が 打刻を倉庫へ送った（押せる物だけ・押しただけで終わっていない）', () => {
   const r = results.filter((x) => x.file === 'punch.html')[0];
   const n = r.page.fake._calls.filter((c) => c === 'rpc:tc_punch_add').length;
-  ok(n === 4, '打刻のRPCが ' + n + '回（4つのボタンぶん来ていない）');
+  ok(n >= 1, '打刻のRPCが ' + n + '回（1回も送っていない）');
+  const st = r.page.w.TcClean.stateOf([
+    { at: '2026-08-03T09:00', kind: 'in' }, { at: '2026-08-03T20:00', kind: 'out' },
+    { at: '2026-08-04T09:30', kind: 'in', src: 'calendar', pending: true },
+  ], {});
+  const canPress = ['in', 'out', 'away_in', 'away_out'].filter((k) => st.allow[k]).length;
+  ok(n === canPress, '押せるはずの ' + canPress + '個と 送った ' + n + '回が合っていない');
+  console.log('     実測: 状態「' + st.label + '」→ 押せる ' + canPress + '個 / 送った ' + n + '回'
+    + ' / 押せなかった物 ' + JSON.stringify(r.sawDisabled));
 });
 
 T('★あとから入れる は お願い(申請)として送られる', () => {
@@ -537,6 +560,89 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
   });
 }
 
+/* ── ★★ミスが起きない作り（打つ画面）★★（2026-08-18 司さん）────────────────
+   「出勤押してもないのに退勤おせるとか」「間違えて押した時の仕様を見直すべきやろ」
+   ★押す物の一覧を先に書く★:
+     未出勤の画面 … #b-in（押せる・大きい）／#b-out（★灰色＋理由★）／#b-ain #b-aout（出さない）
+     押した直後   … #b-undo（★60秒だけ出る★）／#b-in（「いま打ちました」で押せない）
+     出勤中の画面 … #b-out（押せる・大きい）／#b-in（出さない）／#to-fix（打ち間違えた）
+     過去の時刻   … 全部 押せない＋#t-why に理由 */
+{
+  const nowJst = new Date(Date.now() + 9 * 3600000).toISOString();
+  const today = nowJst.slice(0, 10);
+  const T_URL = '?t=11111111-1111-1111-1111-111111111111';
+  console.log('\n  punch.html（★いまの状態で押せる物だけ出す★）で押す物');
+  ['#b-in（未出勤）', '#b-undo（打った直後60秒）', '#b-out（出勤中）'].forEach((s) => console.log('    - ' + s));
+
+  /* ① まだ出勤していない人 */
+  const p0 = openPage('punch.html', T_URL, { punches: [] });
+  await wait(); await wait(); await wait();
+  T('★★出勤していない人に「退勤」を押させない（灰色＋理由）★★', () => {
+    const d2 = p0.w.document;
+    ok(!d2.getElementById('b-in').disabled, '★出勤が押せない★');
+    ok(/main/.test(d2.getElementById('b-in').className), '★押せる物が大きくなっていない★');
+    ok(d2.getElementById('b-out').disabled, '★出勤していないのに 退勤が押せる★');
+    ok(!d2.getElementById('b-out').hidden, '退勤を消してしまった（灰色で残して理由を出す）');
+    ok(d2.getElementById('b-ain').hidden && d2.getElementById('b-aout').hidden, '外出の2つが出ている');
+    const why = d2.getElementById('deny-why');
+    ok(!why.hidden && /先に出勤/.test(why.textContent), '★押せない理由が出ていない★: ' + why.textContent);
+    ok(/まだ出勤していません/.test(d2.getElementById('state-now').textContent), 'いまの状態が出ていない');
+    console.log('     実測: 理由「' + why.textContent + '」');
+  });
+
+  /* ② 押した直後（★取り消せる★・同じ物は押せない） */
+  p0.w.document.getElementById('b-in').click();
+  await wait(); await wait();
+  T('★★打った直後は「取り消す」が出て、同じボタンは押せない★★', () => {
+    const d2 = p0.w.document;
+    const box = d2.getElementById('undo');
+    ok(!box.hidden, '★取り消す箱が出ていない★');
+    ok(/取り消せます/.test(d2.getElementById('undo-what').textContent),
+      '残り時間を出していない: ' + d2.getElementById('undo-what').textContent);
+    ok(d2.getElementById('b-in').disabled, '★同じボタンが続けて押せる（連打できる）★');
+    ok(/いま打ちました/.test(d2.getElementById('b-in').textContent), '★押せない事を字で出していない★');
+    console.log('     実測: ' + d2.getElementById('undo-what').textContent);
+  });
+
+  T('★★取り消すと 会社には何も出ない（お願いにもならない）★★', () => {
+    const d2 = p0.w.document;
+    d2.getElementById('b-undo').click();
+    ok(p0.fake._store.undo.length === 1, '★取り消しを倉庫へ出していない★');
+    ok(p0.fake._store.fixReq.length === 0, '★取り消しなのに お願いを出している★');
+    ok(!p0.fake._calls.some((c) => /tc_punch\.delete/.test(c)), '★打刻を消している★');
+    console.log('     実測: 取り消し 1件／お願い 0件（★消す道は通っていない★）');
+  });
+
+  /* ③ 出勤中の人（★前の日の夜から出勤中★＝いま何時でも「最後より後」になる＝時計に振り回されない） */
+  const yday = new Date(Date.parse(today + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+  const p1 = openPage('punch.html', T_URL, { punches: [[yday + 'T23:00', 'in']] });
+  await wait(); await wait(); await wait();
+  T('★★出勤中の人には「退勤」だけ大きく（出勤は出さない・打ち間違えたの逃げ道を出す）★★', () => {
+    const d2 = p1.w.document;
+    ok(d2.getElementById('b-in').hidden, '★出勤中なのに 出勤が出ている★');
+    ok(!d2.getElementById('b-out').disabled && /main/.test(d2.getElementById('b-out').className),
+      '★退勤が大きく押せる形になっていない★');
+    ok(!d2.getElementById('to-fix').hidden, '★「出勤を打ち間違えた」の逃げ道が無い★');
+    ok(/出勤中/.test(d2.getElementById('state-now').textContent), d2.getElementById('state-now').textContent);
+  });
+
+  /* ④ ★過去の時刻には打たせない★（08/17 の事故はここから起きた）
+     ★時計に振り回されない形で測る★＝今日 09:00 に出勤した人が 08:00 を選ぶ（値は直に入れる） */
+  const p2 = openPage('punch.html', T_URL, { punches: [[today + 'T09:00', 'in']] });
+  await wait(); await wait(); await wait();
+  T('★★最後に打った時刻より前は 押せない（打つ画面で過去へ戻らせない）★★', () => {
+    const d2 = p2.w.document;
+    const t = d2.getElementById('t');
+    t.value = '08:00';                       // 09:00 に出勤した後に 08:00 を選ぶ
+    t.onchange();
+    ok(d2.getElementById('b-out').disabled, '★過去の時刻で 退勤が押せる★');
+    const why = d2.getElementById('t-why');
+    ok(!why.hidden && /最後に打ったのは 09:00/.test(why.textContent), '理由が出ていない: ' + why.textContent);
+    ok(/記録へ/.test(why.textContent), '★逃げ道（あとから入れる）を出していない★');
+    console.log('     実測: 「' + why.textContent + '」');
+  });
+}
+
 /* ── ★連打・打ち間違いを 画面が先に言う（2026-08-18 司さんの実機の形）★ ─────
    ★見本は 司さんが 08/17 に実機で作った 5本★（テスト倉庫からそのまま）。作り物で代用しない。
    ★押す物の一覧を先に書く★（下の PLAN_ASK）。 */
@@ -581,7 +687,8 @@ T('★あとから入れる は お願い(申請)として送られる', () => {
   for (const [id, , fill] of PLAN_ASK) {
     for (const [k, v] of Object.entries(fill || {})) {
       const f = p.w.document.getElementById(k);
-      if (f) f.value = v;
+      /* ★入れたら「入れた」と画面に伝える★（揃うまで押せない形にしたので 値だけでは押せない） */
+      if (f) { f.value = v; if (f.oninput) f.oninput(); if (f.onchange) f.onchange(); }
     }
     const el = p.w.document.getElementById(id);
     if (!el || typeof el.onclick !== 'function') { missing.push(id); continue; }

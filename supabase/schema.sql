@@ -525,6 +525,35 @@ begin
   return jsonb_build_object('ok',true,'id',v_id,'pending', v_src='calendar');
 end $$;
 
+-- ★打った直後だけ 自分で取り消せる★（2026-08-18 司さん「ミスのないような対処をさせろ」）
+--   ★これは「消す道」ではない★:
+--     ・行は残る（at も kind も1分も動かさない）。★voided_at の印を立てるだけ★
+--     ・読む側（tc_my_punches / loadPunches）が voided_at is null で外すので、
+--       ★会社には何も出ない＝お願いにもならない＝会社の手間も増えない★
+--   ★門は倉庫の側にも作る★（画面だけで止めると 直に叩けば通る）:
+--     ① 自分の打刻だけ ② その場の打刻(src='punch')だけ ③ ★60秒以内★ ④ まだ取り消していない
+--     ⑤ 締め切った月は受け付けない
+--   ★60秒の根拠★: 実データ（tc_punch の created_at）で ★押し直しの間隔は最大11.9秒★。その5倍。
+create or replace function public.tc_punch_undo(p_token uuid, p_device text, p_pw text, p_id uuid)
+returns jsonb language plpgsql security definer set search_path=public, extensions, timeally as $$
+declare v_pub timeally.tc_pub; v_row timeally.tc_punch; v_st text;
+begin
+  select * into v_pub from timeally.tc_pub where token=p_token;
+  if v_pub.token is null or not v_pub.active then return jsonb_build_object('ok',false,'unauth',true); end if;
+  if not timeally.tc_ok(v_pub, p_device, p_pw) then return jsonb_build_object('ok',false,'unauth',true); end if;
+  select * into v_row from timeally.tc_punch
+   where id = p_id and account_id = v_pub.account_id and employee_id = v_pub.employee_id;
+  if v_row.id is null then return jsonb_build_object('ok',false,'not_mine',true); end if;
+  if v_row.voided_at is not null then return jsonb_build_object('ok',false,'already',true); end if;
+  if v_row.src <> 'punch' then return jsonb_build_object('ok',false,'not_punch',true); end if;
+  if now() - v_row.created_at > interval '60 seconds' then
+    return jsonb_build_object('ok',false,'too_late',true); end if;
+  v_st := timeally.tc_state(v_pub.account_id, ((v_row.at at time zone 'Asia/Tokyo')::date));
+  if v_st <> 'open' then return jsonb_build_object('ok',false,'closed',true,'state',v_st); end if;
+  update timeally.tc_punch set voided_at = now() where id = p_id;
+  return jsonb_build_object('ok',true);
+end $$;
+
 -- ★自分の記録を返す。返すのは「打った生の時刻」だけ★
 --   実労働・残業・丸め・金額は ★1つも返さない★（従業員は嘘の数字を一度も見ない）
 create or replace function public.tc_my_punches(p_token uuid, p_device text, p_pw text,
@@ -623,6 +652,7 @@ grant execute on function
   public.tc_pin_set(uuid,text),
   public.tc_verify(uuid,text),
   public.tc_punch_add(uuid,text,text,timestamptz,text,text),
+  public.tc_punch_undo(uuid,text,text,uuid),
   public.tc_my_punches(uuid,text,text,date,date),
   public.tc_fix_request(uuid,text,text,date,int,int,text,uuid[],uuid[]),
   public.tc_pub_info(uuid,date)

@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="format-detection" content="telephone=no" />
     <title>Timeally — 自分の記録</title>
-    <link rel="icon" href="icons/favicon-32.png?v=4fee63dc" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=4fee63dc" />
+    <link rel="icon" href="icons/favicon-32.png?v=f4013116" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=f4013116" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=4fee63dc" />
+    <link rel="stylesheet" href="css/timeally.css?v=f4013116" />
   </head>
   <body>
     <div class="tc-appbar">
@@ -64,7 +64,11 @@
       </select>
       <label for="ar">ひとこと（打ち忘れた理由など）</label>
       <input type="text" id="ar" />
-      <p><button class="tc-btn wide" id="b-add" type="button">お願いを出す</button></p>
+      <!-- ★出す前に1行 見せる★／★日・時刻・どれ が揃うまで押せない★
+           （2026-08-18 司さん「時間変更する前に間違えて押した時の仕様を見直すべきやろ」）
+           ＝時刻が --:-- のまま「お願いを出す」が押せてしまうのが 今までの穴。 -->
+      <div class="tc-note" id="add-why"></div>
+      <p><button class="tc-btn wide" id="b-add" type="button" disabled>お願いを出す</button></p>
     </div>
 
     <div class="tc-overlay" id="gate">
@@ -89,17 +93,17 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=4fee63dc"></script>
-    <script src="js/env-badge.js?v=4fee63dc"></script>
-    <script src="lib/tc-pin.js?v=4fee63dc"></script>
+    <script src="js/supa-config.js?v=f4013116"></script>
+    <script src="js/env-badge.js?v=f4013116"></script>
+    <script src="lib/tc-pin.js?v=f4013116"></script>
     <!-- ★打った物の「使う／使わない」と「聞く事」を決める1本★
          ★長さ（働いた分・追加ぶん・夜の分・お金）は1つも数えない★ので この画面から読んでよい。
          社長の画面も 数える所も ★同じこの1本★を見る＝食い違わない。
          （★この画面に 数える道具の名前すら書かない★＝見張りが名前で数えているため） -->
-    <script src="lib/tc-clean.js?v=4fee63dc"></script>
-    <script src="js/tc-ui.js?v=4fee63dc"></script>
-    <script src="js/tc-db.js?v=4fee63dc"></script>
-    <script src="js/emp-app.js?v=4fee63dc"></script>
+    <script src="lib/tc-clean.js?v=f4013116"></script>
+    <script src="js/tc-ui.js?v=f4013116"></script>
+    <script src="js/tc-db.js?v=f4013116"></script>
+    <script src="js/emp-app.js?v=f4013116"></script>
     <script>
       EmpApp.startKiroku();
     </script>

@@ -70,9 +70,9 @@
       el.hidden = !st.notice;
     }
     /* ★締め切った月には「お願い」も出せない★
-       倉庫が断るので入りはしないが、★押せてしまうと「出したのに直らない」と思われる★ */
-    var add = q('b-add');
-    if (add) add.disabled = !!st.notice;
+       倉庫が断るので入りはしないが、★押せてしまうと「出したのに直らない」と思われる★
+       ★押せる/押せないを決めるのは drawAdd の1本だけ★（2026-08-18・ここで別々に決めない） */
+    if (q('b-add')) drawAdd();
   }
 
   /* ── 入口 ─────────────────────────────────────────────────── */
@@ -156,24 +156,39 @@
     if (global.localStorage && st.device) global.localStorage.setItem(devKey(), st.device);
   }
 
-  /* ── ① 打つ ───────────────────────────────────────────────── */
+  /* ── ① 打つ ───────────────────────────────────────────────────────────
+     ★ミスが起きてからの対処より先に、ミスが起きない作り★（2026-08-18 司さん）
+       A ★いまの状態で押してよい物だけ出す★（出勤していない人に退勤を押させない）
+       B ★打った直後60秒は「取り消す」★（★取り消したら会社には何も出ない★）
+       C ★連打を受け付けない★（押せない事を 見て分かる形で出す）
+       E ★選べる時刻は「最後に打った時刻より後」だけ★（打つ画面で過去へ戻らせない）
+     ★状態も 押せる/押せない理由も lib/tc-clean.js が1か所で持つ★（画面で言い換えない）。 */
+  var PUNCH_BTN = [['b-in', 'in', '出勤'], ['b-out', 'out', '退勤'],
+    ['b-ain', 'away_in', '私用で外出'], ['b-aout', 'away_out', '外出から戻る']];
+  /* ★その状態で「灰色にして理由を出す」物★（これ以外の押せない物は そもそも出さない）
+     ＝出勤していない人に「退勤」を ★見せるが押させない★（なぜ押せないかを覚えてもらう） */
+  var GREY = { out: ['out'], in: [], away: ['out'], brk: [] };
+  var _now = null;        // いまの状態（TcClean.stateOf の返り値）
+  var _undo = null;       // 打った直後の取り消し {id, kind, hm, until, timer}
+
   function startPunch() {
     begin(function () {
-      var t = q('t');
-      if (t && !t.value) t.value = (DB.nowJst() || '').slice(11, 16);   // ★いまの時刻を入れておく。直せる★
       var link = q('to-kiroku');
       if (link) link.href = 'kiroku.html?t=' + encodeURIComponent(st.token);
-      /* ★休憩は押させない★（2026-08-15）。集計の側で 会社の既定を引く。
-         ★倉庫は break_in / break_out を今も受け取る★＝★過去の打刻が読めなくなると困る★ため。 */
-      var pairs = [['b-in', 'in', '出勤'], ['b-out', 'out', '退勤'],
-        ['b-ain', 'away_in', '私用で外出'], ['b-aout', 'away_out', '外出から戻る']];
-      pairs.forEach(function (p) {
+      var fix = q('to-fix');
+      if (fix) fix.href = 'kiroku.html?t=' + encodeURIComponent(st.token);
+      var t = q('t');
+      if (t) {
+        if (!t.value) t.value = (DB.nowJst() || '').slice(11, 16);   // ★いまの時刻。直せる★
+        t.onchange = drawPunch;
+        t.oninput = drawPunch;
+      }
+      PUNCH_BTN.forEach(function (p) {
         var b = q(p[0]);
-        if (!b) return;
-        b.onclick = function () { push(p[1], p[2], b); };
-        /* ★締め切った後は押せない★（押せても倉庫が断るが、押させない方が親切） */
-        b.disabled = st.state !== 'open';
+        if (b) b.onclick = function () { push(p[1], p[2], b); };
       });
+      var u = q('b-undo');
+      if (u) u.onclick = undoLast;
       drawNotice();
       var f = q('b-forget');
       if (f) f.onclick = function () {
@@ -181,20 +196,126 @@
         st.device = '';
         U.toast('この端末を忘れました。次から暗証番号を聞きます。');
       };
+      loadState();
     });
+  }
+
+  /** ★いまの状態を取り直す★（打刻は倉庫が正・画面で組み立てない）
+      前の日から見る＝夜勤（23:50 出勤 → 翌 07:00 退勤）でも「出勤中」が続く。 */
+  function loadState() {
+    var today = (DB.nowJst() || '').slice(0, 10);
+    var from = new Date(Date.parse(today + 'T00:00:00Z') - 2 * 86400000).toISOString().slice(0, 10);
+    return DB.Emp.mine(st.token, st.device, st.pw, from, today).then(function (r) {
+      if (!r || r.unauth) { _now = null; drawPunch(); return; }
+      _now = global.TcClean.stateOf(r.punches || [], { today: today });
+      drawPunch();
+    }).catch(function () { _now = null; drawPunch(); });
+  }
+
+  /** ★押せる物・押せない理由・取り消しの箱★を描く（★描くのはここ1か所★） */
+  function drawPunch() {
+    var closed = st.state !== 'open';
+    var sn = q('state-now');
+    if (sn) {
+      sn.textContent = !_now ? ''
+        : _now.state === 'in' && _now.lastAt ? _now.label + '（' + global.TcClean.hmOf(_now.lastAt) + ' から）'
+          : _now.label;
+      sn.hidden = !sn.textContent;
+    }
+    /* ★E★ 選んだ時刻が 最後に打った時刻より後か */
+    var today = (DB.nowJst() || '').slice(0, 10);
+    var hm = (q('t') || {}).value || '';
+    var tOk = hm ? global.TcClean.timeOk(_now, today + 'T' + hm) : { ok: false, why: '時刻を選んでください' };
+    var tw = q('t-why');
+    if (tw) { tw.textContent = tOk.ok ? '' : tOk.why; tw.hidden = tOk.ok; }
+
+    var grey = [];
+    PUNCH_BTN.forEach(function (p) {
+      var b = q(p[0]);
+      if (!b) return;
+      var allowed = _now ? _now.allow[p[1]] : p[1] === 'in';
+      var greyed = _now ? GREY[_now.state].indexOf(p[1]) >= 0 : p[1] === 'out';
+      /* ★C★ いま打ったばかりの物は 押せない（見て分かる形で） */
+      var justNow = _undo && _undo.kind === p[1];
+      b.hidden = !allowed && !greyed;
+      b.disabled = !allowed || closed || !tOk.ok || justNow;
+      b.className = 'tc-btn' + (allowed && p[1] !== 'in' && p[1] !== 'out' ? ' sub' : '')
+        + (allowed && !b.disabled ? ' main' : '');
+      b.textContent = justNow ? p[2] + '（いま打ちました）' : p[2];
+      if (greyed && !allowed) grey.push(p[2]);
+    });
+    var dw = q('deny-why');
+    if (dw) {
+      var why = closed ? '' : (grey.length && _now ? _now.deny : '');
+      dw.textContent = why;
+      dw.hidden = !why;
+    }
+    var fix = q('to-fix');
+    if (fix) fix.hidden = !(_now && _now.state === 'in');
+    drawUndo();
+  }
+
+  /** ★打った直後の取り消し★（残り秒を出す。0になったら箱ごと消す） */
+  function drawUndo() {
+    var box = q('undo'), what = q('undo-what');
+    if (!box) return;
+    if (!_undo) { box.hidden = true; if (what) what.textContent = ''; return; }
+    var left = Math.max(0, Math.ceil((_undo.until - Date.now()) / 1000));
+    if (left <= 0) { clearUndo(); return; }
+    box.hidden = false;
+    if (what) {
+      what.textContent = _undo.hm + ' ' + KIND_LABEL[_undo.kind] + ' で打ちました'
+        + '（あと ' + left + ' 秒 取り消せます）';
+    }
+  }
+  function clearUndo() {
+    if (_undo && _undo.timer) global.clearInterval(_undo.timer);
+    _undo = null;
+    var box = q('undo');
+    if (box) { box.hidden = true; }
+    drawPunch();
   }
 
   function push(kind, label, btn) {
     var hm = (q('t') || {}).value || (DB.nowJst() || '').slice(11, 16);
     var today = (DB.nowJst() || '').slice(0, 10);
+    /* ★E★ 画面でも止める（倉庫が断る前に、なぜ駄目かを出す） */
+    var tOk = global.TcClean.timeOk(_now, today + 'T' + hm);
+    if (!tOk.ok) { U.toast(tOk.why); drawPunch(); return; }
     if (btn) btn.disabled = true;
     DB.Emp.punch(st.token, st.device, st.pw, today + 'T' + hm, kind, 'punch')
       .then(function (r) {
         if (!r || !r.ok) { U.toast(reason(r)); return; }
-        U.toast(label + ' ' + hm + ' を残しました');
+        /* ★B★ 打った直後だけ 取り消せる（会社には何も出ない） */
+        if (_undo && _undo.timer) global.clearInterval(_undo.timer);
+        _undo = {
+          id: r.id, kind: kind, hm: hm,
+          until: Date.now() + global.TcClean.UNDO_SEC * 1000, timer: null,
+        };
+        _undo.timer = global.setInterval(drawUndo, 1000);
+        return loadState();
       })
       .catch(function (e) { U.toast('つながりませんでした（' + e.message + '）'); })
-      .then(function () { if (btn) btn.disabled = false; });
+      .then(function () { drawPunch(); });
+  }
+
+  function undoLast() {
+    if (!_undo) return;
+    var id = _undo.id;
+    var b = q('b-undo');
+    if (b) b.disabled = true;
+    DB.Emp.undo(st.token, st.device, st.pw, id).then(function (r) {
+      if (!r || !r.ok) {
+        U.toast(r && r.too_late ? '取り消せる時間が過ぎました。「記録へ」からお願いを出してください。'
+          : '取り消せませんでした。');
+        clearUndo();
+        return loadState();
+      }
+      U.toast('取り消しました。記録には残りません。');
+      clearUndo();
+      return loadState();
+    }).catch(function (e) { U.toast('つながりませんでした（' + e.message + '）'); })
+      .then(function () { if (b) b.disabled = false; });
   }
 
   /* ── ② 自分の記録（★打った時刻を並べるだけ★） ───────────────── */
@@ -214,7 +335,18 @@
       q('b-prev').onclick = function () { shift(-1); };
       q('b-next').onclick = function () { shift(1); };
       q('b-add').onclick = addLater;
+      /* ★D★ 日・時刻・どれ が揃うまで「お願いを出す」は押せない＋出す前に1行 見せる */
+      ['at', 'ak', 'ar'].forEach(function (id) {
+        var el = q(id);
+        if (el) { el.oninput = drawAdd; el.onchange = drawAdd; }
+      });
+      var dwrap = d.querySelector('#ad-wrap .tc-date-input');
+      if (dwrap) {
+        var prev = dwrap.getAttribute('onchange') || '';
+        dwrap.setAttribute('onchange', prev + 'EmpApp.onAddChange();');
+      }
       drawNotice();
+      drawAdd();
       draw();
     });
   }
@@ -295,6 +427,16 @@
         if (b) b.onclick = fn;
       };
       var pick = function () { return (q('ask' + n + '-t') || {}).value || ''; };
+      /* ★D★ 時刻を選ぶまで「この時刻に…」は押せない（押しても何も起きない、を作らない） */
+      var tin = q('ask' + n + '-t'), pb = q('ask' + n + '-pick');
+      if (tin && pb) {
+        var sync = function () {
+          pb.disabled = !tin.value;
+          pb.title = tin.value ? '' : '時刻を選んでください';
+        };
+        tin.oninput = sync; tin.onchange = sync;
+        sync();
+      }
       if (a.type === 'both') {
         on('in', function () {
           sendAsk(a, a.hm + ' は ' + K.in + 'でした（' + K.out + 'は使いません）', null, null, [a.outId]);
@@ -378,13 +520,39 @@
     }).catch(function (e) { U.toast('つながりませんでした（' + e.message + '）'); });
   }
 
+  /** ★D★ 出す前に「何を出すか」を1行 見せる／揃うまで押せない
+   *  ＝★時刻が --:-- のまま押せてしまう★のが 今までの穴（司さんの指摘そのもの）。
+   *  ★押せない理由は 押す物のすぐ上に出す★（押しても何も起きない、を作らない）。 */
+  function addLater0() {
+    return {
+      day: (d.querySelector('#ad-wrap .tc-date-input') || {}).value || '',
+      hm: (q('at') || {}).value || '',
+      kind: (q('ak') || {}).value || '',
+      why: (q('ar') || {}).value || '',
+    };
+  }
+  function drawAdd() {
+    var v = addLater0(), b = q('b-add'), note = q('add-why');
+    var msg = '', ok = false;
+    if (st.notice) msg = st.notice;                       // 締め切った月は そもそも出せない
+    else if (!v.day) msg = '日を選んでください';
+    else if (!v.hm) msg = '時刻を選んでください';
+    else if (!v.kind) msg = 'どれかを選んでください';
+    else {
+      ok = true;
+      msg = global.TcClean.mdOf(v.day) + ' ' + v.hm + ' に ' + (KIND_LABEL[v.kind] || v.kind)
+        + ' でお願いを出します';
+    }
+    if (note) { note.textContent = msg; note.hidden = !msg; }
+    if (b) b.disabled = !ok;
+  }
+
   /** あとから入れる＝★必ずお願い（申請）扱い★。当日打ったものと札で分ける。 */
   function addLater() {
-    var day = (d.querySelector('#ad-wrap .tc-date-input') || {}).value || '';
-    var hm = (q('at') || {}).value || '';
-    var kind = (q('ak') || {}).value || 'in';
-    var why = (q('ar') || {}).value || '';
-    if (!day || !hm) { U.toast('日と時刻を入れてください'); return; }
+    var v = addLater0();
+    var day = v.day, hm = v.hm, kind = v.kind || 'in', why = v.why;
+    /* ★押せない時は そもそも押せない★（ここは念のための二重の門） */
+    if (!day || !hm) { drawAdd(); return; }
     var btn = q('b-add');
     btn.disabled = true;
     DB.Emp.punch(st.token, st.device, st.pw, day + 'T' + hm, kind, 'calendar')
@@ -394,8 +562,13 @@
           .then(function () { U.toast('お願いを出しました。会社が見てから記録に入ります。'); draw(); });
       })
       .catch(function (e) { U.toast('つながりませんでした（' + e.message + '）'); })
-      .then(function () { btn.disabled = false; });
+      .then(function () { drawAdd(); });
   }
 
-  global.EmpApp = { startPunch: startPunch, startKiroku: startKiroku, KIND_LABEL: KIND_LABEL, _st: st };
+  global.EmpApp = {
+    startPunch: startPunch, startKiroku: startKiroku, KIND_LABEL: KIND_LABEL,
+    /* 日付の欄（TcUi が作る）から呼ばれる＝★選び終わった事を受け取る★ */
+    onAddChange: drawAdd,
+    _st: st,
+  };
 })(typeof window !== 'undefined' ? window : globalThis);

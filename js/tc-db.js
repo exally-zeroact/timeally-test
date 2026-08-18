@@ -264,6 +264,11 @@
         p_at: fromJst(wallTime), p_kind: kind, p_src: src || 'punch',
       });
     },
+    /** ★打った直後だけ 自分で取り消す★（★消さない＝倉庫が voided_at の印を立てるだけ★）
+        ★門は倉庫の側★（自分の物・その場の打刻・60秒以内・締めていない）。 */
+    undo: function (token, device, pw, id) {
+      return rpc('tc_punch_undo', { p_token: token, p_device: device, p_pw: pw, p_id: id });
+    },
     mine: function (token, device, pw, from, to) {
       return rpc('tc_my_punches', { p_token: token, p_device: device, p_pw: pw, p_from: from, p_to: to })
         .then(function (r) {

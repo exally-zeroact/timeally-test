@@ -83,7 +83,18 @@ if (process.argv.includes('--self-test')) {
     ok(/決められません/.test(CSV.note(d)), '★本物の備考に出ていない＝この検査が空振り★');
     ok(!/決められません/.test(CSV.note(Object.assign({}, d, { undecided: false }))), '作り物でも出ている');
   });
-  console.log('\n[self-test] ' + sp + ' passed, ' + sf + ' failed（★5通り★）');
+  S('⑥ ★どの状態でも全部 押せる作り（前の姿）★に戻すと 出勤していない人が退勤を押せる', () => {
+    const all = { in: true, out: true, away_in: true, away_out: true };
+    ok(all.out, '作り物が「全部押せる」になっていない');
+    ok(!CLEAN.stateOf([], {}).allow.out, '★本物で 出勤していない人が退勤を押せる＝門が無い★');
+  });
+  S('⑦ ★時刻の門を「以上」に緩めた作り物★は 同じ分（08:00 出勤→08:00 退勤）を通す', () => {
+    const s = CLEAN.stateOf([p('2026-08-18T09:00', 'in')], {});
+    const loose = (t) => CLEAN.toMin(t) >= CLEAN.toMin(s.lastAt);      // わざと「以上」
+    ok(loose('2026-08-18T09:00'), '作り物が緩くなっていない');
+    ok(!CLEAN.timeOk(s, '2026-08-18T09:00').ok, '★本物が同じ分を通している（08/17 の型が再発する）★');
+  });
+  console.log('\n[self-test] ' + sp + ' passed, ' + sf + ' failed（★7通り★）');
   if (sf) process.exit(1);
 }
 
@@ -263,6 +274,84 @@ T('★従業員の画面に出る文に 数えた結果の言葉が1つも無い
   texts.forEach((t) => words.forEach((w) => { if (t.indexOf(w) >= 0) bad.push(w + ' ← ' + t); }));
   ok(bad.length === 0, '★従業員に見せられない言葉: ' + bad.join(' / ') + '★');
   console.log('     実測: 文 ' + texts.length + '本 / 見張った言葉 ' + words.length + '語 / 見つかった 0件');
+});
+
+/* ── ④ ★ミスが起きない作り★（打つ画面の門・2026-08-18 司さん） ───────────
+   「出勤押してもないのに退勤おせるとか」
+   「ミスがあったからの対処やなく、ミスのないような対処させろよ」            */
+T('★門A★ 出勤していない人は ★出勤しか押せない★（退勤は押せない）', () => {
+  const s = CLEAN.stateOf([], {});
+  eq(s.state, 'out'); eq(s.label, 'まだ出勤していません');
+  eq(s.allow.in, true); eq(s.allow.out, false);
+  eq(s.allow.away_in, false); eq(s.allow.away_out, false);
+  ok(/先に出勤/.test(s.deny), '押せない理由が無い: ' + s.deny);
+});
+
+T('★門A★ 出勤中は ★退勤と外出だけ★／外出中は ★戻るだけ★', () => {
+  const inn = CLEAN.stateOf([p('2026-08-18T09:00', 'in')], {});
+  eq(inn.state, 'in'); eq(inn.allow.out, true); eq(inn.allow.away_in, true); eq(inn.allow.in, false);
+  const away = CLEAN.stateOf([p('2026-08-18T09:00', 'in'), p('2026-08-18T12:00', 'away_in')], {});
+  eq(away.state, 'away'); eq(away.allow.away_out, true); eq(away.allow.out, false); eq(away.allow.in, false);
+  const back = CLEAN.stateOf([p('2026-08-18T09:00', 'in'), p('2026-08-18T12:00', 'away_in'),
+    p('2026-08-18T13:00', 'away_out')], {});
+  eq(back.state, 'in'); eq(back.allow.out, true);
+});
+
+T('★門A★ 夜勤（前の日 23:00 出勤）でも 翌朝は「出勤中」のまま', () => {
+  const s = CLEAN.stateOf([p('2026-08-17T23:00', 'in')], { today: '2026-08-18' });
+  eq(s.state, 'in'); eq(s.allow.out, true);
+  eq(CLEAN.hmOf(s.lastAt), '23:00');
+});
+
+T('★門A★ 退勤した後は また出勤だけ／★まとめた打刻は状態に入れない★', () => {
+  const s = CLEAN.stateOf([p('2026-08-18T09:00', 'in'), p('2026-08-18T18:00', 'out')], {});
+  eq(s.state, 'out'); eq(s.allow.in, true); eq(s.allow.out, false);
+  /* 同じ分の連打は1本にまとまる＝状態は「出勤中」1回ぶん */
+  const dbl = CLEAN.stateOf([p('2026-08-18T09:00', 'in', 'a'), p('2026-08-18T09:00', 'in', 'b')], {});
+  eq(dbl.state, 'in'); eq(dbl.clean.used.length, 1);
+});
+
+T('★門E★ 選べる時刻は ★最後に打った時刻より後★だけ（同じ分も止める＝08/17 の型）', () => {
+  const s = CLEAN.stateOf([p('2026-08-18T09:00', 'in')], {});
+  eq(CLEAN.timeOk(s, '2026-08-18T08:00').ok, false, '過去の時刻を通している');
+  eq(CLEAN.timeOk(s, '2026-08-18T09:00').ok, false, '★同じ分を通している（出勤と退勤が同じ時刻になる）★');
+  eq(CLEAN.timeOk(s, '2026-08-18T09:01').ok, true);
+  ok(/最後に打ったのは 09:00/.test(CLEAN.timeOk(s, '2026-08-18T08:00').why), '理由に時刻が無い');
+  ok(/記録へ/.test(CLEAN.timeOk(s, '2026-08-18T08:00').why), '★逃げ道（あとから入れる）を出していない★');
+  /* まだ1本も打っていない人は 何時でもよい */
+  eq(CLEAN.timeOk(CLEAN.stateOf([], {}), '2026-08-18T08:00').ok, true);
+  eq(CLEAN.timeOk(CLEAN.stateOf([], {}), '').ok, false, '空の時刻を通している');
+});
+
+T('★実物★ 08/17 の5本を ★押した順★に門A＋門Eへ通すと 4本が そもそも入らない', () => {
+  /* 押した順（created_at）… 21:44 を打った後に 時刻を朝へ戻して 4回 押している */
+  const pressed = [
+    { at: '2026-08-17T21:44', kind: 'in' }, { at: '2026-08-17T08:00', kind: 'in' },
+    { at: '2026-08-17T08:00', kind: 'out' }, { at: '2026-08-17T08:00', kind: 'in' },
+    { at: '2026-08-17T17:03', kind: 'out' },
+  ];
+  const kept = [];
+  let blocked = 0;
+  pressed.forEach(function (x, i) {
+    const s = CLEAN.stateOf(kept, { today: TODAY });
+    const okKind = s.allow[x.kind];
+    const okTime = CLEAN.timeOk(s, x.at).ok;
+    if (okKind && okTime) kept.push(Object.assign({ id: 'k' + i }, x)); else blocked++;
+  });
+  eq(blocked, 4, '止まった本数');
+  eq(kept.length, 1, '入った本数');
+  /* ★後ろに残る「聞く事」が 2件 → 1件★（「決められない日」が丸ごと消える） */
+  eq(asksOf(REAL_0817).length, 2, '今の件数');
+  const after = CLEAN.clean(kept, { today: TODAY });
+  eq(after.asks.length, 1, '門を入れた後の件数');
+  eq(after.asks[0].type, 'open-in');
+  ok(!after.byDay['2026-08-17'].undecided, '★決められない日が残っている★');
+  console.log('     実測: 5本中 4本が入らない → 聞く事 2件 → 1件（決められない日 1日 → 0日）');
+});
+
+T('★門B★ 取り消せる長さは ★60秒★（実データの押し直し最大11.9秒の5倍以上）', () => {
+  eq(CLEAN.UNDO_SEC, 60);
+  ok(CLEAN.UNDO_SEC >= 11.9 * 5, '★実測の押し直し（最大11.9秒）に対して余裕が無い★');
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

@@ -219,8 +219,8 @@ function createFake(seed) {
   var tick = 0;
   var store = {
     tc_close: (seed.closeLog || []).slice(),
-    /* ★従業員が出した「お願い」と「後から入れた打刻」★（2026-08-18） */
-    fixReq: [], punchAdd: [],
+    /* ★従業員が出した「お願い」と「後から入れた打刻」と「打った直後の取り消し」★（2026-08-18） */
+    fixReq: [], punchAdd: [], undo: [],
     clock: function () { tick++; return '2026-08-15T' + ('0' + (9 + tick)).slice(-2) + ':00:00Z'; },
   };
   return {
@@ -276,6 +276,12 @@ function createFake(seed) {
       /* ★出したお願いを 溜めておく★（押しただけで終わっていないか・中身が正しいかを数える） */
       if (name === 'tc_fix_request') { store.fixReq.push(args || {}); out = { ok: true, id: 'f9' }; }
       if (name === 'tc_punch_add') store.punchAdd.push(args || {});
+      /* ★打った直後の取り消し★（2026-08-18）… ★倉庫は消さず voided_at の印を立てるだけ★。
+         seed.undoTooLate=true で「60秒を過ぎた」を作れる（画面が何と言うかを見る）。 */
+      if (name === 'tc_punch_undo') {
+        store.undo.push(args || {});
+        out = seed.undoTooLate ? { ok: false, too_late: true } : { ok: true };
+      }
       return Promise.resolve({ data: out, error: null });
     },
     auth: {
