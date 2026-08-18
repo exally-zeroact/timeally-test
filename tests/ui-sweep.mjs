@@ -849,7 +849,7 @@ T('★あとから入れる は その場で入る（お願いにしない・跡
   const p = openPage('index.html', '', { fixVoid: true });
   await wait(); await wait(); await wait();
   T('★★「この1本は使わない」お願いも 承認前に 数で見せる（0→0 に見せない）★★', () => {
-    const box = p.w.document.getElementById('fixes').textContent;
+    const box = p.w.document.getElementById('pend').textContent;
     const m = /元は (\d+)分 → 入れると (\d+)分/.exec(box);
     ok(m, '★承認する前の数が出ていない★: ' + box.slice(0, 120));
     ok(m[1] !== m[2], '★使わない印を数に入れていない（元と後が同じ）★: ' + m[0]);
@@ -865,12 +865,85 @@ T('★あとから入れる は その場で入る（お願いにしない・跡
   const p = openPage('index.html', '', { fixSame: true, sameDay: day, punches: [[day + 'T09:00', 'in']] });
   await wait(); await wait(); await wait();
   T('★★数字が動かない直しは「0分→0分」と出さない（何が起きるかを言う）★★', () => {
-    const t = p.w.document.getElementById('fixes').textContent;
+    const t = p.w.document.getElementById('pend').textContent;
     ok(!/元は 0分 → 承認すると 0分/.test(t), '★0→0 のまま出している★: ' + t.slice(0, 140));
     ok(/数字は変わりません/.test(t), '★何が起きるかを言っていない★: ' + t.slice(0, 140));
     ok(/まだ退勤が入っていません/.test(t), '理由が出ていない: ' + t.slice(0, 140));
     const line = (t.split('\n').filter((x) => /数字は変わりません/.test(x))[0] || '').trim();
     console.log('     実測: ' + line.slice(0, 100));
+  });
+}
+
+/* ── ★箱は2つ★（指示役 2026-08-18 夜）＝「もう入った物」と「まだの物」を混ぜない ──
+   ①「直した記録」        … もう入っている → ★押す物を出さない★
+   ②「まだ入っていません」… 承認前の古い分 → ［入れる］［入れない］
+   ★わざと混ぜたら 赤になる★ ところまで この場で試す（見張りが空振りしていない証拠）。 */
+{
+  /* ★混ざり方を数える道具★（この1本を 本物と 混ぜた物の両方に当てる） */
+  const mixCheck = (doc) => {
+    const bad = [];
+    const done = doc.getElementById('fixes');
+    const pend = doc.getElementById('pend');
+    const btns = done.querySelectorAll('button').length;
+    if (btns) bad.push('「直した記録」に押す物が ' + btns + '個');
+    if (/まだ入っていません|入れる|入れない/.test(done.textContent)) bad.push('「直した記録」に まだの物の言葉が入っている');
+    if (/本人が直した|入れた|入れなかった/.test(pend.textContent)) bad.push('「まだ入っていません」に もう入った物の言葉が入っている');
+    [].forEach.call(pend.querySelectorAll('.tc-card'), (c, i) => {
+      if (!c.querySelector('[data-ok]') || !c.querySelector('[data-ng]')) bad.push((i + 1) + '枚目に［入れる］［入れない］が無い');
+    });
+    return bad;
+  };
+  const num = (t) => { const m = /（(\d+)件）/.exec(t || ''); return m ? +m[1] : -1; };
+
+  const p = openPage('index.html', '', { fixBoth: true });
+  await wait(); await wait(); await wait();
+  const d = p.w.document;
+
+  T('★★社長の画面＝「直した記録」と「まだ入っていません」を 1つの箱に混ぜない★★', () => {
+    const bad = mixCheck(d);
+    ok(bad.length === 0, '★混ざっている★: ' + bad.join(' / '));
+    console.log('     実測: 直した記録 ' + d.getElementById('fixes').querySelectorAll('.tc-card').length
+      + '枚（押す物 ' + d.getElementById('fixes').querySelectorAll('button').length + '個）'
+      + '／まだ入っていません ' + d.getElementById('pend').querySelectorAll('.tc-card').length + '枚');
+  });
+
+  T('★★見出しに 件数を出す（①と②を それぞれ数える）★★', () => {
+    const h1 = d.getElementById('fixes-head'), h2 = d.getElementById('pend-head');
+    ok(!h1.hidden && !h2.hidden, '見出しが出ていない（' + h1.hidden + '/' + h2.hidden + '）');
+    ok(num(h1.textContent) === d.getElementById('fixes').querySelectorAll('.tc-card').length,
+      '★「直した記録」の件数が 中身と合っていない★: ' + h1.textContent);
+    ok(num(h2.textContent) === d.getElementById('pend').querySelectorAll('.tc-card').length,
+      '★「まだ入っていません」の件数が 中身と合っていない★: ' + h2.textContent);
+    console.log('     実測: ' + h1.textContent.trim() + '／' + h2.textContent.trim());
+  });
+
+  T('★★わざと混ぜたら 赤になる（この見張りは 空振りしていない）★★', () => {
+    const done = d.getElementById('fixes');
+    const keep = done.innerHTML;
+    done.insertAdjacentHTML('beforeend',
+      '<div class="tc-card pending"><div class="tc-cardhead"><span class="tc-tag pending">まだ入っていません</span>'
+      + '<button class="tc-btn" type="button" data-ok="x">入れる</button></div></div>');
+    const bad = mixCheck(d);
+    done.innerHTML = keep;
+    ok(bad.length >= 2, '★混ぜても 気づかない★（見つけた数 ' + bad.length + '）');
+    console.log('     実測: 混ぜたら ' + bad.length + '件 見つけた（' + bad[0] + ' …）');
+  });
+}
+
+/* ★古い分が 0件の時★＝②の箱は 見出しごと出さない（今どきの会社は ほぼ これ） */
+{
+  const p = openPage('index.html', '', { fixDoneOnly: true });
+  await wait(); await wait(); await wait();
+  T('★★もう「お願い」を出さない会社では ②の箱が出ない（0件なら 見出しごと消す）★★', () => {
+    const d = p.w.document;
+    const h2 = d.getElementById('pend-head');
+    ok(h2.hidden, '★0件なのに ②の見出しが出ている★: ' + h2.textContent);
+    ok(d.getElementById('pend').innerHTML === '', '★0件なのに ②の中身が残っている★');
+    ok(!d.getElementById('fixes-head').hidden, '①の見出しが出ていない');
+    ok(d.getElementById('fixes').querySelectorAll('button').length === 0,
+      '★本人が直した物に 押す物が出ている★');
+    console.log('     実測: ②は 見出しも中身も 0（①は ' + d.getElementById('fixes-head').textContent.trim()
+      + '・押す物 0個）');
   });
 }
 

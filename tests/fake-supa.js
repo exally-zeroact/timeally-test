@@ -145,6 +145,31 @@ function rowsFor(table, seed, store) {
     ];
   }
   if (table === 'tc_fix') {
+    /* ★seed.fixBoth=true … 「もう入った物」と「まだの物」を 同時に持たせる★（2026-08-18 夜）
+       ＝社長の画面で ★2つが同じ箱に混ざっていないか★ を実物で押して見るために要る。
+         （片方しか無い種では「混ざっていない」を確かめたことにならない） */
+    /* ★seed.fixDoneOnly=true … 古い分が 0件の会社★（＝この決まりの後に始めた会社の姿）
+       ＝②の箱が ★見出しごと消えるか★ を実物で見るために要る。 */
+    if (s.fixDoneOnly) {
+      return [
+        { id: 'f2', account_id: 'u1', employee_id: 'E1', d: '2026-08-03',
+          before_min: 540, after_min: 480, reason: '押し間違い', requested_by: 'employee',
+          requested_at: '2026-08-06T00:00:00Z', approved_by: 'employee', approved_at: '2026-08-06T00:00:00Z',
+          status: 'approved', punch_ids: ['p2'], void_ids: [] },
+      ];
+    }
+    if (s.fixBoth) {
+      return [
+        { id: 'f1', account_id: 'u1', employee_id: 'E1', d: '2026-08-04',
+          before_min: null, after_min: null, reason: '打ち忘れ', requested_by: 'employee',
+          requested_at: '2026-08-05T00:00:00Z', approved_by: null, approved_at: null,
+          status: 'pending', punch_ids: ['p3'], void_ids: [] },
+        { id: 'f2', account_id: 'u1', employee_id: 'E1', d: '2026-08-03',
+          before_min: 540, after_min: 480, reason: '押し間違い', requested_by: 'employee',
+          requested_at: '2026-08-06T00:00:00Z', approved_by: 'employee', approved_at: '2026-08-06T00:00:00Z',
+          status: 'approved', punch_ids: ['p2'], void_ids: [] },
+      ];
+    }
     return [{
       /* ★fixVoid の時は 打刻が在る日にする★（別の日にすると どちらも0分で
          「数に入れていない」のか「その日に打刻が無い」のか 見分けが付かない） */

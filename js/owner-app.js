@@ -192,17 +192,35 @@
     };
   }
 
-  /* ★直した記録★（2026-08-18 司さんの決まり）
-     ＝従業員は もう「お願い」を出さない（自分で直せる＝その場で入る）。
-     ここに出るのは ★まだ入っていない古い分★と ★本人が直した跡★だけ。
-     ★0件なら 見出しごと出さない★（もう無い物のボタンを見せない）。 */
+  /* ★箱は2つ★（指示役 2026-08-18 夜「1つの箱に もう入った物と まだの物が混ざっている」）
+       ①「直した記録」  … ★もう入っている★＝★押す物を出さない★（誰が・いつ・何を だけ）
+       ②「まだ入っていません」… ★承認前の古い分だけ★＝［入れる］［入れない］
+     ★どちらも 0件なら 見出しごと出さない★（もう無い物のボタンを見せない）。
+     ★件数は 見出しに出す★（どちらの箱の話か 数で分かるように）。
+     ＝2026-08-18 司さんの決まり「自分の打刻は自分で直せる」により、
+       従業員は もう「お願い」を出さない（その場で入る）＝②は 古い分だけ。 */
   function drawFixes(fixes) {
     var box = q('fixes'), head = q('fixes-head');
-    if (!box) return Promise.resolve();
+    var pbox = q('pend'), phead = q('pend-head');
+    if (!box || !pbox) return Promise.resolve();
     var pending = fixes.filter(function (f) { return f.status === 'pending'; });
     var done = fixes.filter(function (f) { return f.status !== 'pending'; }).slice(0, 20);
-    if (head) head.hidden = !(pending.length || done.length);
-    if (!pending.length && !done.length) { box.innerHTML = ''; return Promise.resolve(); }
+
+    /* ①もう入っている分＝★ボタンを出さない★（数える前に描いてよい＝数字はもう決まっている） */
+    if (head) { head.hidden = !done.length; head.textContent = '直した記録（' + done.length + '件）'; }
+    box.innerHTML = done.map(function (f) {
+      return '<div class="tc-card"><div class="tc-cardhead"><b>' + U.esc(nameOf(f.employee_id)) + '</b>'
+        + ' <span class="num">' + U.esc(f.d) + '</span>'
+        + '<span class="tc-tag">' + (f.status !== 'approved' ? '入れなかった'
+          : (f.requested_by === 'employee' && f.approved_by === 'employee') ? '本人が直した' : '入れた')
+        + '</span>'
+        + '</div><div>' + (f.before_min == null ? '' : '元は ' + f.before_min + '分 → ' + f.after_min + '分')
+        + (f.reason ? '　理由: ' + U.esc(f.reason) : '') + '</div></div>';
+    }).join('');
+
+    /* ②まだ入っていない分 */
+    if (phead) { phead.hidden = !pending.length; phead.textContent = 'まだ入っていません（' + pending.length + '件）'; }
+    if (!pending.length) { pbox.innerHTML = ''; return Promise.resolve(); }
 
     /* 入れる前に「今どうなっていて、入れると何分になるか」を実際に数えて見せる */
     return Promise.all(pending.map(function (f) {
@@ -226,7 +244,7 @@
         return f;
       }).catch(function () { f._before = null; f._after = null; return f; });
     })).then(function (rows) {
-      box.innerHTML = rows.map(function (f) {
+      pbox.innerHTML = rows.map(function (f) {
         var name = nameOf(f.employee_id);
         return '<div class="tc-card pending"><div class="tc-cardhead">'
           + '<b>' + U.esc(name) + '</b> <span class="num">' + U.esc(f.d) + '</span>'
@@ -239,17 +257,9 @@
               : f._open ? '数字は変わりません（この日は まだ退勤が入っていません）'
                 : '数字は変わりません（時刻の直し）')
           + (f.reason ? '　理由: ' + U.esc(f.reason) : '') + '</div></div>';
-      }).join('') + done.map(function (f) {
-        return '<div class="tc-card"><div class="tc-cardhead"><b>' + U.esc(nameOf(f.employee_id)) + '</b>'
-          + ' <span class="num">' + U.esc(f.d) + '</span>'
-          + '<span class="tc-tag">' + (f.status !== 'approved' ? '入れなかった'
-            : (f.requested_by === 'employee' && f.approved_by === 'employee') ? '本人が直した' : '入れた')
-          + '</span>'
-          + '</div><div>' + (f.before_min == null ? '' : '元は ' + f.before_min + '分 → ' + f.after_min + '分')
-          + (f.reason ? '　理由: ' + U.esc(f.reason) : '') + '</div></div>';
       }).join('');
 
-      Array.prototype.forEach.call(box.querySelectorAll('[data-ok]'), function (b) {
+      Array.prototype.forEach.call(pbox.querySelectorAll('[data-ok]'), function (b) {
         b.onclick = function () {
           var f = rows.filter(function (x) { return x.id === b.getAttribute('data-ok'); })[0];
           /* ★社長1人の会社は「自分で入れた」と残す（誰がやったかを消さない）★ */
@@ -261,7 +271,7 @@
             .catch(failed('できませんでした'));
         };
       });
-      Array.prototype.forEach.call(box.querySelectorAll('[data-ng]'), function (b) {
+      Array.prototype.forEach.call(pbox.querySelectorAll('[data-ng]'), function (b) {
         b.onclick = function () {
           DB.rejectFix(b.getAttribute('data-ng'), st.user.id)
             .then(function () { U.toast('入れませんでした'); reload(); })
