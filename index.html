@@ -4,17 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <title>Timeally — 一覧</title>
-    <link rel="icon" href="icons/favicon-32.png?v=8eaa0a4e" sizes="32x32" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=8eaa0a4e" />
+    <link rel="icon" href="icons/favicon-32.png?v=90a7432d" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=90a7432d" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Timeally" />
     <meta name="theme-color" content="#FFC72C" />
-    <link rel="manifest" href="manifest.json?v=8eaa0a4e" />
+    <link rel="manifest" href="manifest.json?v=90a7432d" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/timeally.css?v=8eaa0a4e" />
+    <link rel="stylesheet" href="css/timeally.css?v=90a7432d" />
   </head>
   <body>
     <div class="tc-appbar">
@@ -26,7 +26,7 @@
       <!-- ★別のページへ移る物は いつでも 帯のいちばん右★（2026-08-16 司さん
            「戻るが集計の時だけ右上にある」）＝★置き場所を1つに決める★。
            タブ（会社／従業員／今月の勤務）は同じページの中なので 帯には出さない。 -->
-      <a class="tc-btn go tc-nav" id="go-shukei" href="shukei.html?v=8eaa0a4e">集計へ →</a>
+      <a class="tc-btn go tc-nav" id="go-shukei" href="shukei.html?v=90a7432d">集計へ →</a>
     </div>
 
     <div class="tc-wrap" id="main" hidden>
@@ -58,6 +58,12 @@
       <section id="pane-list">
         <!-- ★何が分かる画面かを 頭に1行★（2026-08-16 司さん「何のためにあるか分からない」） -->
         <div class="tc-lead">今月 誰が何時間 働いたかを 全員ぶん並べます。</div>
+        <!-- ★年5日★（2026-08-19 指示役④-②）＝★10日以上 付いた人だけ★出す。
+             取らせないと会社が罰を受ける＝★見えていないのが いちばん危ない★。
+             ★0人なら 見出しごと出さない★（もう無い物を見せない）。 -->
+        <h2 id="must5-head" hidden>年5日</h2>
+        <div id="must5"></div>
+
         <h2 id="fixes-head" hidden>直した記録</h2>
         <div id="fixes"></div>
 
@@ -82,6 +88,11 @@
         </div>
         <!-- ★人数を頭に出す★／★状態で絞れる★（20人でも探せるように・2026-08-16） -->
         <div class="tc-lead" id="people-count"></div>
+
+        <!-- ★入社日を 1人ずつ聞く★（2026-08-19 指示役④-①／「聞いてあげる。埋めさせない。」）
+             ＝★別の画面を作らない★（この画面の中で1問）／★答えたら その場で残りを返す★／
+               ★1問ごと保存★／★空のままでも進める（あとで）★／★全員 入っていれば 箱ごと出さない★ -->
+        <div id="hire-ask" hidden></div>
         <div class="tc-tabs" id="people-filter" hidden>
           <button class="tc-btn sub" type="button" data-filter="all" aria-selected="true">全員</button>
           <button class="tc-btn sub" type="button" data-filter="yet" aria-selected="false">まだ打てない人</button>
@@ -208,22 +219,22 @@
       </section>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supa-config.js?v=8eaa0a4e"></script>
-    <script src="js/env-badge.js?v=8eaa0a4e"></script>
-    <script src="lib/tc-yukyu.js?v=8eaa0a4e"></script>
-    <script src="lib/tc-law.js?v=8eaa0a4e"></script>
+    <script src="js/supa-config.js?v=90a7432d"></script>
+    <script src="js/env-badge.js?v=90a7432d"></script>
+    <script src="lib/tc-yukyu.js?v=90a7432d"></script>
+    <script src="lib/tc-law.js?v=90a7432d"></script>
     <!-- ★tc-calc より先に読む★（打った物の掃除＝連打をまとめる／決められない日を見つける。
          tc-calc.js は これが無いと数えられない） -->
-    <script src="lib/tc-clean.js?v=8eaa0a4e"></script>
-    <script src="lib/tc-calc.js?v=8eaa0a4e"></script>
-    <script src="lib/tc-csv.js?v=8eaa0a4e"></script>
-    <script src="lib/tc-name.js?v=8eaa0a4e"></script>
-    <script src="lib/tc-hours.js?v=8eaa0a4e"></script>
-    <script src="lib/qr.js?v=8eaa0a4e"></script>
-    <script src="js/file-out.js?v=8eaa0a4e"></script>
-    <script src="js/tc-ui.js?v=8eaa0a4e"></script>
-    <script src="js/tc-db.js?v=8eaa0a4e"></script>
-    <script src="js/owner-app.js?v=8eaa0a4e"></script>
+    <script src="lib/tc-clean.js?v=90a7432d"></script>
+    <script src="lib/tc-calc.js?v=90a7432d"></script>
+    <script src="lib/tc-csv.js?v=90a7432d"></script>
+    <script src="lib/tc-name.js?v=90a7432d"></script>
+    <script src="lib/tc-hours.js?v=90a7432d"></script>
+    <script src="lib/qr.js?v=90a7432d"></script>
+    <script src="js/file-out.js?v=90a7432d"></script>
+    <script src="js/tc-ui.js?v=90a7432d"></script>
+    <script src="js/tc-db.js?v=90a7432d"></script>
+    <script src="js/owner-app.js?v=90a7432d"></script>
     <script>
       OwnerApp.startIndex();
     </script>

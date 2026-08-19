@@ -59,7 +59,11 @@ function rowsFor(table, seed, store) {
           token: '1111111' + k + '-1111-1111-1111-111111111111', account_id: 'u1',
           employee_id: 'E' + (k + 1),
           name: s.longName ? '長谷川 佐和子' + (k + 1) : (['山田 太郎', '佐藤 花子', '鈴木 一郎'][k] || ('従業員' + k)),
-          emp_no: 'A0' + (k + 1), hire_date: '2024-04-01', hourly_yen: 1200,
+          emp_no: 'A0' + (k + 1), hourly_yen: 1200,
+          /* ★seed.hireMix=true … 入社日が入っている人と 空の人が混ざる★（2026-08-19 追加）
+             ＝実データは ★18人中14人が空★。全員入っていると
+             「入社日を聞く箱」も「年5日」も ★何も絞らずに緑★になる。 */
+          hire_date: s.hireMix ? (k % 2 === 0 ? null : '2019-04-01') : '2024-04-01',
           /* ★seed.pinMix=true … 決めた人と まだの人が混ざる★（2026-08-16 追加）
              ＝全員おなじだと ★「まだの人だけ出す」が 何も絞っていなくても緑になる★。 */
           init_code: null, pw_hash: (s.pinMix && k % 3 !== 0) ? '$2a$10$dummydummydummydummydu' : null, device_tokens: [],
@@ -71,7 +75,7 @@ function rowsFor(table, seed, store) {
     return [{
       token: '11111111-1111-1111-1111-111111111111', account_id: 'u1',
       employee_id: 'E1', emp_no: 'A01',
-      hire_date: '2024-04-01', hourly_yen: 1200,
+      hire_date: s.hireDate === undefined ? '2024-04-01' : s.hireDate, hourly_yen: 1200,
       /* ★長い氏名でも頭がはみ出さないか★を測れるようにする */
       name: s.longName ? '長谷川 佐和子' : '山田 太郎',
       /* ★seed.pwSet=true … 暗証番号は決めてあるが 帳面には記録が無い人★

@@ -172,8 +172,9 @@
       st.pinLog = r[3] || [];
       fillCompany();
       drawPeople();
+      drawHireAsk();
       return drawFixes(r[2] || []);
-    }).then(drawSummary)
+    }).then(drawSummary).then(drawMust5)
       .catch(failed('読めませんでした'));
   }
 
@@ -336,6 +337,101 @@
             + '<td class="num">' + z(m.holidayNightMin) + '</td></tr>';
         }).join('') + '</tbody></table></div>';
     }).catch(failed('数えられませんでした'));
+  }
+
+  /* ── ★入社日を 1人ずつ聞く★（2026-08-19 指示役④-①） ─────────────────
+     ＝★入社日が空の人が 18人中14人★（実測）。空のままだと ★8割の人の有給が数えられない★。
+     ★聞いてあげる。埋めさせない★（全アプリの決まり）:
+       ・★別の画面を作らない★（従業員の画面の中で1問だけ）
+       ・★1問ごと保存★／★答えたら その場で結果（残り）を返す★
+       ・★空のままでも進める★（「あとで」）／★全員 入っていれば 箱ごと出さない★ */
+  var hireSkip = {};        /* 「あとで」を押した人（この画面を開いている間だけ後ろに回す） */
+  function hireLeft() {
+    return st.people.filter(function (p) { return !p.hire_date && !hireSkip[p.token]; });
+  }
+  function drawHireAsk() {
+    var box = q('hire-ask');
+    if (!box) return;
+    var yet = st.people.filter(function (p) { return !p.hire_date; });
+    var list = hireLeft();
+    if (!list.length) {
+      box.hidden = true; box.innerHTML = '';
+      return;
+    }
+    box.hidden = false;
+    var p = list[0];
+    box.innerHTML = '<div class="tc-card"><div class="tc-cardhead">'
+      + '<b>' + U.esc(p.name || p.employee_id) + '</b>さんの入社日は？'
+      + '<span class="tc-spacer"></span>'
+      + '<span class="num">入社日が入っていない人 ' + yet.length + '人／' + st.people.length + '人</span>'
+      + '</div>'
+      + '<div class="tc-note">有給の残りを数えるのに使います。分かる時だけで大丈夫です。</div>'
+      + '<div id="hire-field"></div>'
+      + '<p><button class="tc-btn" id="b-hire-save" type="button">決める</button>'
+      + ' <button class="tc-btn quiet" id="b-hire-later" type="button">あとで</button></p>'
+      + '<div class="tc-note" id="hire-result" hidden></div></div>';
+    q('hire-field').innerHTML = U.dateField('', 'OwnerApp._hirePreview()');
+    q('b-hire-later').onclick = function () { hireSkip[p.token] = true; drawHireAsk(); };
+    q('b-hire-save').onclick = function () { saveHire(p); };
+    hirePreview();
+  }
+  function hireInput() {
+    var f = q('hire-field');
+    return (f && f.querySelector('.tc-date-input')) || null;
+  }
+  /** ★答えたら その場で返す★（保存する前に「その日なら こうなります」を見せる） */
+  function hirePreview() {
+    var el = q('hire-result'), inp = hireInput();
+    if (!el || !inp) return;
+    var v = inp.value;
+    if (!v) { el.hidden = true; el.textContent = ''; return; }
+    var y = global.TcLaw.yukyuLeft({ hireDate: v, today: todayJst(), takenDays: [] });
+    el.hidden = false;
+    el.textContent = y.ok
+      ? 'この日なら 有給の残り ' + y.leftDays + '日（付与 ' + y.grantDays + ' ＋ 繰越 ' + y.carryDays + '）'
+      : y.why;
+  }
+  function saveHire(p) {
+    var inp = hireInput();
+    if (!inp || !inp.value) { U.toast('入社日を選んでください'); return; }
+    DB.updatePerson(p.token, { hire_date: inp.value })
+      .then(function () { U.toast((p.name || '') + 'さんの入社日を入れました'); reload(); })
+      .catch(failed('入れられませんでした'));
+  }
+
+  /* ── ★年5日★（2026-08-19 指示役④-②） ─────────────────────────
+     ★10日以上 付いた人だけ★に「あと◯日（期限 ◯年◯月◯日）」を出す。
+     ★判定は lib/tc-yukyu.js の1か所★（画面で日数を書かない＝法定の数を直書きしない）。
+     ★0人なら 見出しごと出さない★。 */
+  function drawMust5() {
+    var box = q('must5'), head = q('must5-head');
+    if (!box) return Promise.resolve();
+    if (!st.people.length) { box.innerHTML = ''; if (head) head.hidden = true; return Promise.resolve(); }
+    /* ★繰越（前の1年）まで見るので 2年ぶん読む★／★全員ぶんを1回で読む★ */
+    var to = todayJst();
+    var from = (Number(to.slice(0, 4)) - 2) + to.slice(4);
+    return DB.loadShiftsAll(from, to).then(function (rows) {
+      var byEmp = {};
+      rows.filter(function (x) { return x.dayKind === 'paid_leave'; })
+        .forEach(function (x) { (byEmp[x.employeeId] = byEmp[x.employeeId] || []).push(x.d); });
+      var hit = st.people.map(function (p) {
+        return { p: p, m: global.TcLaw.must5State({
+          hireDate: p.hire_date || null, today: to, takenDays: byEmp[p.employee_id] || [],
+        }) };
+      }).filter(function (x) { return x.m.target && x.m.needDays > 0; });
+      if (head) { head.hidden = !hit.length; head.textContent = '年5日（' + hit.length + '人）'; }
+      box.innerHTML = hit.map(function (x) {
+        return '<div class="tc-card"><div class="tc-cardhead">'
+          + '<b>' + U.esc(x.p.name || x.p.employee_id) + '</b>'
+          + '<span class="tc-spacer"></span>'
+          + '<span class="tc-tag pending">あと ' + x.m.needDays + '日</span></div>'
+          + '<div>期限 ' + U.esc(jpDate(x.m.byDate)) + '（いま ' + x.m.usedDays + '日）</div></div>';
+      }).join('');
+    }).catch(function () { /* 読めなくても 他の表示は止めない */ });
+  }
+  function jpDate(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+    return m ? (+m[1]) + '年' + (+m[2]) + '月' + (+m[3]) + '日' : String(iso || '');
   }
 
   /* ── ② 従業員（入口の発行・QR） ─────────────────────────────── */
@@ -1622,6 +1718,6 @@
   global.OwnerApp = {
     startLogin: startLogin, startIndex: startIndex, startShukei: startShukei,
     _st: st, _grantDaysOf: grantDaysOf, _fileName: fileName, _pinHistoryOf: pinHistoryOf,
-    _holNote: drawHolidayNote,
+    _holNote: drawHolidayNote, _hirePreview: hirePreview,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

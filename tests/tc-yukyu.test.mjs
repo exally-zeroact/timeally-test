@@ -56,6 +56,11 @@ if (process.argv.includes('--self-test')) {
     const r = Y.yukyuLeft({ hireDate: '2020-01-01', today: '2022-08-01', takenDays: [] });
     ok(r.carryDays <= 11, '★2年以上前の分まで繰り越している★: ' + r.carryDays);
   });
+  S('④ 年5日を「全員に出す」にしたら 赤（9日の人は対象外）', () => {
+    /* 6か月未満＝まだ付いていない人を 対象にしていないか */
+    ok(Y.must5State({ hireDate: '2026-08-01', today: '2026-08-19', takenDays: [] }).target === false,
+      '★まだ付いていない人まで 対象にしている★');
+  });
   S('③ 入社日が無い人に 数を返したら 赤', () => {
     ok(Y.yukyuLeft({ hireDate: null, today: '2026-08-19', takenDays: [] }).ok === false, '数えてしまっている');
   });
@@ -139,6 +144,34 @@ T('★年5日の対象（10日以上 付いた人）', () => {
   eq(Y.mustTake5(9), false, '9日');
   eq(Y.yukyuLeft({ hireDate: '2026-01-01', today: '2026-07-01', takenDays: [] }).mustTake5, true, '6か月の人');
   console.log('     実測: 10日→対象 / 9日→対象外');
+});
+
+/* ── ★年5日の時季指定義務★（2026-08-19 指示役④-②） ────────────────────────
+   出典（上と同じ・確認日 2026-08-19）… 確かめよう労働条件
+     「１０日以上の年次有給休暇が付与される全ての労働者を対象に、
+       その基準日から１年以内に５日以上の年休付与義務」 */
+T('★年5日＝10日以上 付いた人だけが対象（9日の人は出さない）', () => {
+  /* 6か月＝10日 → 対象／入社半年未満 → 対象外（まだ付いていない） */
+  const a = Y.must5State({ hireDate: '2026-01-01', today: '2026-08-19', takenDays: [] });
+  eq(a.target, true, '6か月の人');
+  eq(a.needDays, 5, 'あと何日');
+  /* 2026-01-01 入社 → 基準日 2026-07-01 → ★期限は その1年後の前日 2027-06-30★ */
+  eq(a.byDate, '2027-06-30', '期限（基準日から1年）');
+  const b = Y.must5State({ hireDate: '2026-08-01', today: '2026-08-19', takenDays: [] });
+  eq(b.target, false, '入社半年未満');
+  const c = Y.must5State({ hireDate: null, today: '2026-08-19', takenDays: [] });
+  eq(c.target, false, '入社日が無い人');
+  console.log('     実測: 6か月→対象（あと5日・期限 2027-06-30）／半年未満→対象外／入社日なし→対象外');
+});
+
+T('★年5日＝取った分だけ減り、5日 取ったら 0になる（境界）', () => {
+  const base = { hireDate: '2026-01-01', today: '2026-08-19' };
+  eq(Y.must5State(Object.assign({ takenDays: ['2026-07-01', '2026-07-02'] }, base)).needDays, 3, '2日 取った');
+  eq(Y.must5State(Object.assign({ takenDays: ['2026-07-01', '2026-07-02', '2026-07-03', '2026-07-06', '2026-07-07'] }, base)).needDays, 0, '5日 取った');
+  eq(Y.must5State(Object.assign({ takenDays: ['2026-07-01', '2026-07-02', '2026-07-03', '2026-07-06', '2026-07-07', '2026-07-08'] }, base)).needDays, 0, '6日 取った（マイナスにしない）');
+  /* ★前の1年に取った分は 今の1年に数えない★（年度またぎ） */
+  eq(Y.must5State({ hireDate: '2022-07-01', today: '2026-08-19', takenDays: ['2025-12-30'] }).needDays, 5, '前の1年に取った分');
+  console.log('     実測: 2日→あと3 ／5日→あと0 ／6日→あと0 ／前の1年の分は数えない');
 });
 
 T('★tc-law.js から呼んでも 同じ数（正本は1本きり）', () => {

@@ -238,6 +238,107 @@ T('★★日を押すと その日の結論が1行 出る（08:00〜17:03（実�
   console.log('     実測: ' + (/[^\n]*として数えます/.exec(line) || [''])[0].trim());
 });
 
+/* ── ★入社日を1人ずつ聞く★（2026-08-19 指示役④-①）＝★実UIで答えて 倉庫を読む★ ────
+   実データは ★18人中14人が空★。空のままだと 8割の人の有給が数えられない。 */
+{
+  const p = openPage('index.html', '', { people: 4, hireMix: true, mix: true });
+  await wait(); await wait(); await wait();
+  const d2 = p.w.document;
+  console.log('  [入社日] 押す物: 従業員タブ → 日付 → ［決める］／［あとで］');
+
+  T('★★入社日が空の人にだけ 1人ずつ聞く（別の画面を作らない・1問だけ）★★', () => {
+    d2.getElementById('tab-people').click();
+    const box = d2.getElementById('hire-ask');
+    ok(box && !box.hidden, '★聞く箱が出ていない★');
+    ok(box.querySelectorAll('.tc-card').length === 1, '★一度に ' + box.querySelectorAll('.tc-card').length + '人 聞いている（1人のはず）★');
+    ok(/さんの入社日は？/.test(box.textContent), '★聞き方が違う★: ' + box.textContent.slice(0, 60));
+    const num = /入社日が入っていない人 (\d+)人／(\d+)人/.exec(box.textContent);
+    ok(num, '★何人 空いているかを出していない★');
+    console.log('     実測: 「' + (/[^]*?さんの入社日は？/.exec(box.textContent) || [''])[0].trim()
+      + '」／' + num[0] + '／一度に聞くのは 1人');
+  });
+
+  T('★★答えたら その場で結果を返す（保存する前に「この日なら…」）★★', () => {
+    const inp = d2.getElementById('hire-field').querySelector('.tc-date-input');
+    ok(inp, '日付の欄が無い');
+    inp.value = '2019-04-01';
+    p.w.TcUi.onDateChange(inp);
+    p.w.OwnerApp._hirePreview();
+    const res = d2.getElementById('hire-result');
+    ok(!res.hidden && /有給の残り \d+日/.test(res.textContent), '★その場で返していない★: ' + res.textContent);
+    console.log('     実測: 「' + res.textContent.trim() + '」');
+  });
+
+  T('★★［決める］を押したら 倉庫に入社日が1件 書かれた（1問ごと保存）★★', () => {
+    const before = (p.fake._saved || []).filter((x) => x.table === 'tc_pub').length;
+    d2.getElementById('b-hire-save').click();
+    const rows = (p.fake._saved || []).filter((x) => x.table === 'tc_pub');
+    ok(rows.length === before + 1, '★押したのに 倉庫へ行っていない★（' + before + '→' + rows.length + '）');
+    const row = rows[rows.length - 1].row;
+    ok(row.hire_date === '2019-04-01', '★入れた日が違う★: ' + JSON.stringify(row));
+    ok(Object.keys(row).length === 1, '★入社日のほかも書き換えている★: ' + Object.keys(row).join(','));
+    console.log('     実測: hire_date=' + row.hire_date + ' の1項目だけ書いた');
+  });
+
+  T('★★［あとで］で 次の人に進む（空のままでも止めない）★★', () => {
+    const box = d2.getElementById('hire-ask');
+    const who = (/[^]*?さん/.exec(box.textContent) || [''])[0];
+    d2.getElementById('b-hire-later').click();
+    const box2 = d2.getElementById('hire-ask');
+    const who2 = (/[^]*?さん/.exec(box2.textContent) || [''])[0];
+    ok(box2.hidden || who2 !== who, '★「あとで」を押しても 同じ人を聞き続けている★: ' + who2);
+    console.log('     実測: ' + who.trim() + ' → ' + (box2.hidden ? '（もう居ない）' : who2.trim()));
+  });
+}
+
+{
+  const p = openPage('index.html', '', { people: 3, mix: true });   /* 全員 入社日が入っている種 */
+  await wait(); await wait(); await wait();
+  T('★★全員 入社日が入っていれば 聞く箱を出さない（用が済んだ物を見せない）★★', () => {
+    p.w.document.getElementById('tab-people').click();
+    const box = p.w.document.getElementById('hire-ask');
+    ok(box.hidden, '★もう聞く事が無いのに 出している★: ' + box.textContent.slice(0, 60));
+    ok(box.innerHTML === '', '★中身が残っている★');
+    console.log('     実測: 箱ごと出さない（hidden=' + box.hidden + '）');
+  });
+}
+
+/* ── ★年5日★（2026-08-19 指示役④-②）＝★10日以上 付いた人だけ★ ─────────────── */
+{
+  const p = openPage('index.html', '', { people: 4, hireMix: true, mix: true });
+  await wait(); await wait(); await wait(); await wait();
+  T('★★年5日＝対象の人だけ「あと◯日（期限 ◯年◯月◯日）」が出る★★', () => {
+    const d3 = p.w.document;
+    const head = d3.getElementById('must5-head'), box = d3.getElementById('must5');
+    ok(!head.hidden, '★対象が居るのに 見出しが出ていない★');
+    const cards = box.querySelectorAll('.tc-card');
+    ok(cards.length > 0, '★1人も出ていない★');
+    const n = /年5日（(\d+)人）/.exec(head.textContent);
+    ok(n && +n[1] === cards.length, '★見出しの人数が 中身と合っていない★: ' + head.textContent);
+    ok(/あと \d+日/.test(box.textContent), '★あと何日を出していない★');
+    ok(/期限 \d{4}年\d{1,2}月\d{1,2}日/.test(box.textContent), '★期限を出していない★: ' + box.textContent.slice(0, 100));
+    /* ★入社日が無い人は 出さない★（数えられないのに 出したら嘘になる） */
+    const noHire = [...p.w.OwnerApp._st.people].filter((x) => !x.hire_date).map((x) => x.name);
+    const shown = box.textContent;
+    noHire.forEach((nm) => ok(shown.indexOf(nm) < 0, '★入社日が無い ' + nm + ' を出している★'));
+    console.log('     実測: ' + head.textContent.trim() + '／'
+      + (/あと \d+日/.exec(shown) || [''])[0] + '／'
+      + (/期限 [^（]*/.exec(shown) || [''])[0].trim()
+      + '／入社日が無い ' + noHire.length + '人は 出さない');
+  });
+}
+
+{
+  const p = openPage('index.html', '', { hireDate: null });   /* 入社日が無い1人だけ */
+  await wait(); await wait(); await wait(); await wait();
+  T('★★年5日の対象が0人なら 見出しごと出さない★★', () => {
+    const d4 = p.w.document;
+    ok(d4.getElementById('must5-head').hidden, '★0人なのに 見出しが出ている★');
+    ok(d4.getElementById('must5').innerHTML === '', '★0人なのに 中身が残っている★');
+    console.log('     実測: 見出しも中身も 0');
+  });
+}
+
 /* ── ★従業員の画面は「残り◯日」を出すだけ★（2026-08-19 指示役⑤） ─────────────
    ★押す物は置かない★（付ける・外すは 社長だけ）／★入社日が無い人には 何も出さない★。 */
 {

@@ -210,6 +210,17 @@
       });
     });
   }
+  /** ★全員ぶんを1回で読む★（2026-08-19 年5日のため）
+      ＝人ごとに聞くと 18人で18回になる。★中身は loadShifts と同じ形★（employeeId が付くだけ）。 */
+  function loadShiftsAll(fromDate, toDate) {
+    return selectAll('tc_shift', function (q) {
+      return q.gte('d', fromDate).lte('d', toDate).order('d');
+    }).then(function (rows) {
+      return rows.map(function (r) {
+        return { employeeId: r.employee_id, d: r.d, dayKind: r.day_kind };
+      });
+    });
+  }
   function saveShift(row) {
     return client().from('tc_shift').upsert(row, { onConflict: 'account_id,employee_id,d' }).select()
       .then(function (r) { if (r.error) throw wrapError('tc_shift', r.error); return (r.data || [])[0]; });
@@ -318,7 +329,7 @@
     listPeople: listPeople, addPerson: addPerson, updatePerson: updatePerson,
     loadPunches: loadPunches, addPunch: addPunch,
     listFixes: listFixes, approveFix: approveFix, rejectFix: rejectFix,
-    loadShifts: loadShifts, saveShift: saveShift, saveDayBreak: saveDayBreak, saveDayKind: saveDayKind,
+    loadShifts: loadShifts, loadShiftsAll: loadShiftsAll, saveShift: saveShift, saveDayBreak: saveDayBreak, saveDayKind: saveDayKind,
     listCloseLog: listCloseLog, addCloseLog: addCloseLog, listPinLog: listPinLog,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
