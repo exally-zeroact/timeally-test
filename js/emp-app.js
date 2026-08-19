@@ -615,6 +615,22 @@
     });
   }
 
+  /** ★有給の残りを 出すだけ★（2026-08-19）
+      ＝★数えるのは lib/tc-law.js の1本★（倉庫は「入社日」と「有給にした日」だけ返す）。
+        ★押す物は置かない★＝付ける・外すは 社長だけ。
+        ★数えられない時は 黙って消す★（「入社日を入れてください」は 従業員に言う事ではない）。 */
+  function drawYukyu(info) {
+    var el = q('yukyu-left');
+    if (!el) return;
+    var y = global.TcYukyu.yukyuLeft({
+      hireDate: (info && info.hire_date) || null,
+      today: (DB.nowJst() || '').slice(0, 10),
+      takenDays: (info && info.yukyu_days) || [],
+    });
+    el.hidden = !y.ok;
+    if (y.ok) el.textContent = '有給の残り ' + y.leftDays + '日';
+  }
+
   function draw() {
     var lab = q('ymlabel');
     if (lab) lab.textContent = st.ym.replace('-', '年') + '月';
@@ -623,6 +639,7 @@
     DB.Emp.info(st.token, st.ym + '-15').then(function (i) {
       st.notice = (i && i.notice) || '';
       drawNotice();
+      drawYukyu(i);
     }).catch(function () { /* 聞けなくても 記録の表示は止めない */ });
     var from = st.ym + '-01';
     var to = new Date(Date.UTC(+st.ym.slice(0, 4), +st.ym.slice(5, 7), 0)).toISOString().slice(0, 10);

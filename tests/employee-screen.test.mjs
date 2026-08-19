@@ -25,7 +25,11 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 /* ★従業員の画面（と、そこが読む物）★
    ★lib/tc-clean.js を足した（2026-08-18）★＝従業員の画面が読む物が1本 増えたので、
    ★出す文も 同じ目で数える★（この1本は ★長さを1つも数えない★のが約束）。 */
-export const EMP_FILES = ['punch.html', 'kiroku.html', 'js/emp-app.js', 'lib/tc-clean.js'];
+export const EMP_FILES = ['punch.html', 'kiroku.html', 'js/emp-app.js', 'lib/tc-clean.js',
+  /* ★2026-08-19 lib/tc-yukyu.js を足した★＝「有給の残り」を1行 出すために読む。
+     ★この1本は 日数しか数えない★（率・丸め・割増・金額の言葉が1つも無い）ので
+     従業員の画面から読み込んでよい。★tc-law.js は今までどおり 読ませない★（②が見張る）。 */
+  'lib/tc-yukyu.js'];
 
 /* ★出してはいけない言葉★（「数えた結果」と「法律の話」）
    ここに無い言い換えが増えたら足す。足す時は ★実物の画面を見てから★。 */
@@ -49,8 +53,16 @@ export function visibleText(src, isHtml) {
   return t;
 }
 
+/* ★たった1つだけ 出してよい言い方★（指示役 2026-08-19 ⑤「従業員の画面に『残り◯日』を出すだけ」）
+   ＝★「有給の残り」という並びだけ★を先に取り除いてから数える。
+     ★これ以外の「有給」は 今までどおり赤★（「有給を申請」「有給 8時間」などは通らない）。
+     ★言い方を増やす時は ここに足す＝勝手に増えない★ */
+export const ALLOWED_PHRASES = ['有給の残り'];
+
 export function bannedIn(text) {
-  return BANNED.filter((w) => text.indexOf(w) >= 0);
+  var t = String(text);
+  ALLOWED_PHRASES.forEach((ph) => { t = t.split(ph).join(''); });
+  return BANNED.filter((w) => t.indexOf(w) >= 0);
 }
 
 let pass = 0, fail = 0;
@@ -73,7 +85,13 @@ if (process.argv.includes('--self-test')) {
       'コメントを拾っている＝説明が書けなくなる');
     ok(bannedIn(visibleText('<!-- 残業 --><b>x</b>', true)).length === 0, 'HTMLコメントを拾っている');
   });
-  S('④ ふつうの打刻の言葉は捕まえない（誤検知が出ない）', () => {
+  S('④ 「有給の残り 3日」だけは通す／それ以外の「有給」は捕まえる', () => {
+    ok(bannedIn('有給の残り 3日').length === 0, '★出してよい1つの言い方まで赤にしている★');
+    ok(bannedIn('有給を申請する').length > 0, '★「有給を申請」まで通している＝穴★');
+    ok(bannedIn('有給 8時間').length > 0, '★「有給 8時間」まで通している＝穴★');
+    ok(bannedIn('残りの有給は 3日です').length > 0, '★並びが違う言い方まで通している★');
+  });
+  S('⑤ ふつうの打刻の言葉は捕まえない（誤検知が出ない）', () => {
     ok(bannedIn('出勤 退勤 休憩に入る 休憩から戻る 私用で外出 外出から戻る').length === 0,
       '誤検知: ' + bannedIn('出勤 退勤 休憩に入る 休憩から戻る 私用で外出 外出から戻る').join(','));
   });
@@ -121,6 +139,24 @@ T('★倉庫のRPCが 時刻しか返さない（画面を作り直しても漏�
   ok(extra.length === 0, '★時刻以外を返している: ' + extra.join(', ') + '★');
   /* 数える言葉がSQLの返り値に混ざっていないか（min / total などの名前も見る） */
   ok(!/work_min|ot_min|night_min|holiday_min|amount|yen/i.test(body), '★数えた結果を返している★');
+});
+
+/* ★2026-08-19 有給の残りを出すために tc_pub_info が返す物が増えた★
+   ＝★返してよいのは「元の事実」だけ★（入社日／有給にした日の一覧）。
+     ★残り日数・付与日数を倉庫で数えて返さない★（数えるのは lib/tc-yukyu.js の1本きり）。 */
+T('★tc_pub_info は「元の事実」しか返さない（残り日数を倉庫で数えない）', () => {
+  const sql = fs.readFileSync(path.join(ROOT, 'supabase/schema.sql'), 'utf8');
+  const m = /create or replace function public\.tc_pub_info[\s\S]*?\$\$([\s\S]*?)\$\$/.exec(sql);
+  ok(m, 'tc_pub_info が読めない');
+  const body = m[1];
+  const keys = (body.match(/'([a-z_0-9]+)',\s*[a-z_(]/g) || []).map((s) => s.split("'")[1]);
+  const allowed = new Set(['found', 'company', 'name', 'state', 'ym', 'day_std_min',
+    'notice', 'hire_date', 'yukyu_days']);
+  const extra = keys.filter((k) => !allowed.has(k));
+  ok(extra.length === 0, '★想定外の物を返している: ' + extra.join(', ') + '★');
+  ok(!/left|grant|carry|_min|amount|yen/i.test(body.replace(/day_std_min/g, '')),
+    '★数えた結果を倉庫で作って返している★');
+  console.log('     実測: tc_pub_info が返す物 ' + keys.length + '個（' + keys.join(' / ') + '）');
 });
 
 T('★従業員が触れるRPCの一覧に「数える物」が無い（anon に渡している物を数える）', () => {

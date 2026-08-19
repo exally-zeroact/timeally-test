@@ -795,7 +795,7 @@
       st.ym = thisYm();
       q('b-prev').onclick = function () { shiftYm2(-1); };
       q('b-next').onclick = function () { shiftYm2(1); };
-      q('who').onchange = function () { st.who = q('who').value; drawShukei(); };
+      q('who').onchange = function () { st.who = q('who').value; st.dayIdx = null; drawShukei(); };
       q('b-print').onclick = function () { doPrint(false); };
       /* ★紙のとおりに見る★（刷らずに A4横のまま見せる・指で広げて読める） */
       q('b-preview').onclick = function () { doPrint(true); };
@@ -830,6 +830,7 @@
     var y = +st.ym.slice(0, 4), m = +st.ym.slice(5, 7) + n;
     if (m < 1) { m = 12; y--; } if (m > 12) { m = 1; y++; }
     st.ym = y + '-' + pad2(m);
+    st.dayIdx = null;   /* ★月を変えたら 開いていた日は閉じる★（同じ番号の別の日を開かない） */
     drawShukei();
   }
 
@@ -847,11 +848,20 @@
     q('period').textContent = '対象: ' + per.from + ' 〜 ' + per.to;
     DB.listCloseLog(st.ym).then(function (log) { st.closeLog = log || []; drawClose(); })
       .catch(failed('締めの記録を読めませんでした'));
+    /* ★有給の残りは「付けた日」を数えて出す★（2026-08-19・倉庫に残り日数の列は作らない）
+       ＝繰越は前の1年ぶんまで（時効2年）なので、★2年ぶん読む★。 */
+    var wide = { from: (Number(per.from.slice(0, 4)) - 2) + per.from.slice(4), to: per.to };
     Promise.all([
       DB.loadPunches(p.employee_id, per.from, per.to),
       DB.loadShifts(p.employee_id, per.from, per.to),
       DB.listFixes('approved'),
+      DB.loadShifts(p.employee_id, wide.from, wide.to),
     ]).then(function (r) {
+      st.yukyu = global.TcLaw.yukyuLeft({
+        hireDate: p.hire_date || null, today: todayJst(),
+        takenDays: (r[3] || []).filter(function (x) { return x.dayKind === 'paid_leave'; })
+          .map(function (x) { return x.d; }),
+      });
       st.sum = global.TcCalc.summarize({
         ym: st.ym, punches: r[0], shifts: r[1], today: todayJst(),
         fixes: (r[2] || []).filter(function (f) { return f.employee_id === p.employee_id; })
@@ -865,6 +875,8 @@
       });
       renderTables(p);
       fillBreakDays();
+      /* ★押した後も 同じ日を開いたままにする★（押すたびに箱が閉じると 残りが読めない） */
+      if (st.dayIdx != null && st.sum && st.sum.days && st.sum.days[st.dayIdx]) drawDayBox(st.dayIdx);
     }).catch(failed('数えられませんでした'));
   }
 
@@ -1335,11 +1347,51 @@
         }).join('');
     });
     box.innerHTML = '<div class="day-h">' + U.esc(v[0]) + '（' + U.esc(v[1]) + '）'
-      + (d.isLegalHoliday ? '　法定休日' : '') + '</div>' + dayLine(d) + html;
+      + (d.isLegalHoliday ? '　法定休日' : '') + '</div>' + dayLine(d) + html + yukyuInner(d);
     box.hidden = false;
+    st.dayIdx = idx;
+    var yb = box.querySelector('[data-yk]');
+    if (yb) yb.onclick = function () { saveDayKind(d.d, yb.getAttribute('data-yk')); };
     Array.prototype.forEach.call(q('cal').querySelectorAll('[data-day]'), function (b) {
       b.setAttribute('aria-selected', String(Number(b.getAttribute('data-day')) === idx));
     });
+  }
+
+  /* ── ★有給を 付ける／外す★（2026-08-19 司さんの決まりの続き） ─────────────
+     ★新しい画面を作らない★＝日を押した箱に 押す物を1つだけ足す。
+     ★今の状態で押せる物しか出さない★（有給の日は「やめる」だけ・そうでない日は「にする」だけ）。
+     ★締めた後は出さない★（理由は締めの1か所から聞く＝2画面で答えが割れない）。
+     ★残りは その場で返す★（付与＋繰越−使った の3つを そのまま見せる）。 */
+  function yukyuInner(d) {
+    var y = st.yukyu || { ok: false, why: '' };
+    var isY = d.dayKind === 'paid_leave';
+    var c = st.close || closeState();
+    /* ★他の仲間と同じ形（見出し＋行）で出す★＝説明文だけの箱を作らない */
+    var line = y.ok
+      ? y.leftDays + '日（付与 ' + y.grantDays + ' ＋ 繰越 ' + y.carryDays
+        + ' − 使った ' + y.usedDays + '）'
+      : 'まだ数えられません（' + y.why + '）';
+    var btn = c.state === 'closed'
+      ? '<div class="tc-note">' + U.esc(c.why.requestFix) + '</div>'
+      : '<button class="tc-btn' + (isY ? ' danger' : '') + '" type="button" data-yk="'
+        + (isY ? 'work' : 'paid_leave') + '">' + (isY ? '有給をやめる' : '有給にする') + '</button>';
+    return '<div class="day-g">有給</div>'
+      + (isY ? '<div class="day-l"><span class="k">この日</span><span class="v">有給です</span></div>' : '')
+      + '<div class="day-l"><span class="k">残り</span><span class="v">' + U.esc(line) + '</span></div>'
+      + btn;
+  }
+
+  function saveDayKind(day, kind) {
+    var p = personOf(st.who);
+    if (!p) { U.toast('先に人を選んでください'); return; }
+    var c = st.close || closeState();
+    if (c.state === 'closed') { U.toast(c.why.requestFix); return; }
+    DB.saveDayKind(st.user.id, p.employee_id, day, kind, st.user.id)
+      .then(function () {
+        U.toast(kind === 'paid_leave' ? day + ' を有給にしました' : day + ' の有給をやめました');
+        return drawShukei();
+      })
+      .catch(failed('できませんでした'));
   }
 
   function renderTables(p) {

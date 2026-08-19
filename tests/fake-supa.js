@@ -193,7 +193,7 @@ function rowsFor(table, seed, store) {
     var ym2 = s.ym || '2026-08';
     var mk = function (n) { return ym2 + '-' + ('0' + n).slice(-2); };
     return [
-      { id: 's1', account_id: 'u1', employee_id: 'E1', d: mk(2), planned_min: null, planned_in: null, planned_out: null, day_kind: 'paid_leave', note: '', break_min: null, break_by: null, break_at: null },
+      { id: 's1', account_id: 'u1', employee_id: 'E1', d: mk(2), planned_min: null, planned_in: null, planned_out: null, day_kind: 'paid_leave', note: '', break_min: null, break_by: null, break_at: null, day_kind_by: 'u1', day_kind_at: '2026-08-19T00:00:00Z' },
       { id: 's2', account_id: 'u1', employee_id: 'E1', d: mk(10), planned_min: null, planned_in: null, planned_out: null, day_kind: 'absent', note: '', break_min: null, break_by: null, break_at: null },
       /* ★社長が休憩を直した日★（出どころが「直した値」になる） */
       { id: 's3', account_id: 'u1', employee_id: 'E1', d: mk(6), planned_min: null, planned_in: null, planned_out: null, day_kind: 'work', note: '', break_min: 0, break_by: 'u1', break_at: '2026-08-15T01:00:00Z' },
@@ -274,7 +274,12 @@ function createFake(seed) {
       /* ★notice は倉庫が作る文★（画面が組み立てない）。seed.empClosed=true で締め切った後を作る */
       if (name === 'tc_pub_info') {
         out = { found: true, company: 'テスト商事', name: '山田 太郎', state: 'open', ym: '2026-08',
-          notice: '', day_std_min: 480 };
+          notice: '', day_std_min: 480,
+          /* ★有給の残りを出すための「元の事実」だけ★（2026-08-19）
+             ＝入社日と「有給にした日」。★残り日数は倉庫では数えない★（lib/tc-yukyu.js が数える）。
+             seed.hireDate に null を入れれば ★入社日が無い人（実データで18人中14人）★を試せる。 */
+          hire_date: seed.hireDate === undefined ? '2022-07-01' : seed.hireDate,
+          yukyu_days: seed.yukyuDays || [] };
         if (seed.empClosed) { out.state = 'closed'; out.notice = '7月は締め切りました。直しは会社へ言ってください'; out.ym = '2026-07'; }
       }
       if (name === 'tc_verify') out = { ok: true, device_token: 'dev1', name: '山田 太郎' };

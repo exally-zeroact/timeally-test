@@ -224,6 +224,16 @@
     });
   }
 
+  /** ★その日を 有給にする／やめる★（2026-08-19・社長が押す）
+      ＝★休憩の直しと同じ形★（誰が・いつ を一緒に残す）。
+        ★消さない★＝日ごとの棚は上書きだが、'work' に戻した跡も 誰が・いつ で残る。 */
+  function saveDayKind(accountId, employeeId, d, dayKind, byUid) {
+    return saveShift({
+      account_id: accountId, employee_id: employeeId, d: d,
+      day_kind: dayKind, day_kind_by: byUid, day_kind_at: new Date().toISOString(),
+    });
+  }
+
   /* ── 締めの記録（★追記だけ★） ──────────────────────────────
      ★update も delete も書かない★（倉庫の側でも渡していない）。
      ここに「消す」を1本でも足したら、直しの跡が消える。 */
@@ -308,7 +318,7 @@
     listPeople: listPeople, addPerson: addPerson, updatePerson: updatePerson,
     loadPunches: loadPunches, addPunch: addPunch,
     listFixes: listFixes, approveFix: approveFix, rejectFix: rejectFix,
-    loadShifts: loadShifts, saveShift: saveShift, saveDayBreak: saveDayBreak,
+    loadShifts: loadShifts, saveShift: saveShift, saveDayBreak: saveDayBreak, saveDayKind: saveDayKind,
     listCloseLog: listCloseLog, addCloseLog: addCloseLog, listPinLog: listPinLog,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -266,6 +266,13 @@ create table if not exists timeally.tc_shift (
 alter table timeally.tc_shift add column if not exists break_min int;
 alter table timeally.tc_shift add column if not exists break_by  uuid;
 alter table timeally.tc_shift add column if not exists break_at  timestamptz;
+-- ★有給を「付ける／外す」（2026-08-19）★
+--   ★新しい棚は作らない★＝有給は もともと day_kind='paid_leave' が持っている。
+--   足すのは ★誰が・いつ 付けたか★ の2つだけ（★休憩の break_by / break_at と同じ形★）。
+--   ★付与日数・繰越・残り日数の列は作らない★＝付けた日を数えれば出る（lib/tc-law.js が数える）。
+alter table timeally.tc_shift add column if not exists day_kind_by uuid;
+alter table timeally.tc_shift add column if not exists day_kind_at timestamptz;
+
 alter table timeally.tc_shift drop constraint if exists tc_shift_break_min_range;
 alter table timeally.tc_shift add  constraint tc_shift_break_min_range
   check (break_min is null or (break_min >= 0 and break_min <= 1440));
@@ -723,8 +730,14 @@ begin
   --   （lib/tc-close.js の employeeNotice と ★同じ文★。tests/tc-close が突き合わせている）
   -- ★day_std_min は「会社の1日の所定（分）」★＝★長すぎの線を 画面と数える所で同じにする★ため。
   --   ★丸め方・率・金額は 今までどおり1つも返さない★（これは設定であって 数えた結果ではない）。
+  -- ★有給は「入社日」と「有給にした日の一覧」だけ返す★（2026-08-19）
+  --   ＝★残り日数は 画面(lib/tc-law.js)が数える★。同じ判定を倉庫と画面の2か所に置かない。
   return jsonb_build_object('found',true,'company', coalesce(v_co.name,''), 'name', v_pub.name,
     'state', v_st, 'ym', v_ym, 'day_std_min', coalesce(v_co.daily_std_min, 480),
+    'hire_date', v_pub.hire_date,
+    'yukyu_days', coalesce((select jsonb_agg(sh.d order by sh.d) from timeally.tc_shift sh
+       where sh.account_id = v_pub.account_id and sh.employee_id = v_pub.employee_id
+         and sh.day_kind = 'paid_leave'), '[]'::jsonb),
     'notice', case when v_st = 'closed'
       then ltrim(right(v_ym, 2), '0') || '月は締め切りました。直しは会社へ言ってください'
       else '' end);

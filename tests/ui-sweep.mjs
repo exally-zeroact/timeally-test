@@ -238,6 +238,101 @@ T('★★日を押すと その日の結論が1行 出る（08:00〜17:03（実�
   console.log('     実測: ' + (/[^\n]*として数えます/.exec(line) || [''])[0].trim());
 });
 
+/* ── ★従業員の画面は「残り◯日」を出すだけ★（2026-08-19 指示役⑤） ─────────────
+   ★押す物は置かない★（付ける・外すは 社長だけ）／★入社日が無い人には 何も出さない★。 */
+{
+  const p = openPage('kiroku.html', '?t=11111111-1111-1111-1111-111111111111',
+    { yukyuDays: ['2026-03-02', '2026-05-01'] });
+  await wait(); await wait(); await wait();
+  T('★★従業員の画面に「有給の残り ◯日」が1行 出る（押す物は増やさない）★★', () => {
+    const el = p.w.document.getElementById('yukyu-left');
+    ok(el && !el.hidden, '★出ていない★');
+    ok(/^有給の残り \d+日$/.test(el.textContent.trim()), '★言い方が違う★: ' + el.textContent);
+    ok(el.querySelectorAll('button, a, select, input').length === 0, '★押す物を置いている★');
+    console.log('     実測: 「' + el.textContent.trim() + '」／その行の押す物 0個');
+  });
+}
+
+{
+  const p = openPage('kiroku.html', '?t=11111111-1111-1111-1111-111111111111', { hireDate: null });
+  await wait(); await wait(); await wait();
+  T('★★入社日が無い人（実データで 18人中14人）には 何も出さない（0日と嘘を書かない）★★', () => {
+    const el = p.w.document.getElementById('yukyu-left');
+    ok(el && el.hidden, '★数えられないのに 出している★: ' + (el && el.textContent));
+    ok((el.textContent || '').indexOf('0日') < 0, '★0日と書いている★');
+    console.log('     実測: 箱ごと出さない（hidden=' + el.hidden + '）');
+  });
+}
+
+/* ── ★有給を 付ける／外す★（2026-08-19 指示役②）＝★実UIで押して 倉庫を読む★ ──────
+   ここは ★押した気になって緑★を作らない：押す前と後で ★倉庫に書かれた物★を数える。 */
+{
+  const p = openPage('shukei.html', '', { mix: true, ym: '2026-08' });
+  await wait(); await wait(); await wait();
+  const d2 = p.w.document;
+  /* ★押す物の一覧を先に出す★（押した数を後から数えない） */
+  console.log('  [有給] 押す物: #cal の日 → 「有給にする」 → もう一度 開いて 「有給をやめる」');
+
+  T('★★日を開くと 有給の残りが その場で出る（付与＋繰越−使った）★★', () => {
+    const cell = [...d2.querySelectorAll('#cal [data-day]')][0];
+    ok(cell, 'カレンダーの日が無い');
+    cell.click();
+    const t = d2.getElementById('cal-day').textContent;
+    const m = /残り\s*(\d+)日（付与 (\d+) ＋ 繰越 (\d+) − 使った (\d+)）/.exec(t);
+    ok(m, '★残りが出ていない★: ' + t.slice(-120));
+    ok(+m[1] === Math.max(0, +m[2] + +m[3] - +m[4]),
+      '★足し算が合っていない★: ' + m[0]);
+    console.log('     実測: ' + m[0]);
+  });
+
+  T('★★「有給にする」を押したら 倉庫に paid_leave が書かれた（誰が・いつ 付き）★★', () => {
+    const before = (p.fake._saved || []).filter((x) => x.table === 'tc_shift').length;
+    const btn = d2.querySelector('#cal-day [data-yk]');
+    ok(btn, '★押す物が無い★');
+    ok(btn.textContent.trim() === '有給にする', '言葉が違う: ' + btn.textContent);
+    btn.click();
+    const rows = (p.fake._saved || []).filter((x) => x.table === 'tc_shift');
+    ok(rows.length === before + 1, '★押したのに 倉庫へ行っていない★（' + before + '→' + rows.length + '）');
+    const row = rows[rows.length - 1].row;
+    ok(row.day_kind === 'paid_leave', '★有給として書いていない★: ' + row.day_kind);
+    ok(row.day_kind_by, '★誰が付けたかが残っていない★');
+    ok(row.day_kind_at, '★いつ付けたかが残っていない★');
+    console.log('     実測: ' + row.d + ' → ' + row.day_kind + '（誰が: 有り／いつ: 有り）');
+  });
+
+  T('★★もう有給の日には「やめる」しか出ない（今の状態で押せる物だけ）★★', () => {
+    /* ★有給の日★（種が入れてある 8/2）を開く＝押す物が「やめる」に変わる */
+    const cells = [...d2.querySelectorAll('#cal [data-day]')];
+    const yu = cells.filter((b) => /有/.test(b.textContent))[0];
+    ok(yu, '★有給の印が付いた日が1つも無い★');
+    yu.click();
+    const btns = [...d2.querySelectorAll('#cal-day [data-yk]')];
+    ok(btns.length === 1, '★押す物が ' + btns.length + '個（1個のはず）★');
+    ok(btns[0].textContent.trim() === '有給をやめる', '言葉が違う: ' + btns[0].textContent);
+    ok(btns[0].getAttribute('data-yk') === 'work', '★戻す先が work でない★');
+    console.log('     実測: 有給の日を開くと 「' + btns[0].textContent.trim() + '」1個だけ');
+  });
+}
+
+/* ★締めた月は 有給も 付けられない（可否は締めの1か所から聞く）★ */
+{
+  const p = openPage('shukei.html', '', { mix: true, ym: '2026-07', closedYm: '2026-07' });
+  await wait(); await wait(); await wait();
+  T('★★締めた月は 有給の押す物を そもそも出さない（理由を出す）★★', () => {
+    const d3 = p.w.document;
+    const cell = [...d3.querySelectorAll('#cal [data-day]')][0];
+    if (!cell) { console.log('     実測: この月はカレンダーが無い（試験の種を見直す）'); ok(false, 'カレンダーが無い'); }
+    cell.click();
+    const box = d3.getElementById('cal-day');
+    const btns = [...box.querySelectorAll('[data-yk]')];
+    ok(btns.length === 0, '★締めた月なのに 押せる★（' + btns.length + '個）');
+    /* ★理由は 締めの1か所（lib/tc-close.js）が作る文★＝ここで言い換えない */
+    ok(/確定しています/.test(box.textContent), '★理由が出ていない★: ' + box.textContent.slice(-100));
+    console.log('     実測: 押す物 0個／理由「'
+      + (/この月は[^]*?要ります/.exec(box.textContent) || [''])[0] + '」');
+  });
+}
+
 T('★「渡す」を押したらファイルが実際に作られた（名前も出る）', () => {
   const r = results.filter((x) => x.file === 'shukei.html')[0];
   ok(r.page.delivered.length >= 2, '落とした物: ' + JSON.stringify(r.page.delivered));

@@ -43,6 +43,11 @@ jobs:
         run: node tests/tc-law.test.mjs
       - name: ★法定の数値 (わざと「超える」を「以上」にして赤になるかの自己確認)
         run: node tests/tc-law.test.mjs --self-test
+      # ★有給（2026-08-19）★＝一次情報の日数＋実データで測った境界（入社日が無い14人・月末入社・年度またぎ）
+      - name: ★有給の日数 (一次情報の表・基準日・繰越/時効2年・年5日／境界は実データから)
+        run: node tests/tc-yukyu.test.mjs
+      - name: ★有給の日数 (表を変える/繰越を全部にする/入社日が無い人に数を返す→赤になるかの自己確認)
+        run: node tests/tc-yukyu.test.mjs --self-test
       - name: ★計算の境界 (休憩6h/8hの等号・残業0分と1分・深夜の1分・日またぎ・打刻漏れ・空)
         run: node tests/tc-calc.test.mjs
       - name: ★計算の境界 (わざと混ぜて赤になるかの自己確認)
