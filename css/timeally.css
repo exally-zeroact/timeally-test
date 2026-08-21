@@ -350,6 +350,14 @@ table.tc td.warn { color: #B3261E; }
 }
 .tc-daybox .day-l .k { color: #78705C; }
 .tc-daybox .day-l .v { font-family: 'DM Mono', ui-monospace, monospace; }
+/* ★社長も その日の打刻を直す（2026-08-22）★＝1行1打刻・押す物は右に寄せる */
+.tc-daybox .pf-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0;
+  border-bottom: 1px dotted #F0E0B8; }
+.tc-daybox .pf-row .pf-t { font-family: 'DM Mono', ui-monospace, monospace; color: #2B2418; }
+.tc-daybox .pf-row .pf-k { color: #2B2418; flex: 1 1 auto; }
+.tc-daybox .pf-edit { flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0 8px; }
+.tc-daybox .pf-edit input[type='time'], .tc-daybox .pf-edit select { font-size: 16px; }
+.tc-daybox .pf-edit .tc-note { flex: 1 0 100%; }
 
 .tc-scrollhint { font-size: 12px; color: #78705C; margin: 6px 0; line-height: 1.7; }
 

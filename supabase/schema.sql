@@ -637,6 +637,66 @@ begin
   return jsonb_build_object('ok',true,'id',v_new);
 end $$;
 
+-- ★社長も その人の打刻を直す・消す・足す★（2026-08-22 司さん
+--   「社長の画面からやけど ここからも個人の出勤や退勤など修正できるようにした方がいい」）
+--   ★決まりは1つのまま★＝直せるのは 締める前だけ。記録は消さない（元に印・新しい行を足す）。
+--   ★従業員の口(tc_punch_edit)と 同じ門・同じ跡★（可否と理由を2か所に作らない）:
+--     ・締めた月は断る（closed）／これから先の時刻は入れない（future）
+--     ・元の行は voided_at の印だけ（★消さない★）／跡は tc_fix に残す（★誰が＝owner★）
+--   ★違いは2つだけ★
+--     ① 誰か … 社長は auth.uid()＝自分の会社の人だけ（他社の人は not_mine）
+--     ② ★種類(kind)も直せる★ … 「08:00 が 出勤か退勤か 決まっていません」を
+--        本人が答えられない時、会社が決められるようにする（実機で詰まった所）
+create or replace function public.tc_punch_edit_owner(p_employee text, p_id uuid, p_at timestamptz,
+                                                      p_kind text, p_reason text, p_note text default '')
+returns jsonb language plpgsql security definer set search_path=public, extensions, timeally as $$
+declare v_acc uuid := auth.uid(); v_emp text; v_row timeally.tc_punch; v_st text; v_new uuid; v_d date; v_kind text;
+begin
+  if v_acc is null then return jsonb_build_object('ok',false,'unauth',true); end if;
+  if p_id is null then
+    -- ★足す★ … 誰の分かを 会社の人から確かめる
+    if p_at is null or p_kind not in ('in','out','break_in','break_out','away_in','away_out') then
+      return jsonb_build_object('ok',false,'bad_kind',true); end if;
+    select employee_id into v_emp from timeally.tc_pub
+     where account_id = v_acc and employee_id = p_employee and active;
+    if v_emp is null then return jsonb_build_object('ok',false,'not_mine',true); end if;
+    v_d := ((p_at at time zone 'Asia/Tokyo')::date);
+  else
+    select * into v_row from timeally.tc_punch where id = p_id and account_id = v_acc;
+    if v_row.id is null then return jsonb_build_object('ok',false,'not_mine',true); end if;
+    if v_row.voided_at is not null then return jsonb_build_object('ok',false,'already',true); end if;
+    v_emp := v_row.employee_id;
+    v_d := ((v_row.at at time zone 'Asia/Tokyo')::date);
+  end if;
+  v_st := timeally.tc_state(v_acc, v_d);
+  if v_st = 'closed' then return jsonb_build_object('ok',false,'closed',true,'state',v_st); end if;
+  if p_at is not null and p_at > now() + interval '5 minutes' then
+    return jsonb_build_object('ok',false,'future',true); end if;
+  -- ★直す／足す＝新しい行を1本 足す★（種類は 渡されたらそれ・無ければ元のまま）
+  if p_at is not null or (p_id is not null and p_kind is not null) then
+    if p_id is not null and p_at is not null
+       and ((p_at at time zone 'Asia/Tokyo')::date) <> v_d then
+      return jsonb_build_object('ok',false,'other_day',true); end if;
+    v_kind := coalesce(p_kind, v_row.kind);
+    if v_kind not in ('in','out','break_in','break_out','away_in','away_out') then
+      return jsonb_build_object('ok',false,'bad_kind',true); end if;
+    insert into timeally.tc_punch(account_id, employee_id, at, kind, src, device, approved_at)
+    values (v_acc, v_emp, coalesce(p_at, v_row.at), v_kind,
+            case when p_id is null then 'calendar' else 'punch' end, 'owner', now())
+    returning id into v_new;
+  end if;
+  if p_id is not null then
+    update timeally.tc_punch set voided_at = now() where id = p_id;
+  end if;
+  insert into timeally.tc_fix(account_id, employee_id, d, before_min, after_min, reason, note,
+                              requested_by, approved_by, approved_at, status, punch_ids, void_ids)
+  values (v_acc, v_emp, v_d, null, null, coalesce(p_reason,''), coalesce(p_note,''),
+          'owner', 'owner', now(), 'approved',
+          case when v_new is null then '{}'::uuid[] else array[v_new] end,
+          case when p_id is null then '{}'::uuid[] else array[p_id] end);
+  return jsonb_build_object('ok',true,'id',v_new);
+end $$;
+
 -- ★「この時刻で合っている」と答える★（2026-08-18）
 --   機械が気づいて聞いた事に本人が答える。★答えたら 二度と聞かない★（印を1つ足すだけ）。
 --   ★打刻は1文字も動かない★（at も kind も そのまま。消しもしない）。
@@ -777,6 +837,26 @@ grant execute on function
   public.tc_fix_request(uuid,text,text,date,int,int,text,uuid[],uuid[]),
   public.tc_pub_info(uuid,date)
 to anon, authenticated;
+
+-- ★社長の口は authenticated だけ★（2026-08-22）
+--   ＝anon（従業員のリンク）に渡すと ★他人の打刻を触れる道★ができる。
+--   tests/employee-screen.test.mjs が「anon に渡した物」を数えていて、
+--   ★渡した瞬間に赤になった★（見張りが働いた）。
+--   ★ただし grant を書くだけでは足りない★（2026-08-22 倉庫を実測して分かった）
+--     ＝Postgres は 関数の実行権を ★既定で PUBLIC に渡す★。
+--       だから「authenticated にだけ grant」しても、anon は PUBLIC 経由で呼べたままだった。
+--     ⇒★先に PUBLIC から取り上げる★。（中の auth.uid() でも止まるが、
+--       ★渡さない★のが本筋＝門を2つにしない）
+--     ★さらに もう1つ★ … この倉庫は「これから作る関数は anon にも渡す」という
+--       既定(default privileges)を持っている＝★新しい関数は 黙って anon 付きで生まれる★。
+--       実測: revoke ... from public の後も proacl に ★anon=X★ が残っていた。
+--     ⇒★anon から名指しで取り上げる★（PUBLIC と anon の2つを外して初めて 社長だけになる）
+revoke execute on function
+  public.tc_punch_edit_owner(text,uuid,timestamptz,text,text,text)
+from public, anon;
+grant execute on function
+  public.tc_punch_edit_owner(text,uuid,timestamptz,text,text,text)
+to authenticated;
 
 -- ★引数を増やした前の形は 落とす★（残ると 古い形が呼べてしまい、締めの門が無い方が通る）
 drop function if exists public.tc_pub_info(uuid);

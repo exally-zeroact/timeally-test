@@ -569,6 +569,79 @@ T('★★日を押すと その日の結論が1行 出る（08:00〜17:03（実�
   });
 }
 
+/* ★★社長も その日の打刻を 直す・消す・足す★★（2026-08-22 司さん
+   「社長の画面からやけど ここからも個人の出勤や退勤など修正できるようにした方がいい」）
+   ★決まりは増やさない★＝言葉は 直す・消す・足す の3つのまま／締めた月は 口ごと出さない。 */
+{
+  const p = openPage('shukei.html', '', { days: 31, ym: '2026-08', closeDay: 31, mix: true });
+  await wait(); await wait(); await wait();
+  const d2 = p.w.document;
+  const cells = () => [...d2.querySelectorAll('#cal [data-day]')];
+  const openWorked = () => {
+    const c = cells().filter((b) => /:/.test(b.textContent))[0];
+    ok(c, '★打刻のある日が1つも無い（試験の種を見直す）★');
+    c.click();
+    return d2.getElementById('cal-day');
+  };
+
+  T('★★打刻のある日を開くと 1行1打刻で「直す／消す」＋「足す」が出る★★', () => {
+    const box = openWorked();
+    const rows = [...box.querySelectorAll('.pf-row')];
+    const fix = [...box.querySelectorAll('[data-pf]')].filter((b) => b.textContent.trim() === '直す');
+    const drop = [...box.querySelectorAll('[data-pfdrop]')];
+    ok(rows.length >= 2, '★行が出ていない★（' + rows.length + '）');
+    ok(fix.length === drop.length && fix.length >= 1, '★直すと消すの数が合わない★（' + fix.length + '/' + drop.length + '）');
+    ok([...box.querySelectorAll('[data-pf]')].some((b) => /足す/.test(b.textContent)), '★足す口が無い★');
+    console.log('     実測: 打刻 ' + fix.length + '本（直す/消す）＋足す1つ');
+  });
+
+  T('★★「直す」を開くと 今の時刻と種類が入っている／同じままでは押せない★★', () => {
+    const box = d2.getElementById('cal-day');
+    const b = [...box.querySelectorAll('[data-pf]')].filter((x) => x.textContent.trim() === '直す')[0];
+    b.click();
+    const t = d2.getElementById('pf-t'), k = d2.getElementById('pf-k'), go = d2.getElementById('pf-go');
+    ok(t && k && go, '★開かない★');
+    ok(/^\d{2}:\d{2}$/.test(t.value), '★時刻が空のまま★: ' + t.value);
+    ok(k.value === 'in' || k.value === 'out' || /^(break|away)_/.test(k.value), '★種類が入っていない★');
+    ok(go.disabled, '★同じままなのに 押せる★');
+    ok(/今と同じです/.test(d2.getElementById('pf-why').textContent), '理由が出ていない');
+    console.log('     実測: 時刻 ' + t.value + ' / 種類 ' + k.value + ' / 押せない（今と同じ）');
+  });
+
+  T('★★種類を変えると押せて、倉庫へ「会社が直す」口が飛ぶ★★', () => {
+    const k = d2.getElementById('pf-k'), go = d2.getElementById('pf-go');
+    const before = (p.fake._store.editOwner || []).length;
+    k.value = k.value === 'in' ? 'out' : 'in';
+    k.dispatchEvent(new p.w.Event('change', { bubbles: true }));
+    ok(!go.disabled, '★変えたのに 押せない★');
+    go.click();
+    const rows = p.fake._store.editOwner || [];
+    ok(rows.length === before + 1, '★倉庫へ行っていない★（' + before + '→' + rows.length + '）');
+    const a = rows[rows.length - 1];
+    ok(a.p_id, '★どの打刻かを渡していない★');
+    ok(a.p_kind, '★種類を渡していない★');
+    ok(a.p_employee, '★誰の分かを渡していない★');
+    console.log('     実測: 倉庫へ ' + JSON.stringify({ 種類: a.p_kind, 誰: a.p_employee }));
+  });
+}
+
+/* ★締めた月は 社長も 打刻を直せない（口ごと出さない）★ */
+{
+  const p = openPage('shukei.html', '', { mix: true, ym: '2026-07', closedYm: '2026-07' });
+  await wait(); await wait(); await wait();
+  T('★★締めた月は「打刻を直す」の口ごと出さない（理由は締めの1か所から）★★', () => {
+    const d3 = p.w.document;
+    const cell = [...d3.querySelectorAll('#cal [data-day]')][0];
+    cell.click();
+    const box = d3.getElementById('cal-day');
+    ok([...box.querySelectorAll('[data-pf],[data-pfdrop]')].length === 0,
+      '★締めた月なのに 打刻を直す口が出ている★');
+    ok(!/打刻を直す/.test(box.textContent), '★見出しだけ残っている★');
+    ok(/確定しています/.test(box.textContent), '理由が出ていない');
+    console.log('     実測: 押す物 0個／理由「この月は確定しています」');
+  });
+}
+
 /* ★締めた月は 有給も 付けられない（可否は締めの1か所から聞く）★ */
 {
   const p = openPage('shukei.html', '', { mix: true, ym: '2026-07', closedYm: '2026-07' });

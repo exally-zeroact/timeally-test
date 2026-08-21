@@ -209,22 +209,28 @@ T('★upsert の onConflict が 実在する一意制約と合っている', () 
 /* 2026-08-18（夜2）★tc_punch_edit★ を1本 足した（9→10本）
    ＝★自分で直せる（お願い 不要）★の道。★締めた月は倉庫が断る★／
      ★元の行は消さず voided_at の印＋新しい時刻を1本★／★tc_fix に承認済で跡を残す★。 */
+/* 2026-08-22 ★tc_punch_edit_owner★ を1本 足した（10→11本）
+   ＝司さん「社長の画面からも 個人の出勤や退勤を修正できるようにした方がいい」。
+     ★門も跡も 従業員の口と同じ★（締めた月は断る／元は消さず印／tc_fix に owner で残す）。
+     ★違いは2つだけ★ … 誰か（auth.uid の会社の人だけ）／★種類(kind)も直せる★
+     （「08:00 が 出勤か退勤か 決まっていません」を 本人が答えられない時に 会社が決める）。 */
 export const PUBLIC_RPCS = ['tc_auth', 'tc_fix_request', 'tc_my_punches', 'tc_pin_set',
-  'tc_pub_info', 'tc_punch_add', 'tc_punch_edit', 'tc_punch_ok', 'tc_punch_undo', 'tc_verify'];
+  'tc_pub_info', 'tc_punch_add', 'tc_punch_edit', 'tc_punch_edit_owner', 'tc_punch_ok',
+  'tc_punch_undo', 'tc_verify'];
 /* 部屋の中の補助（★definer にしない★＝決まりを素通りできない）
    tc_ok        … 端末記憶 or 暗証番号（RPC 3本から呼ぶ）
    tc_period_ym … その日が どの締めに入るか（2026-08-15）
    tc_state     … 受付中/締め待ち/確定（2026-08-15・★画面と同じ線を倉庫でも引く★） */
 export const INNER_FUNCS = ['tc_ok', 'tc_period_ym', 'tc_state'];
 
-T('★★関数は13本（public 10本＝全部 definer / 部屋の中 3本＝1つも definer でない）★★', () => {
+T('★★関数は14本（public 11本＝全部 definer / 部屋の中 3本＝1つも definer でない）★★', () => {
   const pub = (SQL.match(/create or replace function public\.(tc_[a-z_]+)/g) || [])
     .map((s) => s.split('.')[1]).sort();
   const inner = (SQL.match(/create or replace function timeally\.(tc_[a-z_]+)/g) || [])
     .map((s) => s.split('.')[1]).sort();
   eq(pub.join(','), PUBLIC_RPCS.join(','), '★public の関数が増減している★: ' + pub.join(','));
   eq(inner.join(','), INNER_FUNCS.slice().sort().join(','), '★部屋の中の関数が増減している★: ' + inner.join(','));
-  eq(pub.length + inner.length, 13, '関数の合計が13本でない');
+  eq(pub.length + inner.length, 14, '関数の合計が14本でない');
 
   /* ★definer かどうかを1本ずつ見る★（definer は決まりを素通りできる） */
   const bodies = SQL.split('create or replace function ').slice(1);

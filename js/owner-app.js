@@ -1048,6 +1048,9 @@
         takenDays: (r[3] || []).filter(function (x) { return x.dayKind === 'paid_leave'; })
           .map(function (x) { return x.d; }),
       });
+      /* ★生の打刻を手元に残す★（2026-08-22）＝日の箱で「直す・消す」を出すのに要る。
+         ★数えるのは summarize の1本のまま★（ここでは何も数えない）。 */
+      st.punches = r[0] || [];
       st.sum = global.TcCalc.summarize({
         ym: st.ym, punches: r[0], shifts: r[1], today: todayJst(),
         fixes: (r[2] || []).filter(function (f) { return f.employee_id === p.employee_id; })
@@ -1561,7 +1564,8 @@
         }).join('');
     });
     box.innerHTML = '<div class="day-h">' + U.esc(v[0]) + '（' + U.esc(v[1]) + '）'
-      + (d.isLegalHoliday ? '　法定休日' : '') + '</div>' + dayLine(d) + html + yukyuInner(d);
+      + (d.isLegalHoliday ? '　法定休日' : '') + '</div>' + dayLine(d) + html
+      + punchFixInner(d) + yukyuInner(d);
     box.hidden = false;
     box.classList.add('open');   /* ★広い画面でも出す★（CSSはこの印だけを見る） */
     st.dayIdx = idx;
@@ -1569,9 +1573,147 @@
     Array.prototype.forEach.call(box.querySelectorAll('[data-yk]'), function (yb) {
       yb.onclick = function () { saveDayKind(d.d, yb.getAttribute('data-yk')); };
     });
+    bindPunchFix(box, d);
     Array.prototype.forEach.call(q('cal').querySelectorAll('[data-day]'), function (b) {
       b.setAttribute('aria-selected', String(Number(b.getAttribute('data-day')) === idx));
     });
+  }
+
+  /* ── ★社長も その日の打刻を 直す・消す・足す★（2026-08-22 司さん
+       「社長の画面からやけど ここからも個人の出勤や退勤など修正できるようにした方がいい」）──
+     ★決まりは増やさない★＝覚える言葉は今までどおり ★直す・消す・足す★ の3つだけ。
+     ★今の状態で押せる物しか出さない★（締めた月は この節ごと出さない＝理由は締めの1か所から）。
+     ★数えない打刻は 見せない★（まとめた分・まだ入っていない分は出さない＝従業員の画面と同じ）。
+     ★記録は消えない★＝倉庫が「元に印＋新しい行」を作り、tc_fix に ★会社が直した★と残す。
+     ★種類も直せる★＝「08:00 が 出勤か退勤か 決まっていません」を 会社が決められる
+       （本人がなかなか答えない時に 実機で詰まった所）。 */
+  var _pfOpen = null;    /* 開いている打刻の id（'add' なら 足す口） */
+  function dayPunches(d) {
+    var CL = global.TcClean;
+    var all = (st.punches || []).filter(function (p) { return String(p.at || '').slice(0, 10) === d.d; });
+    var res = CL.clean(all, { today: todayJst() });
+    return (res.punches || []).filter(function (p) { return p.why !== 'merged' && !p.pending && p.id; });
+  }
+  function kindOptions(sel) {
+    var K = global.TcClean.KIND_LABEL;
+    return Object.keys(K).map(function (k) {
+      return '<option value="' + k + '"' + (k === sel ? ' selected' : '') + '>' + U.esc(K[k]) + '</option>';
+    }).join('');
+  }
+  function punchFixInner(d) {
+    var c = st.close || closeState();
+    if (c.state === 'closed') return '';          /* ★直せない月は 口ごと出さない★ */
+    var K = global.TcClean.KIND_LABEL;
+    var list = dayPunches(d);
+    var rows = list.map(function (p) {
+      var hm = String(p.at).slice(11, 16);
+      var head = '<span class="pf-t num">' + U.esc(hm) + '</span>'
+        + '<span class="pf-k">' + U.esc(K[p.kind] || p.kind) + '</span>';
+      if (_pfOpen !== p.id) {
+        return '<div class="pf-row">' + head
+          + '<button class="tc-btn sub" type="button" data-pf="' + U.esc(p.id) + '">直す</button>'
+          + '<button class="tc-btn sub danger" type="button" data-pfdrop="' + U.esc(p.id) + '">消す</button>'
+          + '</div>';
+      }
+      /* ★開いた時に出るのは1組だけ★（時刻・種類・押す物1つ） */
+      return '<div class="pf-row open">' + head
+        + '<button class="tc-btn sub" type="button" data-pf="' + U.esc(p.id) + '">×</button>'
+        + '<div class="pf-edit">'
+        + '<input type="time" step="60" id="pf-t" value="' + U.esc(hm) + '" />'
+        + '<select id="pf-k">' + kindOptions(p.kind) + '</select>'
+        + '<button class="tc-btn" type="button" id="pf-go" disabled>この内容にする</button>'
+        + '<div class="tc-note" id="pf-why"></div>'
+        + '</div></div>';
+    }).join('');
+    var add = _pfOpen === 'add'
+      ? '<div class="pf-row open">'
+        + '<button class="tc-btn sub" type="button" data-pf="add">×</button>'
+        + '<div class="pf-edit">'
+        + '<input type="time" step="60" id="pf-t" />'
+        + '<select id="pf-k">' + kindOptions('in') + '</select>'
+        + '<button class="tc-btn" type="button" id="pf-go" disabled>足す</button>'
+        + '<div class="tc-note" id="pf-why"></div>'
+        + '</div></div>'
+      : '<div class="pf-row"><button class="tc-btn sub" type="button" data-pf="add">足す（打ち忘れた分）</button></div>';
+    return '<div class="day-g">打刻を直す</div>'
+      + (rows || '<div class="tc-note">この日は 打刻がありません。</div>') + add;
+  }
+  function bindPunchFix(box, d) {
+    Array.prototype.forEach.call(box.querySelectorAll('[data-pf]'), function (b) {
+      b.onclick = function () {
+        var v = b.getAttribute('data-pf');
+        _pfOpen = (_pfOpen === v) ? null : v;
+        drawDayBox(st.dayIdx);
+      };
+    });
+    Array.prototype.forEach.call(box.querySelectorAll('[data-pfdrop]'), function (b) {
+      b.onclick = function () {
+        var id = b.getAttribute('data-pfdrop');
+        var p = dayPunches(d).filter(function (x) { return x.id === id; })[0];
+        if (!p) return;
+        savePunchFix(d, {
+          id: id,
+          why: mdDow(d.d) + ' の ' + String(p.at).slice(11, 16) + ' '
+            + (global.TcClean.KIND_LABEL[p.kind] || p.kind) + ' を 消しました',
+          done: '消しました',
+        });
+      };
+    });
+    var t = box.querySelector('#pf-t'), k = box.querySelector('#pf-k'), go = box.querySelector('#pf-go');
+    if (!t || !k || !go) return;
+    var isAdd = _pfOpen === 'add';
+    var p0 = isAdd ? null : dayPunches(d).filter(function (x) { return x.id === _pfOpen; })[0];
+    var was = p0 ? { hm: String(p0.at).slice(11, 16), kind: p0.kind } : null;
+    var why = box.querySelector('#pf-why');
+    var K = global.TcClean.KIND_LABEL;
+    var redraw = function () {
+      var same = was && t.value === was.hm && k.value === was.kind;
+      var ok = !!t.value && !same;
+      go.disabled = !ok;
+      if (why) {
+        why.textContent = !t.value ? '時刻を選んでください'
+          : same ? '今と同じです（' + was.hm + ' ' + (K[was.kind] || was.kind) + '）。直す時は 変えてください'
+            : (isAdd
+              ? mdDow(d.d) + ' ' + t.value + ' に ' + (K[k.value] || k.value) + ' を足します'
+              : mdDow(d.d) + ' の ' + was.hm + ' ' + (K[was.kind] || was.kind)
+                + ' を ' + t.value + ' ' + (K[k.value] || k.value) + ' に直します');
+        why.hidden = false;
+      }
+    };
+    t.oninput = redraw; t.onchange = redraw; k.onchange = redraw;
+    redraw();
+    go.onclick = function () {
+      if (go.disabled) return;
+      savePunchFix(d, {
+        id: isAdd ? null : _pfOpen,
+        at: d.d + 'T' + t.value,
+        kind: k.value,
+        why: isAdd
+          ? mdDow(d.d) + ' ' + t.value + ' に ' + (K[k.value] || k.value) + ' を足しました'
+          : mdDow(d.d) + ' の ' + was.hm + ' ' + (K[was.kind] || was.kind)
+            + ' を ' + t.value + ' ' + (K[k.value] || k.value) + ' に直しました',
+        done: isAdd ? '入れました' : '直しました',
+      });
+    };
+  }
+  /** ★倉庫へ頼むのは この1本だけ★（可否は倉庫が持つ＝画面で言い換えない） */
+  function savePunchFix(d, o) {
+    var p = personOf(st.who);
+    if (!p) { U.toast('先に人を選んでください'); return; }
+    DB.editPunchOwner(p.employee_id, o.id, o.at || null, o.kind || null, o.why || '', '')
+      .then(function (r) {
+        if (!r || !r.ok) {
+          U.toast(r && r.closed ? (st.close || closeState()).why.requestFix
+            : r && r.future ? 'これから先の時刻は入れられません'
+              : r && r.other_day ? 'その日の中の時刻にしてください'
+                : 'できませんでした');
+          return;
+        }
+        _pfOpen = null;
+        U.toast(o.done);
+        return drawShukei();
+      })
+      .catch(failed('できませんでした'));
   }
 
   /* ── ★有給を 付ける／外す★（2026-08-19 司さんの決まりの続き） ─────────────

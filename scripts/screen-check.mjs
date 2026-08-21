@@ -278,7 +278,12 @@ const CAL_PROBE = VISIBLE + `
     /* ★中身が空の仲間（見出しだけ）が出ていないか★ */
     [].slice.call(box.querySelectorAll(".day-g")).forEach(function(g){
       var nx = g.nextElementSibling;
-      if (!nx || !/day-l/.test(nx.className)) opened.空の仲間++;
+      /* ★中身＝値の行(day-l) だけではない★（2026-08-22）
+         社長が打刻を直す仲間は ★押す物★が中身。★本当に何も無い時だけ 赤★にする
+         （見出しの次が 無い／空っぽ＝人には見出ししか見えない）。 */
+      var has = !!nx && (/day-l/.test(nx.className)
+        || (nx.textContent || "").trim() !== "" || !!nx.querySelector("button"));
+      if (!has) opened.空の仲間++;
     });
     /* ★★列を省いていないか★★
        ＝★表のその日の行に出ている値★が ★1つ残らず 開いた中身にも在る★かを数える。

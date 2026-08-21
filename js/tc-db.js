@@ -284,6 +284,19 @@
   }
 
   /** 記録を1行 足す。action は close / reopen / export / pin_reissue のどれか */
+  /** ★社長が その人の打刻を 直す・消す・足す★（2026-08-22 司さん）
+   *  ★門は倉庫の側★（締めた月は断る）＝画面だけで止めない。
+   *  直す … id と 新しい時刻／種類（どちらか片方でよい）
+   *  消す … id だけ（★行は消えない＝印が立つだけ★）
+   *  足す … id を渡さず 誰の・いつ・種類 */
+  function editPunchOwner(employeeId, id, wallTime, kind, why, note) {
+    return rpc('tc_punch_edit_owner', {
+      p_employee: employeeId || null, p_id: id || null,
+      p_at: wallTime ? fromJst(wallTime) : null, p_kind: kind || null,
+      p_reason: why || '', p_note: note || '',
+    });
+  }
+
   function addCloseLog(row) {
     return client().from('tc_close').insert(row).select()
       .then(function (r) { if (r.error) throw wrapError('tc_close', r.error); return (r.data || [])[0]; });
@@ -355,5 +368,6 @@
     listFixes: listFixes, approveFix: approveFix, rejectFix: rejectFix,
     loadShifts: loadShifts, loadShiftsAll: loadShiftsAll, saveShift: saveShift, saveDayBreak: saveDayBreak, saveDayKind: saveDayKind,
     listCloseLog: listCloseLog, addCloseLog: addCloseLog, listPinLog: listPinLog,
+    editPunchOwner: editPunchOwner,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
