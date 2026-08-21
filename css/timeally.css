@@ -278,6 +278,10 @@ table.tc td.warn { color: #B3261E; }
 .tc-rowhead .tc-chev { color: #78705C; font-size: 18px; line-height: 1; }
 .tc-rowhead[aria-expanded='true'] .tc-chev { transform: rotate(90deg); display: inline-block; }
 .tc-rowbody { padding: 0 4px 10px; }
+/* ★入社日は あとから直せる（従業員の箱の中の1行）★
+   ＝年まで見せる（どの年かで有給の日数が変わる）。押す物は「この日にする」1つだけ。 */
+.tc-hire { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: #2B2418; margin: 6px 0 2px; }
+.tc-hire b { color: #2B2418; }
 
 /* ★何が分かる画面かの1行★（見出しの下・本文と同じ薄い黒） */
 .tc-lead { font-size: 13px; color: #2B2418; margin: 8px 0; }

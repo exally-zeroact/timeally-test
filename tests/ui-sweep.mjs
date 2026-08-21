@@ -1127,28 +1127,37 @@ T('★あとから入れる は その場で入る（お願いにしない・跡
   const T_URL2 = '?t=11111111-1111-1111-1111-111111111111';
   const pA = openPage('kiroku.html', T_URL2, SEED);
   await wait(); await wait(); await wait();
-  const rA = pA.w.document.querySelector('[data-pid]');
-  if (rA) rA.click();
+  const rowsA = [...pA.w.document.querySelectorAll('[data-pid]')];
+  if (rowsA[0]) rowsA[0].click();
   await wait(); await wait();
   const dropA = pA.w.document.getElementById('fix-drop');
   if (dropA) dropA.click();
   await wait(); await wait();
 
-  T('★★締めた月は 押しても入らない／理由を出す★★', () => {
+  /* ★2026-08-22 直した★＝前は「押させてから断る」形を検査していた
+     （締めた月でも「直す」が並び、押して開いて 最後に倉庫が断る）。
+     ★今の決まりは 08-18 の「今の状態で押せる物しか出さない」★＝
+     ★押す物は そもそも出さない／理由は 上の1行に出す★（有給の箱と同じ形）。 */
+  T('★★締めた月は 直す物を そもそも出さない／理由を出す★★', () => {
     const ed = pA.fake._store.edit, req = pA.fake._store.fixReq;
     ok(ed.length === 0, '★締めた月なのに 倉庫へ送っている★（' + ed.length + '件）');
     ok(req.length === 0, '★お願いの道が まだ生きている★（' + req.length + '件）');
-    const toast = (pA.w.document.querySelector('.tc-toast') || {}).textContent || '';
-    ok(/締めたので直せません/.test(toast), '★理由を出していない★: ' + toast);
-    console.log('     実測: 送った 0件／出た言葉「' + toast + '」');
+    ok(rowsA.length === 0, '★締めた月なのに 押せる打刻が出ている★（' + rowsA.length + '個）');
+    const note = pA.w.document.getElementById('closed-note');
+    ok(note && !note.hidden && /締め切りました/.test(note.textContent),
+      '★理由を出していない★: ' + (note ? note.textContent : 'closed-note が無い'));
+    console.log('     実測: 押せる打刻 0個／送った 0件／理由「' + (note ? note.textContent.trim() : '') + '」');
   });
 
-  T('★★締めた月は「足す」も押せない（理由つき）★★', () => {
+  T('★★締めた月は「あとから入れる」の口ごと出さない／理由を出す★★', () => {
     const d2 = pA.w.document;
-    d2.getElementById('b-addopen').click();
-    ok(d2.getElementById('b-add').disabled, '★締めた月なのに 足せる★');
-    ok(/締めたので直せません/.test(d2.getElementById('add-why').textContent),
-      '理由が出ていない: ' + d2.getElementById('add-why').textContent);
+    const open = d2.getElementById('b-addopen');
+    ok(open.hidden, '★締めた月なのに「あとから入れる」が出ている★');
+    ok(d2.getElementById('add-box').hidden, '★中の欄が開いている★');
+    const note = d2.getElementById('closed-note');
+    ok(note && !note.hidden && /締め切りました/.test(note.textContent),
+      '理由が出ていない: ' + (note ? note.textContent : 'closed-note が無い'));
+    console.log('     実測: 口 0個／理由「' + note.textContent.trim() + '」');
   });
 }
 

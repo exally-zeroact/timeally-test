@@ -533,6 +533,14 @@
         /* ★いつ決めたかを出す★（身に覚えの無い日時なら 社長が気づける）
            秘密を1つに減らした分の埋め合わせ（司さん 2026-08-15） */
         + '<div class="tc-when">' + U.esc(pinHistoryOf(p)) + '</div>'
+        /* ★入社日は あとから直せる★（2026-08-22 実配信で見つけた）
+           ＝今までは「空の人に1問だけ聞く」箱しか無く、★一度 入った日は どこからも直せなかった★。
+             打ち間違い・前の人の値が残った日が そのまま 有給の日数になっていた。
+           ★年まで見せる★（2023年4月1日）＝M/D だけだと どの年か分からず 直しようがない。 */
+        + '<div class="tc-hire">入社日 <b>' + U.esc(hireText(p.hire_date)) + '</b>'
+        + U.dateField(p.hire_date || '', '')
+        + '<button class="tc-btn sub" type="button" data-hire="' + t + '">この日にする</button>'
+        + '</div>'
         + '<div id="qr-' + t + '"></div></div></div>';
     }).join('');
     Array.prototype.forEach.call(box.querySelectorAll('[data-open]'), function (b) {
@@ -551,6 +559,32 @@
     Array.prototype.forEach.call(box.querySelectorAll('[data-re]'), function (b) {
       b.onclick = function () { reissue(b.getAttribute('data-re')); };
     });
+    /* ★入社日を直す★（門は hireCheck 1か所＝入れてよい範囲の外は 倉庫へ行かせない） */
+    Array.prototype.forEach.call(box.querySelectorAll('[data-hire]'), function (b) {
+      b.onclick = function () {
+        var tk = b.getAttribute('data-hire');
+        var inp = b.parentNode.querySelector('.tc-date-input');
+        var v = (inp || {}).value || '';
+        if (!v) { U.toast('入社日を選んでください'); return; }
+        var g = hireCheck(v);
+        if (!g.ok) { U.toast(g.why); return; }
+        DB.updatePerson(tk, { hire_date: v })
+          .then(function () { U.toast('入社日を直しました'); reload(); })
+          .catch(failed('直せませんでした'));
+      };
+    });
+  }
+  /** ★入社日は 年まで見せる★（どの年かで 有給の日数が変わる。M/D では直せない） */
+  function hireText(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+    return m ? (+m[1]) + '年' + (+m[2]) + '月' + (+m[3]) + '日' : 'まだ入っていません';
+  }
+  /** 日付の欄を 空に戻す（見せる字も戻す＝DOMに在る≠読める） */
+  function clearDate(sel) {
+    var inp = d.querySelector(sel + ' .tc-date-input');
+    if (!inp) return;
+    inp.value = '';
+    U.onDateChange(inp);
   }
   /** ★リンクは「見せる物」ではなく「渡す物」★＝コピーだけできればよい。
    *  ★コピーできない機械でも 行き止まりにしない★（できなければ その場に出す）。 */
@@ -626,6 +660,11 @@
       U.toast(same ? '入口を作りました（同じ氏名の人が ' + same + '人います。給与は氏名で見分けるので、従業員番号を入れてください）'
         : '入口を作りました');
       q('p-name').value = ''; q('p-no').value = ''; q('p-yen').value = '';
+      /* ★欄は全部 空に戻す★（2026-08-22 実配信で見つけた）
+         ＝入社日と 人ごとの法定休日だけ 消し忘れていて、★次の人に そのまま付いた★。
+           入社日は 有給の付与日数と 年5日の期限を決める値＝★黙って間違う★。 */
+      clearDate('#p-hire-wrap');
+      if (q('p-hol')) q('p-hol').value = '';
       reload();
     }).catch(function (e) {
       /* ★倉庫が断った時も 人の言葉に直す★（23505＝一意に当たった） */
@@ -1013,7 +1052,10 @@
               status: f.status, requestedBy: f.requested_by, approvedBy: f.approved_by };
           }),
         company: Object.assign(coOpts(), {
-          hourlyYen: p.hourly_yen, grantDays: grantDaysOf(p), personHolidayDow: p.legal_holiday_dow,
+          /* ★有給の付与日数は 法定の1本(st.yukyu)から★（2026-08-22）
+             ＝ここで月数を引き算して作ると 月末入社で1回ぶんずれる（tc-yukyu が直した穴）。 */
+          hourlyYen: p.hourly_yen, grantDays: (st.yukyu && st.yukyu.ok) ? st.yukyu.grantDays : null,
+          personHolidayDow: p.legal_holiday_dow,
         }),
       });
       renderTables(p);
@@ -1204,13 +1246,18 @@
     });
   }
 
-  /** ★全員の月計を作るのは この1本だけ★（CSV・Excel・焼き付けが同じ数字になる） */
+  /** ★全員の月計を作るのは この1本だけ★（CSV・Excel・焼き付けが同じ数字になる）
+      ★有給の残りも ここで法定の1本から作る★（2026-08-22）
+      ＝画面と紙で 別々に数えていたので、同じ人の同じ日に ★23日と12日★が同時に出ていた。
+        繰越は前の1年ぶんまで見るので ★2年ぶん読む★（1人の画面と同じ読み方）。 */
   function allMonth() {
     var per = global.TcCalc.period(st.ym, (st.company && st.company.close_day) || 31);
+    var wideFrom = (Number(per.from.slice(0, 4)) - 2) + per.from.slice(4);
     return Promise.all(st.people.map(function (p) {
       return Promise.all([
         DB.loadPunches(p.employee_id, per.from, per.to),
         DB.loadShifts(p.employee_id, per.from, per.to),
+        DB.loadShifts(p.employee_id, wideFrom, per.to),
       ]).then(function (r) {
         return {
           p: p,
@@ -1218,9 +1265,18 @@
             ym: st.ym, punches: r[0], shifts: r[1], fixes: [], today: todayJst(),
             company: Object.assign(coOpts(), { hourlyYen: p.hourly_yen, personHolidayDow: p.legal_holiday_dow }),
           }),
+          yk: yukyuOf(p, r[2]),
         };
       });
     }));
+  }
+  /** ★有給の残りを出すのは この1本だけ★（法定は lib/tc-yukyu.js が1か所で持つ） */
+  function yukyuOf(p, shifts) {
+    return global.TcLaw.yukyuLeft({
+      hireDate: p.hire_date || null, today: todayJst(),
+      takenDays: (shifts || []).filter(function (x) { return x.dayKind === 'paid_leave'; })
+        .map(function (x) { return x.d; }),
+    });
   }
 
   /** ★渡す前に必ず通す門★（確定していない月の数字を外へ出さない） */
@@ -1239,12 +1295,7 @@
     }).catch(function () { /* 記録できなくても 渡した物は渡した。画面は止めない */ });
   }
 
-  function grantDaysOf(p) {
-    if (!p.hire_date) return null;
-    var a = new Date(p.hire_date + 'T00:00:00Z'), b = new Date(st.ym + '-01T00:00:00Z');
-    var months = (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth());
-    return global.TcLaw.yukyuGrantDays(months);
-  }
+
 
   /* ★日ごとの表の作り（2026-08-15 司さんの指摘で作り直した）★
      ・★日付に年は要らない★（期間は見出しに1回 出る）。★月をまたぐ締めの時だけ 月を出す★
@@ -1594,7 +1645,7 @@
     /* ★割増の内訳を全部 出す★（社長が「なぜこれが残業でないのか」を説明できるように）
        ★総労働 ＝ 所定内 ＋ 所定超 ＋ 時間外 ＋ 休日★（深夜は上乗せなので足さない）
        率は ★LAW の数から作る★（説明文に直書きしない） */
-    st.totalRows = totalRowsOf(p, s);
+    st.totalRows = totalRowsOf(p, s, st.yukyu);
     q('total').innerHTML = st.totalRows.map(function (r) { return tr(r[0], r[1]); }).join('');
     drawUndecided(s);
     drawCutBox(s);
@@ -1603,7 +1654,7 @@
 
   /** ★月計の中身は1か所で作る★（画面も紙も 同じ配列を見る＝食い違わない）
       率は ★LAW の数から作る★（説明文に直書きしない） */
-  function totalRowsOf(p, s) {
+  function totalRowsOf(p, s, yk) {
     var LAW = global.TcLaw, pc = function (r) { return Math.round(r * 100) + '%'; };
     var m2 = s.month;
     /* ★ラベルの頭に空白を入れない★（2026-08-15 司さんの指摘）
@@ -1624,7 +1675,7 @@
       ['遅刻', U.minToHm(m2.lateMin)],
       ['早退', U.minToHm(m2.earlyMin)],
       ['有給消化', String(m2.yukyu)],
-      ['有給残', String(yukyuLeft(p, s))],
+      ['有給残', yukyuText(yk)],
       ['欠勤', String(m2.kekkin)],
     ];
   }
@@ -1665,10 +1716,13 @@
      ★残した物★: 紙の備考（その日に何が起きたか）／休憩の既定が法定を下回る赤（会社情報）／
                  丸めの適法性・法定休日の説明（会社情報）。 */
   function tr(k, v) { return '<tr><th class="l">' + U.esc(k) + '</th><td class="num">' + U.esc(v) + '</td></tr>'; }
-  function yukyuLeft(p, s) {
-    var g = grantDaysOf(p);
-    if (g == null) return '入社日が未設定';
-    return Math.max(0, g - s.month.yukyu);
+  /** ★有給の残りの字は ここだけ★（数は yukyuOf＝法定の1本が作る）
+      ＝前は この関数が ★自前で 付与−その月に使った分★ を数えていて、
+        ★繰越を数えず／勤続の数え方も古く★、日を押した箱（法定の1本）と
+        ★同じ人の同じ日に 23日と12日★が出ていた（2026-08-22 実配信で見つけた）。 */
+  function yukyuText(yk) {
+    if (!yk) return '';
+    return yk.ok ? String(yk.leftDays) : (yk.why || '');
   }
 
   function fileName(p, ext) {
@@ -1723,7 +1777,7 @@
     if (!st.people.length) { U.toast('従業員がいません'); return; }
     allMonth().then(function (rows) {
       var body = rows.map(function (x, i) {
-        return paperOf(x.p, x.s, '<table>' + dailyInner(x.s) + '</table>', totalRowsOf(x.p, x.s), i > 0);
+        return paperOf(x.p, x.s, '<table>' + dailyInner(x.s) + '</table>', totalRowsOf(x.p, x.s, x.yk), i > 0);
       }).join('');
       var name = global.TcName.build({
         kind: '勤務表', company: (st.company || {}).name, ym: st.ym, count: rows.length, stamp: stamp(),
@@ -1805,7 +1859,7 @@
 
   global.OwnerApp = {
     startLogin: startLogin, startIndex: startIndex, startShukei: startShukei,
-    _st: st, _grantDaysOf: grantDaysOf, _fileName: fileName, _pinHistoryOf: pinHistoryOf,
+    _st: st, _fileName: fileName, _pinHistoryOf: pinHistoryOf,
     _holNote: drawHolidayNote, _hirePreview: hirePreview,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
