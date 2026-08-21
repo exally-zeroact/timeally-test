@@ -238,6 +238,48 @@ T('★★日を押すと その日の結論が1行 出る（08:00〜17:03（実�
   console.log('     実測: ' + (/[^\n]*として数えます/.exec(line) || [''])[0].trim());
 });
 
+/* ── ★「出勤を打ち間違えた」は その日の行まで連れて行く★（2026-08-21 指示役が実配信で見つけた） ──
+   ＝前は 記録の いちばん上（月の頭）に着くだけ。今日の行は ずっと下に在って、
+     ★ボタンの言葉が約束している所★に着いていなかった。 */
+{
+  const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+  const p = openPage('punch.html', '?t=11111111-1111-1111-1111-111111111111',
+    { punches: [[today + 'T09:00', 'in']] });
+  await wait(); await wait(); await wait();
+  T('★★「出勤を打ち間違えた」の行き先に その日が付いている★★', () => {
+    const a = p.w.document.getElementById('to-fix');
+    ok(a && !a.hidden, '★出勤中なのに 逃げ道が出ていない★');
+    ok(/kiroku\.html\?t=/.test(a.href), '行き先が違う: ' + a.href);
+    ok(a.href.indexOf('d=' + today) > 0, '★その日が付いていない★: ' + a.href);
+    console.log('     実測: ' + a.getAttribute('href'));
+  });
+
+  const k = openPage('kiroku.html', '?t=11111111-1111-1111-1111-111111111111&d=' + today,
+    { punches: [[today + 'T09:00', 'in']] });
+  await wait(); await wait(); await wait(); await wait();
+  T('★★その行き先を開くと その日の打刻が すでに開いている★★', () => {
+    const d2 = k.w.document;
+    const open = [...d2.querySelectorAll('[data-pid][aria-expanded="true"]')];
+    ok(open.length === 1, '★開いている行が ' + open.length + '個（1個のはず）★');
+    const card = open[0].closest('.tc-card');
+    ok(/#/.test('#') && card.textContent.indexOf(today.slice(5).replace('-', '/')) >= 0,
+      '★別の日を開いている★: ' + card.textContent.slice(0, 40));
+    const btns = [...card.querySelectorAll('button')].map((b) => b.textContent.trim());
+    ok(btns.some((x) => /時刻を直す/.test(x)) && btns.some((x) => /消す/.test(x)),
+      '★開いたのに 直す・消すが出ていない★: ' + JSON.stringify(btns));
+    console.log('     実測: ' + today + ' の行が開いている（' + JSON.stringify(btns.slice(0, 3)) + '）');
+  });
+
+  const k2 = openPage('kiroku.html', '?t=11111111-1111-1111-1111-111111111111',
+    { punches: [[today + 'T09:00', 'in']] });
+  await wait(); await wait(); await wait(); await wait();
+  T('★★ふつうに開いた時は 何も開かない（勝手に開かない）★★', () => {
+    const open = [...k2.w.document.querySelectorAll('[data-pid][aria-expanded="true"]')];
+    ok(open.length === 0, '★勝手に ' + open.length + '個 開いている★');
+    console.log('     実測: 開いている行 0個');
+  });
+}
+
 /* ── ★入社日を1人ずつ聞く★（2026-08-19 指示役④-①）＝★実UIで答えて 倉庫を読む★ ────
    実データは ★18人中14人が空★。空のままだと 8割の人の有給が数えられない。 */
 {

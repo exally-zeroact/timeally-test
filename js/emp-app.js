@@ -187,8 +187,14 @@
     begin(function () {
       var link = q('to-kiroku');
       if (link) link.href = 'kiroku.html?t=' + encodeURIComponent(st.token);
+      /* ★「出勤を打ち間違えた」は その日の行まで連れて行く★（2026-08-21 指示役が実配信で見つけた）
+         ＝前は 記録の いちばん上（月の頭）に着くだけで、今日の行は ずっと下だった。
+         ★ボタンの言葉が約束している所★まで開いて見せる。 */
       var fix = q('to-fix');
-      if (fix) fix.href = 'kiroku.html?t=' + encodeURIComponent(st.token);
+      if (fix) {
+        fix.href = 'kiroku.html?t=' + encodeURIComponent(st.token)
+          + '&d=' + encodeURIComponent((DB.nowJst() || '').slice(0, 10));
+      }
       var t = q('t');
       if (t) {
         if (!t.value) t.value = (DB.nowJst() || '').slice(11, 16);   // ★いまの時刻。直せる★
@@ -347,6 +353,7 @@
   function startKiroku() {
     begin(function () {
       st.ym = (DB.nowJst() || '').slice(0, 7);
+      _wantDay = param('d');
       var link = q('to-punch');
       if (link) link.href = 'punch.html?t=' + encodeURIComponent(st.token);
       var wrap = q('ad-wrap');
@@ -516,6 +523,24 @@
       };
     }
     draw2();
+  }
+
+  /** ★打つ画面から「打ち間違えた」で来た時★＝その日の最後の打刻を開いて、そこまで動かす
+      （1回だけ。開いた後は ふつうの記録画面と同じ） */
+  var _wantDay = '';
+  function openWanted(byDay) {
+    if (!_wantDay) return false;
+    var list = byDay[_wantDay];
+    _wantDay = '';
+    if (!list || !list.length) return false;
+    var last = list[list.length - 1];
+    if (!last.id) return false;
+    _openPid = last.id;
+    _fixStep = 'menu';
+    draw();
+    var el = d.querySelector('[data-pid="' + last.id + '"]');
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center' });
+    return true;
   }
 
   /** 打刻の行と 機械が見つけた聞く事を配線する */
@@ -705,6 +730,7 @@
       }).join('');
       bindAsks();
       bindRows();
+      openWanted(byDay);   /* ★「打ち間違えた」で来た日を 開いて そこまで動かす★（1回だけ） */
     }).catch(function (e) { U.toast('つながりませんでした（' + e.message + '）'); });
   }
 
