@@ -157,6 +157,17 @@ function rowsFor(table, seed, store) {
     /* ★seed.fixReal=true … 司さんの実機に出た形★（2026-08-21 実データから写した）
        ＝★同じ打刻の跡が2回★／★前も後も0分★／昔の書き方の理由。
          これが無いと「重なりを消した」「0分→0分を出さない」を確かめた事にならない。 */
+    /* ★seed.fixOldReason=true … 倉庫に残っている「昔の書き方」が入った 承認前の1件★
+       ＝作る所を消しても ★保存済みの文は消えない★。この種が無いと
+         「昔の書き方を刷らない」を確かめた事にならない（司さんの実機に出た文そのもの）。 */
+    if (s.fixOldReason) {
+      return [{ id: 'o1', account_id: 'u1', employee_id: 'E1', d: '2026-08-03',
+        before_min: null, after_min: null,
+        reason: '8/17 の 08:00 出勤 は 間違いなので使いません',
+        requested_by: 'employee', requested_at: '2026-08-17T12:00:00Z',
+        approved_by: null, approved_at: null, status: 'pending',
+        punch_ids: [], void_ids: [] }];
+    }
     if (s.fixReal) {
       var mk = function (id, hm, kind) {
         return { id: id, account_id: 'u1', employee_id: 'E1', d: '2026-08-17',

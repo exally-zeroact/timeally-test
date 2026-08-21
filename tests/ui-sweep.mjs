@@ -1200,6 +1200,32 @@ T('★あとから入れる は その場で入る（お願いにしない・跡
   });
 }
 
+/* ── ★「まだ入っていません」に 昔の書き方を刷らない★（2026-08-21 指示役・倉庫に残っている文） ──
+   作る所は消したが ★保存済みの文は 倉庫に残る★。人が書いた理由は そのまま出す。 */
+{
+  const p = openPage('index.html', '', { fixOldReason: true });
+  await wait(); await wait(); await wait();
+  T('★★倉庫に残っている「昔の書き方」は 刷らない（理由:の見出しも出さない）★★', () => {
+    const box = p.w.document.getElementById('pend');
+    const t = box.textContent;
+    ok(box.querySelectorAll('.tc-card').length === 1, '★その1件が出ていない★');
+    ok(t.indexOf('間違いなので使いません') < 0, '★昔の書き方を そのまま刷っている★: ' + t.slice(0, 140));
+    ok(t.indexOf('理由:') < 0, '★中身が無いのに「理由:」の見出しが出ている★: ' + t.slice(0, 140));
+    console.log('     実測: ' + t.replace(/\s+/g, ' ').trim().slice(0, 90));
+  });
+}
+
+{
+  /* ★人が書いた理由は 消さない★（全部 消していないか＝この見張りが空振りしていない証拠） */
+  const p = openPage('index.html', '', {});
+  await wait(); await wait(); await wait();
+  T('★★人が書いた理由（打ち忘れ）は そのまま出す（消しすぎていない）★★', () => {
+    const t = p.w.document.getElementById('pend').textContent;
+    ok(/理由: 打ち忘れ/.test(t), '★人が書いた理由まで消している★: ' + t.slice(0, 140));
+    console.log('     実測: ' + (/理由: [^\s]+/.exec(t) || [''])[0]);
+  });
+}
+
 /* ★古い分が 0件の時★＝②の箱は 見出しごと出さない（今どきの会社は ほぼ これ） */
 {
   const p = openPage('index.html', '', { fixDoneOnly: true });

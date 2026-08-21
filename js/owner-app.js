@@ -270,7 +270,7 @@
             : !f._same ? '元は ' + f._before + '分 → 入れると ' + f._after + '分'
               : f._open ? '数字は変わりません（この日は まだ退勤が入っていません）'
                 : '数字は変わりません（時刻の直し）')
-          + (f.reason ? '　理由: ' + U.esc(f.reason) : '') + '</div></div>';
+          + (showReason(f.reason) ? '　理由: ' + U.esc(showReason(f.reason)) : '') + '</div></div>';
       }).join('');
 
       Array.prototype.forEach.call(pbox.querySelectorAll('[data-ok]'), function (b) {
@@ -1488,6 +1488,16 @@
       + (isY ? '<div class="day-l"><span class="k">この日</span><span class="v">有給です</span></div>' : '')
       + '<div class="day-l"><span class="k">残り</span><span class="v">' + U.esc(line) + '</span></div>'
       + btn;
+  }
+
+  /** ★倉庫に残っている「昔の書き方」は 人に見せない★（2026-08-21 指示役）
+   *  ＝作る所は もう消したが、★前に保存された文は 倉庫に残っている★。
+   *    「8/17 の 08:00 出勤 は 間違いなので使いません」＝★やった事★であって理由ではないので
+   *    ★刷らない★（見出しの「理由:」も 中身が空なら 出ない）。
+   *    ★人が書いた理由（打ち忘れ など）は そのまま出す★。 */
+  function showReason(r) {
+    r = String(r || '');
+    return /間違いなので使いません/.test(r) ? '' : r;
   }
 
   /** ★1行で言う★＝「08:00 出勤 を 数えません」（時間が動いた時だけ 分を足す）
