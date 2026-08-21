@@ -1048,7 +1048,7 @@
     var day = (st.sum.days || []).filter(function (x) { return x.d === (sel && sel.value); })[0];
     if (!day) { el.textContent = 'この月は 直せる日がありません。'; el.hidden = false; return; }
     el.hidden = false;
-    el.textContent = day.d + '　拘束 ' + U.minToHm(day.spanMin) + '／休憩 ' + day.breakMin + '分'
+    el.textContent = mdDow(day.d) + '　拘束 ' + U.minToHm(day.spanMin) + '／休憩 ' + day.breakMin + '分'
       + '（' + (BREAK_SRC_WORD[day.breakSrc] || day.breakSrc) + '）'
       + '／実労働 ' + U.minToHm(day.workMin);
 
@@ -1059,8 +1059,8 @@
       box.hidden = !fixed.length;
       box.textContent = fixed.length
         ? '直した日: ' + fixed.map(function (x) {
-          return x.d.slice(5).replace('-', '/') + ' ' + x.breakMin + '分'
-            + (x.breakAt ? '（' + (DB.toJst(x.breakAt) || '').replace('T', ' ') + '）' : '');
+          return mdDow(x.d) + ' ' + x.breakMin + '分'
+            + (x.breakAt ? '（' + jstOf(x.breakAt) + '）' : '');
         }).join('　')
         : '';
     }
@@ -1106,7 +1106,7 @@
     q('cstate').className = 'tc-state ' + c.tone;
     q('cwhen').textContent = c.state === 'closed'
       ? '確定: ' + jstOf(c.closedAt)
-      : (c.reopenedAt ? '解除: ' + jstOf(c.reopenedAt) : c.periodFrom + ' 〜 ' + c.periodTo);
+      : (c.reopenedAt ? '解除: ' + jstOf(c.reopenedAt) : mdDow(c.periodFrom) + ' 〜 ' + mdDow(c.periodTo));
 
     /* ★なぜ押せないか／なぜ気をつけるかは 1か所(why)から出す★ */
     var why = q('cwhy');
@@ -1144,7 +1144,13 @@
     });
   }
   function closeRowExists() { return (st.closeLog || []).some(function (r) { return r.action === 'close'; }); }
-  function jstOf(iso) { var v = DB.toJst(iso); return v ? v.replace('T', ' ') : ''; }
+  /** ★いつ やったか（日付＋時刻）★も 日付の形は M/D に揃える（2026-08-21 指示役）
+      ＝画面の中に「2026-08-15 10:00」と「08/15」の2通りを作らない。 */
+  function jstOf(iso) {
+    var v = DB.toJst(iso);
+    if (!v) return '';
+    return v.slice(5, 10).replace('-', '/') + ' ' + v.slice(11, 16);
+  }
 
   function askClose(kind) {
     st.ask = kind;

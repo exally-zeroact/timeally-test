@@ -543,5 +543,79 @@ console.log('    実測: 開いた行の押せる物 ' + kOpen.inRow + '個 '
 say(kOpen.opened, '★行を押すと開く★');
 say(kOpen.inRow <= 3, '★開いた行に見える押せる物は3つまで★（実測 ' + kOpen.inRow + '個）');
 say(kOpen.outside === 0, '★押す物は 開いた行の中だけ★（行の外 実測 ' + kOpen.outside + '個）');
+/* ── ⑧ ★画面の中の 日付の書き方は1つだけ★（2026-08-21 指示役が集計で2通り見つけた） ─────
+   ＝「2026-08-01」と「08/01（土）」が 同じ画面に並んでいた。
+     ★入力欄の中の字（ブラウザが描く物）は 数えない★（人が選ぶ道具であって 出した文ではない）。 */
+console.log('\n⑧ 日付の書き方（画面に出した文だけ・入力欄の中は数えない）');
+const DATE_PROBE = VISIBLE + `
+  var t = [];
+  [].slice.call(document.querySelectorAll("*")).forEach(function(e){
+    if (!vis(e)) return;
+    if (/^(SCRIPT|STYLE|INPUT|SELECT|TEXTAREA|OPTION)$/.test(e.tagName)) return;
+    [].slice.call(e.childNodes).forEach(function(n){
+      if (n.nodeType === 3 && n.nodeValue.trim()) t.push(n.nodeValue);
+    });
+  });
+  var all = t.join(" ");
+  var iso = all.match(/[0-9]{4}-[0-9]{2}-[0-9]{2}/g) || [];
+  /* ★テンプレート文字列の中では \/ が / に戻る★ので、RegExp を文字列から作る（罠を1回踏んだ） */
+  var md  = all.match(new RegExp("[0-9]{1,2}[/][0-9]{1,2}（[日月火水木金土]）", "g")) || [];
+  return { w: document.documentElement.clientWidth, iso: iso, isoN: iso.length, mdN: md.length };
+`;
+for (const [name, file, seed, after] of [
+  ['集計', 'shukei.html', { days: 31, ym: '2026-08', closeDay: 31, mix: true }, openDay(2)],
+  ['今月の勤務', 'index.html', { people: 2, mix: true }, (w) => w.document.getElementById('tab-list').click()],
+]) {
+  const html = await render(file, seed, after);
+  const r = measure('date' + file.replace(/\W/g, ''), html, 390, DATE_PROBE);
+  console.log('    ' + name + ' … M/D（曜）' + r.mdN + '個／年月日 ' + r.isoN + '個'
+    + (r.isoN ? '（' + [...new Set(r.iso)].slice(0, 4).join(' / ') + '）' : ''));
+  say(r.isoN === 0, name + ' … ★画面に出す日付は M/D（曜）の1つだけ★（年月日 実測 ' + r.isoN + '個）');
+}
+
+/* ── ⑨ ★下まで見てから 上に戻した時、いちばん上が帯に隠れていないか★（2026-08-21 指示役 F-4） ──
+   ＝スマホで下まで読んで 上へ戻ると、★貼り付いた帯の下に 中身が潜る★事がある。
+     ★実際に下まで動かして 戻してから 測る★（描いた直後だけ見ても出ない）。 */
+console.log('\n⑨ 下まで見てから 上に戻した時（375/390/412）');
+const BACK_TOP_PROBE = VISIBLE + `
+  window.scrollTo(0, document.body.scrollHeight);
+  window.scrollTo(0, 0);
+  var bars = [].slice.call(document.querySelectorAll("*")).filter(function(e){
+    if (!vis(e)) return false;
+    var cs = getComputedStyle(e);
+    return (cs.position === "sticky" || cs.position === "fixed") && e.getBoundingClientRect().top <= 1;
+  });
+  var bottom = 0, names = [];
+  bars.forEach(function(b){
+    var r = b.getBoundingClientRect();
+    if (r.bottom > bottom) bottom = r.bottom;
+    names.push(b.id || b.className || b.tagName);
+  });
+  var first = null;
+  [].slice.call(document.querySelectorAll("h1,h2,h3,p,div.tc-note,div.tc-lead,button,table,label"))
+    .filter(vis).forEach(function(e){
+      if (bars.some(function(b){ return b.contains(e); })) return;
+      var r = e.getBoundingClientRect();
+      if (r.height <= 0) return;
+      if (!first || r.top < first.top) first = { top: r.top, txt: (e.textContent||"").trim().slice(0, 20) };
+    });
+  return { w: document.documentElement.clientWidth, sita: Math.round(bottom),
+    ue: first ? Math.round(first.top) : null, ji: first ? first.txt : "",
+    obi: names.slice(0, 3), kakure: first ? (first.top < bottom - 1) : false };
+`;
+for (const [name, file, seed, after, search] of [
+  ['打つ', 'punch.html', {}, null, '?t=11111111-1111-1111-1111-111111111111'],
+  ['記録', 'kiroku.html', {}, null, '?t=11111111-1111-1111-1111-111111111111'],
+  ['今月の勤務', 'index.html', { people: 2, mix: true }, (w) => w.document.getElementById('tab-list').click(), ''],
+  ['集計', 'shukei.html', { days: 31, ym: '2026-08', closeDay: 31, mix: true }, openDay(2), ''],
+]) {
+  const html = await render(file, seed, after, search);
+  for (const wpx of [375, 390, 412]) {
+    const r = measure('back' + file.replace(/\W/g, ''), html, wpx, BACK_TOP_PROBE);
+    say(!r.kakure, name + ' ' + wpx + ' … ★上に戻しても 帯に隠れない★（帯の下端 ' + r.sita
+      + 'px／いちばん上 ' + r.ue + 'px「' + r.ji + '」）');
+  }
+}
+
 console.log('\n' + (ng ? '★' + ng + '件 直っていません★' : '★全部 決まりどおり★') + '\n');
 process.exit(ng ? 1 : 0);
