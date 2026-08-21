@@ -396,6 +396,23 @@ create or replace view public.tc_shift with (security_invoker = true) as
 alter view public.tc_shift set (security_invoker = true);
 grant select, insert, update, delete on public.tc_shift to authenticated;
 
+-- ★窓から anon を外す★（2026-08-22 指示役の承認・本番を読んで見つけた）
+--   ★書いていないのに 付いている★＝この倉庫は「新しく作る棚・窓・関数に anon を付ける」
+--   既定(ALTER DEFAULT PRIVILEGES)を持っている（Supabase の標準・★他アプリと同じ倉庫なので触らない★）。
+--   実測（本番）… 窓6本に anon が ★読む・入れる・書き換える・消す 全部★ 付いていた。
+--   ★今 漏れてはいない★（実の棚に anon が無く、窓は security_invoker＝呼んだ人の権利で開くため
+--     anon の鍵で叩くと 401/42501）。★ただし門が1枚だけ★＝棚に anon を1行 足した日に開く。
+--   ⇒★窓の側でも 外して門を2枚にする★。
+--   ★窓は PUBLIC が付いていないので anon だけ外せば足りる★（関数は PUBLIC も外す＝下の revoke）。
+--   ★従業員の画面は RPC(security definer)しか使わない★ので、窓の anon を外しても打刻は動く
+--   （★実際に1周 押して確かめる★）。
+revoke all privileges on public.tc_companies from anon;
+revoke all privileges on public.tc_pub       from anon;
+revoke all privileges on public.tc_punch     from anon;
+revoke all privileges on public.tc_fix       from anon;
+revoke all privileges on public.tc_close     from anon;
+revoke all privileges on public.tc_shift     from anon;
+
 -- ═════════════════════════════════════════════════════════════════════════
 -- 従業員(anon)向け RPC … ★security definer。search_path に extensions が要る★
 --   （crypt / gen_salt / gen_random_bytes は extensions スキーマにある。

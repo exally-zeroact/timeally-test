@@ -75,7 +75,19 @@ select
    where n.nspname='timeally' and c.relkind='r' and c.relrowsecurity) as rls_on,
  (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
    where n.nspname='public' and c.relkind='v' and c.relname like 'tc\\_%'
-     and c.reloptions::text like '%security_invoker=true%') as invoker_true;
+     and c.reloptions::text like '%security_invoker=true%') as invoker_true,
+ -- ★anon が どこに付いているかを 毎回 数える★（2026-08-22 指示役②）
+ --   ＝この倉庫は「新しく作る棚・窓・関数に anon を付ける」既定を持っている（Supabaseの標準）。
+ --     ★書いていないのに 付く★ので、★当てた後に数えないと 次に足す人が また穴を開ける★。
+ --   窓と棚は ★0★ が正しい（従業員は RPC しか使わない）。関数の anon は ★従業員用の10本だけ★。
+ (select count(*) from information_schema.role_table_grants
+   where grantee='anon' and table_schema='public' and table_name like 'tc\_%') as anon_view_grants,
+ (select count(*) from information_schema.role_table_grants
+   where grantee='anon' and table_schema='timeally') as anon_table_grants,
+ (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+   where n.nspname='public' and p.proname like 'tc\_%'
+     and exists (select 1 from aclexplode(p.proacl) a join pg_roles r on r.oid=a.grantee
+                  where r.rolname='anon' and a.privilege_type='EXECUTE')) as anon_funcs;
 `;
 
 async function main() {
@@ -117,10 +129,15 @@ async function main() {
   const a = after[0] || {};
   console.log('当てた後:', JSON.stringify(a));
 
+  /* ★anon が 窓・棚に1件でも付いていたら NG★（関数は 従業員用の10本まで） */
+  const anonOk = Number(a.anon_view_grants) === 0 && Number(a.anon_table_grants) === 0
+    && Number(a.anon_funcs) <= 10;
   const ok = Number(a.tables) >= 6 && Number(a.views) >= 6 && Number(a.funcs) >= 7
-    && Number(a.rls_on) >= 6 && Number(a.invoker_true) >= 6;
+    && Number(a.rls_on) >= 6 && Number(a.invoker_true) >= 6 && anonOk;
   console.log(`\nAPPLY RESULT: ${ok ? 'OK' : 'NG'}`
     + `  棚=${a.tables} 窓=${a.views} 関数=${a.funcs} RLS=${a.rls_on} security_invoker=true の窓=${a.invoker_true}`);
+  console.log(`  anon … 窓=${a.anon_view_grants}件 棚=${a.anon_table_grants}件 関数=${a.anon_funcs}本`
+    + `（★窓と棚は0・関数は従業員用の10本まで★）${anonOk ? '' : ' ← ★ここが NG★'}`);
   process.exit(ok ? 0 : 1);
 }
 
