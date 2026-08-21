@@ -154,6 +154,21 @@ function rowsFor(table, seed, store) {
          （片方しか無い種では「混ざっていない」を確かめたことにならない） */
     /* ★seed.fixDoneOnly=true … 古い分が 0件の会社★（＝この決まりの後に始めた会社の姿）
        ＝②の箱が ★見出しごと消えるか★ を実物で見るために要る。 */
+    /* ★seed.fixReal=true … 司さんの実機に出た形★（2026-08-21 実データから写した）
+       ＝★同じ打刻の跡が2回★／★前も後も0分★／昔の書き方の理由。
+         これが無いと「重なりを消した」「0分→0分を出さない」を確かめた事にならない。 */
+    if (s.fixReal) {
+      var mk = function (id, hm, kind) {
+        return { id: id, account_id: 'u1', employee_id: 'E1', d: '2026-08-17',
+          before_min: 0, after_min: 0,
+          reason: '8/17 の ' + hm + ' ' + kind + ' は 間違いなので使いません',
+          requested_by: 'employee', requested_at: '2026-08-17T12:00:00Z',
+          approved_by: 'u1', approved_at: '2026-08-17T12:00:00Z',
+          status: 'approved', punch_ids: [], void_ids: ['v-' + hm] };
+      };
+      return [mk('x1', '08:00', '出勤'), mk('x2', '17:03', '退勤'),
+        mk('x3', '21:44', '出勤'), mk('x4', '17:03', '退勤')];
+    }
     if (s.fixDoneOnly) {
       return [
         { id: 'f2', account_id: 'u1', employee_id: 'E1', d: '2026-08-03',

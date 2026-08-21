@@ -205,18 +205,31 @@
     var pbox = q('pend'), phead = q('pend-head');
     if (!box || !pbox) return Promise.resolve();
     var pending = fixes.filter(function (f) { return f.status === 'pending'; });
-    var done = fixes.filter(function (f) { return f.status !== 'pending'; }).slice(0, 20);
+    /* ★入れなかった物は ここに並べない★（この箱は「入っている物」だけ＝混ぜない） */
+    var done = fixes.filter(function (f) { return f.status === 'approved'; }).slice(0, 40);
 
-    /* ①もう入っている分＝★ボタンを出さない★（数える前に描いてよい＝数字はもう決まっている） */
-    if (head) { head.hidden = !done.length; head.textContent = '直した記録（' + done.length + '件）'; }
-    box.innerHTML = done.map(function (f) {
-      return '<div class="tc-card"><div class="tc-cardhead"><b>' + U.esc(nameOf(f.employee_id)) + '</b>'
-        + ' <span class="num">' + U.esc(f.d) + '</span>'
-        + '<span class="tc-tag">' + (f.status !== 'approved' ? '入れなかった'
-          : (f.requested_by === 'employee' && f.approved_by === 'employee') ? '本人が直した' : '入れた')
-        + '</span>'
-        + '</div><div>' + (f.before_min == null ? '' : '元は ' + f.before_min + '分 → ' + f.after_min + '分')
-        + (f.reason ? '　理由: ' + U.esc(f.reason) : '') + '</div></div>';
+    /* ①もう入っている分＝★ボタンを出さない★
+       ★この箱が言う事は1つだけ＝「どの打刻を 数えないことにしたか」★（指示役 2026-08-21・司さんの実機）
+       ＝★「元は 0分 → 0分」も「理由:」も「入れた」の札も 出さない★（読む人が止まる）。
+         ★同じ人・同じ日は 頭に1回だけ★／★同じ打刻が2回 出たら 1行にまとめる★。 */
+    var lines = [];
+    done.forEach(function (f) {
+      var one = fixLine(f);
+      var key = f.employee_id + '|' + f.d + '|' + one;
+      if (lines.some(function (x) { return x.key === key; })) return;   /* 重なりを消す */
+      lines.push({ key: key, emp: f.employee_id, d: f.d, text: one });
+    });
+    if (head) { head.hidden = !lines.length; head.textContent = '直した記録（' + lines.length + '件）'; }
+    var groups = [];
+    lines.forEach(function (x) {
+      var g = groups.filter(function (y) { return y.emp === x.emp && y.d === x.d; })[0];
+      if (!g) { g = { emp: x.emp, d: x.d, items: [] }; groups.push(g); }
+      g.items.push(x.text);
+    });
+    box.innerHTML = groups.map(function (g) {
+      return '<div class="tc-card"><div class="tc-cardhead"><b>' + U.esc(nameOf(g.emp)) + '</b>'
+        + ' <span class="num">' + U.esc(g.d.slice(5).replace('-', '/')) + '（' + U.dowOf(g.d) + '）</span></div>'
+        + g.items.map(function (t) { return '<div>' + U.esc(t) + '</div>'; }).join('') + '</div>';
     }).join('');
 
     /* ②まだ入っていない分 */
@@ -1475,6 +1488,20 @@
       + (isY ? '<div class="day-l"><span class="k">この日</span><span class="v">有給です</span></div>' : '')
       + '<div class="day-l"><span class="k">残り</span><span class="v">' + U.esc(line) + '</span></div>'
       + btn;
+  }
+
+  /** ★1行で言う★＝「08:00 出勤 を 数えません」（時間が動いた時だけ 分を足す）
+   *  ＝跡（tc_fix）に残っている文から ★時刻と種類だけ★を取り出す。
+   *    ★昔の書き方（「…は 間違いなので使いません」）でも 同じ1行になる★ように、
+   *    時刻と種類を拾って ★こちらで言い直す★。拾えない時だけ 残っている文をそのまま出す。 */
+  function fixLine(f) {
+    var r = String(f.reason || '');
+    var hm = /(\d{1,2}:\d{2})/.exec(r);
+    var kind = /(出勤|退勤|私用で外出|外出から戻る|休憩から戻る|休憩に入る)/.exec(r);
+    var moved = (f.before_min != null && f.after_min != null && f.before_min !== f.after_min)
+      ? '（' + f.before_min + '分 → ' + f.after_min + '分）' : '';
+    if (hm && kind) return hm[1] + ' ' + kind[1] + ' を 数えません' + moved;
+    return (r || '直しました') + moved;
   }
 
   function saveDayKind(day, kind) {

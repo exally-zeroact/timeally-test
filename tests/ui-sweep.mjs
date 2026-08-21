@@ -1168,6 +1168,38 @@ T('★あとから入れる は その場で入る（お願いにしない・跡
   });
 }
 
+/* ── ★「直した記録」は 読めるか★（2026-08-21 司さんが実機で開いて詰まった） ─────────
+   実機に出ていた物 … 「元は 0分 → 0分」／「理由: …は 間違いなので使いません」／
+                      「入れた」の札／★同じ 17:03 退勤 が2回★（4件と出ていた）
+   ⇒★言う事は1つだけ＝どの打刻を 数えないことにしたか★ */
+{
+  const p = openPage('index.html', '', { fixReal: true });
+  await wait(); await wait(); await wait();
+  const d2 = p.w.document;
+  T('★★「直した記録」は 1打刻＝1行（重なりを消す・数も直す）★★', () => {
+    const box = d2.getElementById('must5') && d2.getElementById('fixes');
+    const cards = [...d2.querySelectorAll('#fixes .tc-card')];
+    const rows = [...d2.querySelectorAll('#fixes .tc-card div')].map((x) => x.textContent.trim())
+      .filter((t) => /数えません/.test(t));
+    ok(cards.length === 1, '★同じ人・同じ日が ' + cards.length + '枚に分かれている（1枚のはず）★');
+    ok(rows.length === 3, '★行が ' + rows.length + '本（重なりを消して 3本のはず）★: ' + JSON.stringify(rows));
+    ok(new Set(rows).size === rows.length, '★同じ行が2回 出ている★: ' + JSON.stringify(rows));
+    const head = d2.getElementById('fixes-head').textContent;
+    ok(/（3件）/.test(head), '★見出しの数が 重なりを消した後になっていない★: ' + head);
+    console.log('     実測: 見出し「' + head.trim() + '」／' + JSON.stringify(rows));
+  });
+
+  T('★★「元は 0分 → 0分」「理由:」「入れた」を 出さない（何も言っていない物を消す）★★', () => {
+    const t = d2.getElementById('fixes').textContent;
+    ok(!/0分 → 0分/.test(t), '★動いていない数を出している★: ' + t.slice(0, 120));
+    ok(t.indexOf('理由:') < 0, '★「理由:」が残っている★');
+    ok(t.indexOf('入れた') < 0, '★「入れた」の札が残っている★');
+    ok(t.indexOf('間違いなので使いません') < 0, '★中の書き方が そのまま出ている★');
+    ok(/矢野|山田|太郎|さん|[一-龥]/.test(t), '名前が出ていない');
+    console.log('     実測: ' + t.replace(/\s+/g, ' ').trim().slice(0, 80));
+  });
+}
+
 /* ★古い分が 0件の時★＝②の箱は 見出しごと出さない（今どきの会社は ほぼ これ） */
 {
   const p = openPage('index.html', '', { fixDoneOnly: true });
