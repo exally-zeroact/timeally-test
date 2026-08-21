@@ -270,6 +270,13 @@ alter table timeally.tc_shift add column if not exists break_at  timestamptz;
 --   ★新しい棚は作らない★＝有給は もともと day_kind='paid_leave' が持っている。
 --   足すのは ★誰が・いつ 付けたか★ の2つだけ（★休憩の break_by / break_at と同じ形★）。
 --   ★付与日数・繰越・残り日数の列は作らない★＝付けた日を数えれば出る（lib/tc-law.js が数える）。
+-- ★人が書いた言葉は 別の欄に持つ（2026-08-21 指示役）★
+--   前は reason 1つに ★自動で作った文（「…を 13:47 に直します」）★と
+--   ★人が書いた言葉（「打ち忘れ」）★が 混ざっていた。
+--   ⇒ 画面が「理由:」として刷ると ★理由でない文が 理由の顔で出る★。
+--   ★文字で見分けるのをやめる★＝ reason=機械が作った説明／note=人が書いた言葉。
+alter table timeally.tc_fix add column if not exists note text not null default '';
+
 alter table timeally.tc_shift add column if not exists day_kind_by uuid;
 alter table timeally.tc_shift add column if not exists day_kind_at timestamptz;
 
@@ -578,7 +585,8 @@ end $$;
 --     ・tc_fix に ★status='approved' / requested_by='employee' / approved_by='employee'★ で1行 残す
 --       ＝会社の画面（直しの箱）に ★「自分で直した」★として出る。誰が・いつ・何を、が消えない。
 create or replace function public.tc_punch_edit(p_token uuid, p_device text, p_pw text,
-                                                p_id uuid, p_at timestamptz, p_kind text, p_reason text)
+                                                p_id uuid, p_at timestamptz, p_kind text, p_reason text,
+                                                p_note text default '')
 returns jsonb language plpgsql security definer set search_path=public, extensions, timeally as $$
 declare v_pub timeally.tc_pub; v_row timeally.tc_punch; v_st text; v_new uuid; v_d date; v_kind text;
 begin
@@ -620,9 +628,9 @@ begin
     update timeally.tc_punch set voided_at = now() where id = p_id;
   end if;
   -- ★跡を残す（会社の画面に出る）★
-  insert into timeally.tc_fix(account_id, employee_id, d, before_min, after_min, reason,
+  insert into timeally.tc_fix(account_id, employee_id, d, before_min, after_min, reason, note,
                               requested_by, approved_by, approved_at, status, punch_ids, void_ids)
-  values (v_pub.account_id, v_pub.employee_id, v_d, null, null, coalesce(p_reason,''),
+  values (v_pub.account_id, v_pub.employee_id, v_d, null, null, coalesce(p_reason,''), coalesce(p_note,''),
           'employee', 'employee', now(), 'approved',
           case when v_new is null then '{}'::uuid[] else array[v_new] end,
           case when p_id is null then '{}'::uuid[] else array[p_id] end);
@@ -764,7 +772,7 @@ grant execute on function
   public.tc_punch_add(uuid,text,text,timestamptz,text,text),
   public.tc_punch_undo(uuid,text,text,uuid),
   public.tc_punch_ok(uuid,text,text,uuid,text),
-  public.tc_punch_edit(uuid,text,text,uuid,timestamptz,text,text),
+  public.tc_punch_edit(uuid,text,text,uuid,timestamptz,text,text,text),
   public.tc_my_punches(uuid,text,text,date,date),
   public.tc_fix_request(uuid,text,text,date,int,int,text,uuid[],uuid[]),
   public.tc_pub_info(uuid,date)
@@ -777,6 +785,9 @@ drop function if exists public.tc_pub_info(uuid);
 drop function if exists public.tc_fix_request(uuid,text,text,date,int,int,text,uuid[]);
 -- ★2026-08-18 夜3 tc_punch_edit に p_kind を足した（足す道を1本にまとめた）★＝前の形は落とす
 drop function if exists public.tc_punch_edit(uuid,text,text,uuid,timestamptz,text);
+-- ★2026-08-21 tc_punch_edit に p_note を足した（人が書いた言葉を 機械の説明と分けて持つ）★
+--   ＝前の7引数の形は落とす（残ると 古い形が呼べて ★note を持たない行が また増える★）
+drop function if exists public.tc_punch_edit(uuid,text,text,uuid,timestamptz,text,text);
 
 -- 初回コードの再発行（社長）はRLSで直接 update すればよい:
 --   update tc_pub set init_code='ABCD1234', pw_hash=null, device_tokens='{}', fail_count=0, locked_until=null

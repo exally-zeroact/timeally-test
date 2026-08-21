@@ -332,6 +332,12 @@ table.tc td.warn { color: #B3261E; }
   padding: 10px 12px; margin: 10px 0;
 }
 @media (min-width: 900px) { .tc-daybox { display: none; } }
+/* ★広い画面でも 日を押したら 出す★（2026-08-21 指示役が実配信で見つけた）
+   ＝広い画面は17列の表になり、★カレンダーごと消えるので 有給を付ける所が どこにも無かった★。
+   表の行を押した時は この箱を出す（★同じ箱・同じ中身★＝2つ作らない）。 */
+.tc-daybox.open { display: block; }
+/* 表の行は 押せる物だと分かるように */
+@media (min-width: 900px) { #daily tbody tr { cursor: pointer; } }
 .tc-daybox .day-h { font-weight: 700; margin-bottom: 6px; }
 .tc-daybox .day-g { text-align: center; font-size: 11px; color: #78705C; margin: 8px 0 2px; }
 .tc-daybox .day-l {

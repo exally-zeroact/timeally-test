@@ -27,6 +27,13 @@ function rowsFor(table, seed, store) {
   /* ★seed.closedYm でその月を「確定」にできる★（頭の【 】の文字数が変わるので 紙の幅に効く） */
   if (table === 'tc_close') {
     var base = (store && store.tc_close) || [];
+    /* ★seed.pinInLog=true … 入口の記録（pin_set）が 同じ棚に混ざっている★（実配信の姿）
+       ＝この種が無いと「中の言葉を出さない」を確かめた事にならない。
+         ★偽の倉庫は 絞り込みをしない★ので、画面側の見張り（言葉を持たない物は描かない）を試せる。 */
+    if (s.pinInLog) {
+      base = base.concat([{ id: 'pin1', account_id: 'u1', ym: s.ym || '2026-08', action: 'pin_set',
+        at: '2026-08-21T03:15:00Z', by_uid: null, by_name: '田中 花子', employee_id: 'E1', reason: '' }]);
+    }
     if (s.closedYm && !base.some(function (r) { return r.action === 'close'; })) {
       return base.concat([{ id: 'seed1', account_id: 'u1', ym: s.closedYm, action: 'close',
         at: '2026-08-01T00:00:00Z', by_uid: 'u1', by_name: 'a@example.com', employee_id: null, reason: '' }]);
@@ -163,7 +170,7 @@ function rowsFor(table, seed, store) {
     if (s.fixOldReason) {
       return [{ id: 'o1', account_id: 'u1', employee_id: 'E1', d: '2026-08-03',
         before_min: null, after_min: null,
-        reason: '8/17 の 08:00 出勤 は 間違いなので使いません',
+        reason: '8/17 の 08:00 出勤 は 間違いなので使いません', note: '',
         requested_by: 'employee', requested_at: '2026-08-17T12:00:00Z',
         approved_by: null, approved_at: null, status: 'pending',
         punch_ids: [], void_ids: [] }];
@@ -172,7 +179,7 @@ function rowsFor(table, seed, store) {
       var mk = function (id, hm, kind) {
         return { id: id, account_id: 'u1', employee_id: 'E1', d: '2026-08-17',
           before_min: 0, after_min: 0,
-          reason: '8/17 の ' + hm + ' ' + kind + ' は 間違いなので使いません',
+          reason: '8/17 の ' + hm + ' ' + kind + ' は 間違いなので使いません', note: '',
           requested_by: 'employee', requested_at: '2026-08-17T12:00:00Z',
           approved_by: 'u1', approved_at: '2026-08-17T12:00:00Z',
           status: 'approved', punch_ids: [], void_ids: ['v-' + hm] };
@@ -183,7 +190,8 @@ function rowsFor(table, seed, store) {
     if (s.fixDoneOnly) {
       return [
         { id: 'f2', account_id: 'u1', employee_id: 'E1', d: '2026-08-03',
-          before_min: 540, after_min: 480, reason: '押し間違い', requested_by: 'employee',
+          before_min: 540, after_min: 480, reason: '9:00 出勤 を 10:00 に直しました', note: '押し間違い',
+          requested_by: 'employee',
           requested_at: '2026-08-06T00:00:00Z', approved_by: 'employee', approved_at: '2026-08-06T00:00:00Z',
           status: 'approved', punch_ids: ['p2'], void_ids: [] },
       ];
@@ -191,11 +199,13 @@ function rowsFor(table, seed, store) {
     if (s.fixBoth) {
       return [
         { id: 'f1', account_id: 'u1', employee_id: 'E1', d: '2026-08-04',
-          before_min: null, after_min: null, reason: '打ち忘れ', requested_by: 'employee',
+          before_min: null, after_min: null, reason: '8/4 09:30 に 出勤 を足しました', note: '打ち忘れ',
+        requested_by: 'employee',
           requested_at: '2026-08-05T00:00:00Z', approved_by: null, approved_at: null,
           status: 'pending', punch_ids: ['p3'], void_ids: [] },
         { id: 'f2', account_id: 'u1', employee_id: 'E1', d: '2026-08-03',
-          before_min: 540, after_min: 480, reason: '押し間違い', requested_by: 'employee',
+          before_min: 540, after_min: 480, reason: '9:00 出勤 を 10:00 に直しました', note: '押し間違い',
+          requested_by: 'employee',
           requested_at: '2026-08-06T00:00:00Z', approved_by: 'employee', approved_at: '2026-08-06T00:00:00Z',
           status: 'approved', punch_ids: ['p2'], void_ids: [] },
       ];
@@ -205,7 +215,8 @@ function rowsFor(table, seed, store) {
          「数に入れていない」のか「その日に打刻が無い」のか 見分けが付かない） */
       id: 'f1', account_id: 'u1', employee_id: 'E1',
       d: s.fixVoid ? '2026-08-03' : (s.fixSame ? (s.sameDay || '2026-08-03') : '2026-08-04'),
-      before_min: null, after_min: null, reason: '打ち忘れ', requested_by: 'employee',
+      before_min: null, after_min: null, reason: '8/4 09:30 に 出勤 を足しました', note: '打ち忘れ',
+      requested_by: 'employee',
       requested_at: '2026-08-05T00:00:00Z', approved_by: null, approved_at: null,
       status: 'pending', punch_ids: ['p3'],
       /* ★seed.fixVoid=true …「この1本は使わない」お願い★（2026-08-18 追加）

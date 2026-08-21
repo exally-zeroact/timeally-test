@@ -579,7 +579,9 @@
   function apply(o) {
     var fix = global.TcClean.canFix({ state: st.state });
     if (!fix.ok) { U.toast(fix.why); return; }
-    return DB.Emp.edit(st.token, st.device, st.pw, o.id || null, o.at || null, o.kind || null, o.why || '')
+    /* why＝機械が作った説明（何をしたか）／note＝人が書いた言葉。★倉庫でも分けて持つ★ */
+    return DB.Emp.edit(st.token, st.device, st.pw, o.id || null, o.at || null, o.kind || null,
+      o.why || '', o.note || '')
       .then(function (r) {
         if (!r || !r.ok) { U.toast(reason(r)); return; }
         _openPid = null;
@@ -775,7 +777,8 @@
     apply({
       at: v.day + 'T' + v.hm, kind: v.kind || 'in', done: '入れました。',
       why: global.TcClean.mdOf(v.day) + ' ' + v.hm + ' に '
-        + (KIND_LABEL[v.kind] || v.kind) + ' を足しました' + (v.why ? '（' + v.why + '）' : ''),
+        + (KIND_LABEL[v.kind] || v.kind) + ' を足しました',
+      note: v.why || '',        /* ★人が書いた言葉は そのまま別に持つ★ */
     });
   }
 

@@ -297,6 +297,7 @@ const CAL_PROBE = VISIBLE + `
     });
   }
   return { w: W, 対象: (document.getElementById("period")||{}).textContent || "",
+    月ラベル: (document.getElementById("ymlabel")||{}).textContent || "",
     マスの数: days.length, 空きマス: cells.length - days.length,
     最後のマス: last ? (last.innerText||"").replace(/\s+/g," ").trim() : "",
     締めの印: last ? /shime/.test(last.className) : false,
@@ -317,7 +318,8 @@ const openDay = (i) => (w) => {
   const b = w.document.querySelectorAll('#cal [data-day]')[i];
   if (b) b.click();
 };
-/** ★月を戻してから 日を押す★
+/** ★狙いの期間かどうかは 画面の字で見る★（2026-08-21 画面の日付は M/D（曜）に揃えた）
+ *  ★月を戻してから 日を押す★
  *  月を戻すたびに ★倉庫から読み直して 描き直す★ので、待たずに押すと
  *  ★押した後に 描き直されて 中身が消える★（実際に3回 赤が出た）。
  *  ⇒ ★狙いの期間が画面に出るまで見張ってから押す★（時間で当てない）。 */
@@ -340,7 +342,7 @@ const backMonths = (n, want, i) => (w) => {
 const CASES = [
   ['末日締め・31日の月', { days: 31, ym: '2026-08', closeDay: 31, mix: true }, openDay(2), 0, true],
   ['締め日20（7/21〜8/20）', { days: 31, ym: '2026-08', closeDay: 20, mix: true }, openDay(2), 2, true],
-  ['2月・締め日30（末日に寄る）', { days: 28, ym: '2026-02', closeDay: 30, mix: true }, backMonths(6, '2026-02-28', 2), 2, true],
+  ['2月・締め日30（末日に寄る）', { days: 28, ym: '2026-02', closeDay: 30, mix: true }, backMonths(6, '02/28', 2), 2, true],
   ['法定休日を決めていない会社', { days: 31, ym: '2026-08', closeDay: 31 }, openDay(2), 0, false],
 ];
 let caseNo = 0;
@@ -350,10 +352,20 @@ for (const [name, seed, after, wantMonth, wantHoliday] of CASES) {
   for (const wpx of [375, 390, 412]) {
     const r = measure('cal' + caseNo, html, wpx, CAL_PROBE);
     if (wpx === 390) {
-      /* ★何日ぶんのはずか は 画面の「対象」から出す★（数字を手で書かない＝別の物を測らない） */
-      const m = /(\d{4}-\d{2}-\d{2}) 〜 (\d{4}-\d{2}-\d{2})/.exec(r.対象 || '');
-      const want = m
-        ? Math.round((Date.parse(m[2] + 'T00:00:00Z') - Date.parse(m[1] + 'T00:00:00Z')) / 86400000) + 1 : -1;
+      /* ★何日ぶんのはずか は 画面の「対象」から出す★（数字を手で書かない＝別の物を測らない）
+         ★2026-08-21 画面の日付を M/D（曜）に揃えた★ので、年は月ラベル（2026年08月）から取る。
+         ＝★人が読む形のまま 機械も数える★（画面用と機械用の2つを持たない）。 */
+      const m = /(\d{1,2})\/(\d{1,2})（.）\s*〜\s*(\d{1,2})\/(\d{1,2})（.）/.exec(r.対象 || '');
+      const yy = Number((/(\d{4})年/.exec(r.月ラベル || '') || [])[1]);
+      let want = -1;
+      if (m && yy) {
+        const p2 = (n) => String(n).padStart(2, '0');
+        const from = yy + '-' + p2(m[1]) + '-' + p2(m[2]);
+        /* 12月→1月をまたぐ時だけ 年が1つ進む */
+        const toY = Number(m[3]) < Number(m[1]) ? yy + 1 : yy;
+        const to = toY + '-' + p2(m[3]) + '-' + p2(m[4]);
+        want = Math.round((Date.parse(to + 'T00:00:00Z') - Date.parse(from + 'T00:00:00Z')) / 86400000) + 1;
+      }
       console.log('    ' + name + ' … ' + (r.対象 || '（対象なし）'));
       console.log('      マス ★' + r.マスの数 + '個★（頭の空き ' + r.空きマス + '）／最後のマス「'
         + r.最後のマス.split(String.fromCharCode(10)).join(' ') + '」／月が出ているマス ' + r.月が出ているマス

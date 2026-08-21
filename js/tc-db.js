@@ -251,7 +251,10 @@
   function listCloseLog(ym) {
     return selectAll('tc_close', function (q) {
       if (ym) q = q.eq('ym', ym);
-      return q.order('at');
+      /* ★締めの記録に 入口（暗証番号）の記録を混ぜない★（2026-08-21 指示役が実配信で見つけた）
+         ＝混ざると 画面に「pin_set」という ★中の言葉★ が出る。
+           入口の記録は 従業員の画面（人ごと）に もう出している。 */
+      return q.in('action', ['close', 'reopen', 'export']).order('at');
     });
   }
   /** ★入口の記録だけ（人ごと）★ … 締めの履歴と混ぜない */
@@ -297,10 +300,12 @@
         ・消す … id だけ            → ★元に印だけ★
         ・足す … id を渡さず 時刻と種類 → ★新しい行を1本★
         ★どれも その場で記録に入る★／★締めた月は倉庫が断る（closed）★ */
-    edit: function (token, device, pw, id, wallTime, kind, why) {
+    /** why＝機械が作った説明（何をしたか）／note＝人が書いた言葉（理由）。★混ぜない★ */
+    edit: function (token, device, pw, id, wallTime, kind, why, note) {
       return rpc('tc_punch_edit', {
         p_token: token, p_device: device, p_pw: pw, p_id: id || null,
-        p_at: wallTime ? fromJst(wallTime) : null, p_kind: kind || null, p_reason: why || '',
+        p_at: wallTime ? fromJst(wallTime) : null, p_kind: kind || null,
+        p_reason: why || '', p_note: note || '',
       });
     },
     /** ★「この時刻で合っている」と答える★（印を1つ足すだけ＝打刻は1文字も動かない） */

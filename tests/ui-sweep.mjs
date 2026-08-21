@@ -280,6 +280,76 @@ T('★★日を押すと その日の結論が1行 出る（08:00〜17:03（実�
   });
 }
 
+/* ── ★中の言葉（pin_set）を 客に見せない★（2026-08-21 指示役が実配信で見つけた） ──────
+   実物に出ていた … 「2026-08-21 12:15　pin_set　田中 花子」＝★中の印がそのまま★
+   ★2重で止める★ … ①倉庫へ「締めの3つだけ」と頼む ②言葉を持っていない記録は 描かない */
+{
+  const p = openPage('shukei.html', '', { mix: true, ym: '2026-08', pinInLog: true });
+  await wait(); await wait(); await wait();
+  T('★★締めの記録に 中の言葉（pin_set）が1つも出ない★★', () => {
+    const t = p.w.document.getElementById('chist').textContent;
+    ok(t.indexOf('pin_set') < 0, '★中の印が そのまま出ている★: ' + t.slice(0, 120));
+    ok(t.indexOf('pin_reissue') < 0, '★中の印が そのまま出ている★: ' + t.slice(0, 120));
+    ok(p.fake._calls.indexOf('tc_close.in') >= 0, '★倉庫に「締めの3つだけ」と頼んでいない★');
+    console.log('     実測: 倉庫へ in(close/reopen/export) を送った／画面に pin_set 0件');
+  });
+}
+
+/* ── ★広い画面でも 有給を付けられるか★（2026-08-21 指示役が実配信で見つけた） ─────
+   広い画面は17列の表になり、★カレンダーごと消えて 有給を付ける所が どこにも無かった★。 */
+{
+  const p = openPage('shukei.html', '', { mix: true, ym: '2026-08' });
+  await wait(); await wait(); await wait();
+  const d2 = p.w.document;
+  T('★★広い画面の表も 行を押したら その日の箱が開く（有給を付けられる）★★', () => {
+    const rows = [...d2.querySelectorAll('#daily tbody tr[data-day]')];
+    ok(rows.length > 0, '★表の行に 日の番号が付いていない★');
+    const box = d2.getElementById('cal-day');
+    ok(box.hidden, '押す前から開いている');
+    rows[2].click();
+    ok(!box.hidden && box.className.indexOf('open') >= 0,
+      '★行を押しても 箱が開かない（className=' + box.className + '）★');
+    const yk = box.querySelector('[data-yk]');
+    ok(yk, '★開いたのに 有給を付ける物が無い★');
+    console.log('     実測: 表の行 ' + rows.length + '本／押すと「' + yk.textContent.trim() + '」が出る');
+  });
+}
+
+/* ── ★入社日は 入れてよい範囲の外を 通さない★（2026-08-21 指示役が 40120-02-01 を入れられた） ── */
+{
+  const p = openPage('index.html', '', { people: 4, hireMix: true, mix: true });
+  await wait(); await wait(); await wait();
+  const d3 = p.w.document;
+  d3.getElementById('tab-people').click();
+  await wait();
+  T('★★ありえない入社日は 決めさせない（理由を出す・倉庫へ行かせない）★★', () => {
+    const inp = d3.getElementById('hire-field').querySelector('.tc-date-input');
+    const btn = d3.getElementById('b-hire-save');
+    ok(inp.min && inp.max, '★欄に 範囲が付いていない★（min=' + inp.min + ' max=' + inp.max + '）');
+    const before = (p.fake._saved || []).filter((x) => x.table === 'tc_pub').length;
+    inp.value = '40120-02-01';
+    p.w.OwnerApp._hirePreview();
+    ok(btn.disabled, '★ありえない日でも ［決める］が押せる★');
+    const why = d3.getElementById('hire-result').textContent;
+    ok(why && !/有給の残り/.test(why), '★理由を出していない★: ' + why);
+    btn.click();
+    const after = (p.fake._saved || []).filter((x) => x.table === 'tc_pub').length;
+    ok(after === before, '★倉庫へ行ってしまった★（' + before + '→' + after + '）');
+    console.log('     実測: 範囲 ' + inp.min + ' 〜 ' + inp.max + '／「' + why.trim() + '」／倉庫へ 0件');
+  });
+
+  T('★★入れた日は そのまま見える（DOMに在る≠読める）★★', () => {
+    const inp = d3.getElementById('hire-field').querySelector('.tc-date-input');
+    inp.value = '2019-04-01';
+    p.w.OwnerApp._hirePreview();
+    const show = inp.parentNode.querySelector('.tc-date-show');
+    ok(show.textContent.indexOf('2019-04-01') >= 0 || show.textContent.indexOf('4/1') >= 0,
+      '★入れた日が 欄に出ていない★: 「' + show.textContent + '」');
+    ok(!d3.getElementById('b-hire-save').disabled, '★入れられる日なのに 押せない★');
+    console.log('     実測: 欄に「' + show.textContent.trim() + '」');
+  });
+}
+
 /* ── ★入社日を1人ずつ聞く★（2026-08-19 指示役④-①）＝★実UIで答えて 倉庫を読む★ ────
    実データは ★18人中14人が空★。空のままだと 8割の人の有給が数えられない。 */
 {
@@ -1222,7 +1292,11 @@ T('★あとから入れる は その場で入る（お願いにしない・跡
   T('★★人が書いた理由（打ち忘れ）は そのまま出す（消しすぎていない）★★', () => {
     const t = p.w.document.getElementById('pend').textContent;
     ok(/理由: 打ち忘れ/.test(t), '★人が書いた理由まで消している★: ' + t.slice(0, 140));
-    console.log('     実測: ' + (/理由: [^\s]+/.exec(t) || [''])[0]);
+    /* ★機械が作った説明は「理由:」に出さない★（2026-08-21 指示役
+       「…を 13:47 に直します」が 理由の顔で出ていた＝★型を潰す★） */
+    ok(!/理由:[^]{0,40}(直します|直しました|足しました|消しました|使いません)/.test(t),
+      '★機械が作った説明が「理由:」に出ている★: ' + t.slice(0, 160));
+    console.log('     実測: ' + (/理由: [^\s]+/.exec(t) || [''])[0] + '（機械の文は 0件）');
   });
 }
 
