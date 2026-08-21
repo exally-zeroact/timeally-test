@@ -465,7 +465,11 @@
     }).join('');
     return '<div class="tc-ask">' + head
       + '<div class="tc-askrow">' + btns
-      + '<span class="tc-askpick"><input type="time" step="60" id="fix-t" />'
+      /* ★元の時刻を 欄に入れておく★（2026-08-22 指示役⑨）
+         ＝空から選ばせると ★今 何時で入っているか★が見えない（④の入社日と同じ型）。
+         ★同じ時刻のままでは「直す」は押せない★（下の draw2 が止める）。 */
+      + '<span class="tc-askpick"><input type="time" step="60" id="fix-t"'
+      + ' value="' + U.esc(global.TcClean.hmOf(p.at)) + '" />'
       + '<button class="tc-btn sub" type="button" id="fix-pick">この時刻にする</button></span>'
       + '</div>'
       + '<div class="tc-note" id="fix-why"></div>'
@@ -489,13 +493,16 @@
     var picked = { hm: '' };
     var send = q('fix-send'), note = q('fix-why'), tin = q('fix-t');
     var K = KIND_LABEL[p.kind] || p.kind;
+    var was = global.TcClean.hmOf(p.at);          /* ★今 入っている時刻★（欄の初めの値） */
     var draw2 = function () {
-      var ok = !!picked.hm;
+      var same = !!picked.hm && picked.hm === was;
+      var ok = !!picked.hm && !same;
       if (note) {
         note.textContent = ok
-          ? global.TcClean.mdOf(global.TcClean.dayOf(p.at)) + ' の ' + global.TcClean.hmOf(p.at)
+          ? global.TcClean.mdOf(global.TcClean.dayOf(p.at)) + ' の ' + was
             + ' ' + K + ' を ' + picked.hm + ' に直します'
-          : '直したい時刻を選んでください';
+          : (same ? '今と同じ時刻です（' + was + '）。直す時は 時刻を変えてください'
+            : '直したい時刻を選んでください');
         note.hidden = false;
       }
       if (send) send.disabled = !ok;
@@ -513,7 +520,7 @@
         if (!picked.hm) { draw2(); return; }
         var day = global.TcClean.dayOf(p.at);
         apply({ id: p.id, at: day + 'T' + picked.hm, done: '直しました。',
-          why: global.TcClean.mdOf(day) + ' の ' + global.TcClean.hmOf(p.at) + ' ' + K
+          why: global.TcClean.mdOf(day) + ' の ' + was + ' ' + K
             + ' を ' + picked.hm + ' に直しました' });
       };
     }

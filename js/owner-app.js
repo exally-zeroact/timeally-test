@@ -55,7 +55,8 @@
     q('b-in').onclick = function () {
       DB.Auth.signIn(q('email').value.trim(), q('pw').value).then(function (r) {
         if (r.error) { alertBox('alert', '入れませんでした（' + r.error.message + '）'); return; }
-        global.location.href = 'index.html';
+        /* ★鍵が読めるようになってから 次の画面へ★（先に行くと 最初の読みが 401 で追い返される） */
+        return DB.Auth.session().then(function () { global.location.href = 'index.html'; });
       });
     };
     /* ★登録したら そのまま入る★（2026-08-16 司さんが本番の実機で止まった）
@@ -72,7 +73,10 @@
         /* 入れなかった時だけ ★次に押す物を1つだけ★言う（メールの話はしない） */
         DB.Auth.signIn(email, pw).then(function (s) {
           if (s.error) { alertBox('alert', '登録しました。そのまま「入る」を押してください。', true); return; }
-          global.location.href = 'index.html';
+          /* ★登録した直後は ここが いちばん危ない★（2026-08-22 実測）
+             ＝鍵が行き渡る前に index へ行くと、最初の読みが anon のまま飛んで 401 →
+               「ログアウトした」と間違えて ★理由も出さずに この画面へ戻る★（1回 出た）。 */
+          return DB.Auth.session().then(function () { global.location.href = 'index.html'; });
         });
       });
     };
@@ -1222,11 +1226,19 @@
         account_id: whoNow.id, ym: st.ym, action: kind, by_uid: whoNow.id,
         by_name: whoNow.email || '', reason: reason, snapshot: snap,
       });
-    }).then(function () {
+    }).then(function (saved) {
       st.ask = null;
       q('b-do').disabled = false;
       U.toast(kind === 'close' ? st.ym + ' を確定しました' : st.ym + ' の確定を解除しました（記録に残ります）');
-      return DB.listCloseLog(st.ym).then(function (log) { st.closeLog = log || []; drawClose(); });
+      /* ★書いた結果を そのまま使ってから 描く★（2026-08-22）
+         ＝前は「書く → もう一度 読む → 描く」だけだったので、
+           読みが1拍 遅れた時に ★倉庫は確定・画面は締め待ち★のままだった（1回 出た）。
+         ★足してから描く★ので、読みが遅れても 画面は正しい。読み直しは その後で上書きする。 */
+      if (saved) { st.closeLog = (st.closeLog || []).concat([saved]); drawClose(); }
+      return DB.listCloseLog(st.ym).then(function (log) {
+        st.closeLog = (log && log.length) ? log : st.closeLog;
+        drawClose();
+      });
     }).catch(function (e) { q('b-do').disabled = false; failed('記録できませんでした')(e); });
   }
 
@@ -1553,8 +1565,10 @@
     box.hidden = false;
     box.classList.add('open');   /* ★広い画面でも出す★（CSSはこの印だけを見る） */
     st.dayIdx = idx;
-    var yb = box.querySelector('[data-yk]');
-    if (yb) yb.onclick = function () { saveDayKind(d.d, yb.getAttribute('data-yk')); };
+    /* ★押す物が2つになった（有給／欠勤）ので 全部つなぐ★（1つ目だけ配線しない） */
+    Array.prototype.forEach.call(box.querySelectorAll('[data-yk]'), function (yb) {
+      yb.onclick = function () { saveDayKind(d.d, yb.getAttribute('data-yk')); };
+    });
     Array.prototype.forEach.call(q('cal').querySelectorAll('[data-day]'), function (b) {
       b.setAttribute('aria-selected', String(Number(b.getAttribute('data-day')) === idx));
     });
@@ -1565,22 +1579,36 @@
      ★今の状態で押せる物しか出さない★（有給の日は「やめる」だけ・そうでない日は「にする」だけ）。
      ★締めた後は出さない★（理由は締めの1か所から聞く＝2画面で答えが割れない）。
      ★残りは その場で返す★（付与＋繰越−使った の3つを そのまま見せる）。 */
+  /* ★欠勤も 同じ箱の中で付ける★（2026-08-22 指示役の裁定⑥）
+     ＝★「欠」の印・月計の欠勤・給与CSVの欠勤欄は もう在った★のに、
+       ★欠勤にする口だけ どこにも無かった★＝受け皿だけ在って口が無い（給与の欠勤控除に渡せない）。
+     ★守る条件★ … 新しい画面・タブ・言葉を作らない／有給と同じ箱に1つ／
+       ★有給と欠勤は同時に立たない★（day_kind は1つしか持たない＝形で守られている）／
+       ★締めた後は出さない★（理由は締めの1か所から）／★理由・種類は作らない★。 */
   function yukyuInner(d) {
     var y = st.yukyu || { ok: false, why: '' };
     var isY = d.dayKind === 'paid_leave';
+    var isA = d.dayKind === 'absent';
     var c = st.close || closeState();
     /* ★他の仲間と同じ形（見出し＋行）で出す★＝説明文だけの箱を作らない */
     var line = y.ok
       ? y.leftDays + '日（付与 ' + y.grantDays + ' ＋ 繰越 ' + y.carryDays
         + ' − 使った ' + y.usedDays + '）'
       : 'まだ数えられません（' + y.why + '）';
+    var b = function (kind, word, danger) {
+      return '<button class="tc-btn' + (danger ? ' danger' : '') + '" type="button" data-yk="'
+        + kind + '">' + word + '</button>';
+    };
+    /* ★今の状態で押せる物だけ★（有給の日は「やめる」だけ／欠勤の日は「やめる」だけ） */
     var btn = c.state === 'closed'
       ? '<div class="tc-note">' + U.esc(c.why.requestFix) + '</div>'
-      : '<button class="tc-btn' + (isY ? ' danger' : '') + '" type="button" data-yk="'
-        + (isY ? 'work' : 'paid_leave') + '">' + (isY ? '有給をやめる' : '有給にする') + '</button>';
-    return '<div class="day-g">有給</div>'
+      : isY ? b('work', '有給をやめる', true)
+        : isA ? b('work', '欠勤をやめる', true)
+          : b('paid_leave', '有給にする') + b('absent', '欠勤にする');
+    return '<div class="day-g">有給・欠勤</div>'
       + (isY ? '<div class="day-l"><span class="k">この日</span><span class="v">有給です</span></div>' : '')
-      + '<div class="day-l"><span class="k">残り</span><span class="v">' + U.esc(line) + '</span></div>'
+      + (isA ? '<div class="day-l"><span class="k">この日</span><span class="v">欠勤です</span></div>' : '')
+      + '<div class="day-l"><span class="k">有給の残り</span><span class="v">' + U.esc(line) + '</span></div>'
       + btn;
   }
 
@@ -1618,7 +1646,11 @@
     if (c.state === 'closed') { U.toast(c.why.requestFix); return; }
     DB.saveDayKind(st.user.id, p.employee_id, day, kind, st.user.id)
       .then(function () {
-        U.toast(kind === 'paid_leave' ? day + ' を有給にしました' : day + ' の有給をやめました');
+        /* ★出す日付は M/D（曜）★（2026-08-21 の決まり＝画面に年月日を出さない） */
+        var md = mdDow(day);
+        U.toast(kind === 'paid_leave' ? md + ' を有給にしました'
+          : kind === 'absent' ? md + ' を欠勤にしました'
+            : md + ' の有給・欠勤をやめました');
         return drawShukei();
       })
       .catch(failed('できませんでした'));

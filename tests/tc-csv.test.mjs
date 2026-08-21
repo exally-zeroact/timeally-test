@@ -112,6 +112,30 @@ T('★★今の給与は「時間外60時間超」「休日深夜」を読まな
   console.log('     実測: 60超と休日深夜は ★CSVに出ているが 今の給与は読まない★');
 });
 
+/* ★★列の順番を固定する★★（2026-08-22 指示役■5・実物で追った結果）
+   ＝受け取る側 kintai-csv.js は ★先に出てきた見出しが勝つ★（idx[f] が null の時だけ入れる）。
+     そして 見出しの判定は ★/深夜/ を /休日/ より先に見る★。
+   ⇒★もし「休日深夜」が「深夜労働」より前に来たら、深夜の値が 休日深夜の値に化ける★
+     （★警告は0のまま★＝黙って間違う。★#ERRORより黙って小さくなる方が危ない★の型）。
+   ⇒ 私（Timeally）がやる事は2つだけ … ★2列は出し続ける★ ／ ★順番を変えない★。
+     受け口を直すのは 給与(Rakually)＝指示役が持つ。 */
+T('★★列の順番を変えない（時間外→60超／深夜→休日深夜 の順）★★', () => {
+  const h = CSV.MONTHLY_HEADERS;
+  ok(h.indexOf('時間外労働') < h.indexOf('時間外60時間超'),
+    '★60超が 時間外より前に来た★（先に出た方が勝つので 時間外の値が化ける）');
+  ok(h.indexOf('深夜労働') < h.indexOf('休日深夜'),
+    '★休日深夜が 深夜労働より前に来た★（深夜の値が 休日深夜に化ける）');
+  /* ★この検査が空振りしていない事を その場で見せる★＝入れ替えた見本を作って 化けるのを実測 */
+  const m = { workedMin: 12000, otMin: 4200, ot60Min: 600, nightMin: 300, holidayMin: 480, holidayNightMin: 120 };
+  const good = KINTAI.parse(CSV.monthlyCsv([{ name: 'A', month: m }])).rows[0];
+  eq(good.nightMin, 300, '★今の順番なのに 深夜が正しく渡っていない★');
+  const swapped = ['氏名,休日深夜,深夜労働', 'A,2:00,5:00', ''].join(String.fromCharCode(13, 10));
+  const bad = KINTAI.parse(swapped);
+  eq(bad.rows[0].nightMin, 120, '★入れ替えても化けない＝この検査は空振り★');
+  eq(bad.warnings.length, 0, '★化けたのに警告が出た（前提が変わった＝読み直す）★');
+  console.log('     実測: 今の順番 深夜 5:00→300分 ／ 入れ替えた見本 深夜が ★2:00→120分★ に化ける（警告0）');
+});
+
 T('★深夜・休日・有給・欠勤も そのまま渡る', () => {
   const m = realMonth([
     P('2026-08-03T21:00', 'in'), P('2026-08-04T02:00', 'out'),   // 深夜4時間
@@ -191,6 +215,13 @@ if (process.argv.includes('--self-test')) {
     ok(r1.recognized.indexOf('worked') < 0, '作り物が読めてしまう＝この検査が空振り');
     const good = KINTAI.parse(CSV.monthlyCsv([{ name: 'A', month: { workedMin: 6000 } }]));
     ok(good.recognized.indexOf('worked') >= 0, '★本物の見出しを受け取る側が読めない★');
+  });
+  S('⑤ 列の順番を入れ替えた作り物では 深夜が化ける（本物の順番では化けない）', () => {
+    const swapped = ['氏名,休日深夜,深夜労働', 'A,2:00,5:00', ''].join(String.fromCharCode(13, 10));
+    eq(KINTAI.parse(swapped).rows[0].nightMin, 120, '作り物が化けない＝この検査が空振り');
+    const m = { workedMin: 6000, nightMin: 300, holidayNightMin: 120 };
+    eq(KINTAI.parse(CSV.monthlyCsv([{ name: 'A', month: m }])).rows[0].nightMin, 300,
+      '★本物の順番で 深夜が化けている★');
   });
   S('② 小数時で出すと1分単位が崩れる（本物は "H:MM" なので崩れない）', () => {
     const decimal = '氏名,労働時間\r\nA,8.01\r\n';

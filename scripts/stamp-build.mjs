@@ -59,8 +59,14 @@ export function restamp(html, stamp) {
   return html.replace(TARGET, (m, attr, url) => `${attr}="${url}?v=${stamp}"`);
 }
 
+/* ★読み込まれただけでは 何も書かない★（2026-08-22）
+   ＝別の道具が stampOf() を使うために import した時、ここが走ると
+     ★見張りのつもりが 画面を書き換える★（副作用のある見張りは 見張りではない）。 */
+const RUN_DIRECT = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 const stamp = stampOf();
 const check = process.argv.includes('--check');
+if (RUN_DIRECT) main();
+function main() {
 let changed = 0;
 const missing = [];
 
@@ -86,4 +92,5 @@ if (check) {
   console.log('✓ 全部の画面の ?v= が中身と合っています');
 } else {
   console.log(changed ? `✓ ${changed}枚を貼り直しました` : '✓ 貼り直す物はありませんでした');
+}
 }

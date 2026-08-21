@@ -374,6 +374,14 @@ function createFake(seed) {
         calls.push('auth.getUser');
         return Promise.resolve({ data: { user: seed.noUser ? null : { id: 'u1', email: 'a@example.com' } }, error: null });
       },
+      /* ★本物と同じ口を持たせる★（2026-08-22）＝読む前に鍵を待つ作りを 見本でも通す。
+         ここに口が無いと「本物では動くのに 見本で落ちる」＝見本が嘘をつく。 */
+      getSession: function () {
+        calls.push('auth.getSession');
+        return Promise.resolve({
+          data: { session: seed.noUser ? null : { user: { id: 'u1', email: 'a@example.com' } } }, error: null,
+        });
+      },
       signInWithPassword: function () { calls.push('auth.signIn'); return Promise.resolve({ data: {}, error: null }); },
       signUp: function () { calls.push('auth.signUp'); return Promise.resolve({ data: {}, error: null }); },
       signOut: function () { calls.push('auth.signOut'); return Promise.resolve({ error: null }); },

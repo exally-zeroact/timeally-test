@@ -525,6 +525,48 @@ T('★★日を押すと その日の結論が1行 出る（08:00〜17:03（実�
     ok(btns[0].getAttribute('data-yk') === 'work', '★戻す先が work でない★');
     console.log('     実測: 有給の日を開くと 「' + btns[0].textContent.trim() + '」1個だけ');
   });
+
+  /* ★欠勤の口★（2026-08-22 指示役の裁定⑥）
+     ＝「欠」の印・月計・給与CSVの欠勤欄は前から在るのに ★付ける口だけ無かった★。
+     ★条件★ 有給と同じ箱／同時に立たない／締めた後は出さない／理由・種類は作らない。 */
+  T('★★何でもない日は「有給にする」「欠勤にする」の2つだけ（他は増やさない）★★', () => {
+    const cells = [...d2.querySelectorAll('#cal [data-day]')];
+    const plain = cells.filter((b) => !/有|欠|締/.test(b.textContent))[0];
+    ok(plain, '★印の無い日が1つも無い★');
+    plain.click();
+    const btns = [...d2.querySelectorAll('#cal-day [data-yk]')];
+    ok(btns.length === 2, '★押す物が ' + btns.length + '個（2個のはず）★');
+    ok(btns.map((b) => b.textContent.trim()).join('／') === '有給にする／欠勤にする',
+      '言葉が違う: ' + btns.map((b) => b.textContent.trim()).join('／'));
+    console.log('     実測: 押す物 ' + btns.map((b) => b.textContent.trim()).join('／'));
+  });
+
+  T('★★「欠勤にする」を押したら 倉庫に absent が書かれた（誰が・いつ 付き）★★', () => {
+    const before = (p.fake._saved || []).filter((x) => x.table === 'tc_shift').length;
+    const btn = [...d2.querySelectorAll('#cal-day [data-yk]')].filter((b) => /欠勤にする/.test(b.textContent))[0];
+    ok(btn, '★欠勤にする が無い★');
+    btn.click();
+    const rows = (p.fake._saved || []).filter((x) => x.table === 'tc_shift');
+    ok(rows.length === before + 1, '★押したのに 倉庫へ行っていない★（' + before + '→' + rows.length + '）');
+    const row = rows[rows.length - 1].row;
+    ok(row.day_kind === 'absent', '★欠勤として書いていない★: ' + row.day_kind);
+    ok(row.day_kind_by && row.day_kind_at, '★誰が・いつ が残っていない★');
+    console.log('     実測: ' + row.d + ' → ' + row.day_kind + '（誰が: 有り／いつ: 有り）');
+  });
+
+  T('★★欠勤の日は「欠勤をやめる」1つだけ（有給と同時に立たない）★★', () => {
+    const cells = [...d2.querySelectorAll('#cal [data-day]')];
+    const ke = cells.filter((b) => /欠/.test(b.textContent))[0];
+    ok(ke, '★欠勤の印が付いた日が1つも無い★');
+    ke.click();
+    const btns = [...d2.querySelectorAll('#cal-day [data-yk]')];
+    ok(btns.length === 1, '★押す物が ' + btns.length + '個（1個のはず）★');
+    ok(btns[0].textContent.trim() === '欠勤をやめる', '言葉が違う: ' + btns[0].textContent);
+    ok(btns[0].getAttribute('data-yk') === 'work', '★戻す先が work でない★');
+    const t = d2.getElementById('cal-day').textContent;
+    ok(!/有給です/.test(t), '★欠勤の日なのに「有給です」が出ている★');
+    console.log('     実測: 欠勤の日を開くと 「' + btns[0].textContent.trim() + '」1個だけ');
+  });
 }
 
 /* ★締めた月は 有給も 付けられない（可否は締めの1か所から聞く）★ */
