@@ -84,10 +84,15 @@ select
    where grantee='anon' and table_schema='public' and table_name like 'tc\_%') as anon_view_grants,
  (select count(*) from information_schema.role_table_grants
    where grantee='anon' and table_schema='timeally') as anon_table_grants,
+ -- ★数えるのは「anon= が書いてある本数」ではなく ★anon が 実際に呼べる本数★★
+ --   （2026-08-22 指示役②）＝anon は 3つの道で呼べてしまう:
+ --     ①anon に直接 grant ②★PUBLIC(=X) 経由★ ③★proacl が空＝Postgresの既定でPUBLICに渡る★
+ --   ★「revoke … from anon」だけ書いて「from public」を忘れると
+ --     「anon= は消えた・でも PUBLIC で呼べる」＝★嘘の緑★になる★（私が実際に踏みかけた所）
+ --   ⇒ has_function_privilege で ★呼べるかどうか★を そのまま聞く（3つの道を全部 含む）
  (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
    where n.nspname='public' and p.proname like 'tc\_%'
-     and exists (select 1 from aclexplode(p.proacl) a join pg_roles r on r.oid=a.grantee
-                  where r.rolname='anon' and a.privilege_type='EXECUTE')) as anon_funcs;
+     and has_function_privilege('anon', p.oid, 'EXECUTE')) as anon_funcs;
 `;
 
 async function main() {
