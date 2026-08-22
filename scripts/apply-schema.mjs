@@ -90,8 +90,11 @@ select
  --   ★「revoke … from anon」だけ書いて「from public」を忘れると
  --     「anon= は消えた・でも PUBLIC で呼べる」＝★嘘の緑★になる★（私が実際に踏みかけた所）
  --   ⇒ has_function_privilege で ★呼べるかどうか★を そのまま聞く（3つの道を全部 含む）
+ -- ★見る範囲は public と timeally の両方★（2026-08-23 指示役②）
+ --   ＝前は public だけを見ていたので、★部屋の中(timeally)に置いた3本を 永久に見落として★いた
+ --     （tc_ok / tc_period_ym / tc_state ＝proacl が空＝既定でPUBLIC＝anon が呼べる形だった）。
  (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-   where n.nspname='public' and p.proname like 'tc\_%'
+   where n.nspname in ('public','timeally') and p.proname like 'tc\_%'
      and has_function_privilege('anon', p.oid, 'EXECUTE')) as anon_funcs;
 `;
 

@@ -413,6 +413,20 @@ revoke all privileges on public.tc_fix       from anon;
 revoke all privileges on public.tc_close     from anon;
 revoke all privileges on public.tc_shift     from anon;
 
+-- ★部屋の中の3本も anon から外す★（2026-08-23 指示役②）
+--   実測 … proacl が ★空(null)★＝Postgres の既定で ★PUBLIC に EXECUTE★ が付いている
+--          ＝has_function_privilege('anon',…) が true（★書いていないのに 付いている★）。
+--   ★この3本は 客に開ける物ではありません★
+--     ・3本とも ★public のRPC(security definer)の中からしか呼ばれない★
+--       ＝definer は postgres として動くので ★呼んだ人の EXECUTE は要らない★
+--     ・とくに tc_state は ★会社のIDを知っていれば 締めの状態が分かる★＝渡す理由が無い
+--   ★今 漏れてはいない★（実測: anon は timeally スキーマの USAGE を持っていない＝false／
+--     PostgREST は public しか公開しない）。★門が2枚 在る★。
+--   ⇒ それでも ★書いていないのに付いている物は 外す★（次に USAGE を1行 足した人が開けてしまう）。
+revoke execute on function timeally.tc_ok(timeally.tc_pub, text, text)  from public, anon;
+revoke execute on function timeally.tc_period_ym(int, date)             from public, anon;
+revoke execute on function timeally.tc_state(uuid, date)                from public, anon;
+
 -- ═════════════════════════════════════════════════════════════════════════
 -- 従業員(anon)向け RPC … ★security definer。search_path に extensions が要る★
 --   （crypt / gen_salt / gen_random_bytes は extensions スキーマにある。

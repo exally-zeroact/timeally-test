@@ -37,6 +37,11 @@ jobs:
         run: node scripts/sql-guard.mjs supabase/schema.sql
       - name: ★門番の自己確認 (わざと危ない物を食わせて止まるか・11通り)
         run: node scripts/sql-guard.mjs --self-test
+      # ── 指示役から配られた見張り（正本＝rakually-test・1文字も書き直さない） ──────
+      - name: ★試験がCIに登録されているか (登録するまで1本も走らない)
+        run: node scripts/tests-registered.mjs
+      - name: ★その見張りの自己確認 (わざと外して赤になるか)
+        run: node scripts/tests-registered.mjs --self-test
 
       # ── 法律と計算（金と労務が動く所） ───────────────────────────
       - name: ★法定の数値 (公式一次情報・実数リテラル・出典URLと確認日)
