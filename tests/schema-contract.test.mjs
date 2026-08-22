@@ -244,7 +244,12 @@ T('★★関数は14本（public 11本＝全部 definer / 部屋の中 3本＝1�
   /* ★tc_ok は RLS ではなく RPC の中から呼ばれている★（呼び元を数える） */
   /* 2026-08-18 ★tc_punch_undo と tc_punch_ok★ が増えて 5本になった
      （打刻を入れる／取り消す／合っていると答える／読む／直しを出す） */
-  const calls = (SQL.match(/timeally\.tc_ok\(/g) || []).length - 1;   // 定義の1回を引く
+  /* ★数えるのは「呼んでいる所」だけ★（2026-08-23）
+     ＝grant / revoke の行にも 関数名が出るので、そのまま数えると ★呼び元が増えたと嘘をつく★
+       （実際 revoke を1行 足した時に 6→7 になって赤くなった＝★見張りは働いた★）。 */
+  const calls = SQL.split(String.fromCharCode(10))
+    .filter((l) => !/^[ 	]*(grant|revoke)[ 	]/i.test(l))
+    .join(' ').split('timeally.tc_ok(').length - 2;   // 定義の1回を引く
   eq(calls, 6, 'tc_ok の呼び元が ' + calls + '箇所（6本のRPCのはず）');
   ok(!/create policy[\s\S]{0,300}tc_ok/.test(SQL), '★tc_ok を決まり(RLS)から呼んでいる★');
   console.log('     実測: public ' + pub.length + '本(全部definer) / 部屋の中 ' + inner.length
