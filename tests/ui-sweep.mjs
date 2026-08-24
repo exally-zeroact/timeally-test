@@ -637,8 +637,11 @@ T('★★日を押すと その日の結論が1行 出る（08:00〜17:03（実�
     ok([...box.querySelectorAll('[data-pf],[data-pfdrop]')].length === 0,
       '★締めた月なのに 打刻を直す口が出ている★');
     ok(!/打刻を直す/.test(box.textContent), '★見出しだけ残っている★');
-    ok(/確定しています/.test(box.textContent), '理由が出ていない');
-    console.log('     実測: 押す物 0個／理由「この月は確定しています」');
+    /* ★理由は 締めの1か所（画面の上の箱）★＝日の箱の中では繰り返さない（2026-08-24 指示役②） */
+    const why1 = d3.getElementById('cwhy');
+    ok(why1 && /確定しています/.test(why1.textContent), '★理由が1か所にも出ていない★');
+    ok(!/確定しています/.test(box.textContent), '★同じ理由を 日の箱でも繰り返している★');
+    console.log('     実測: 押す物 0個／理由は締めの1か所「' + why1.textContent.trim().slice(0, 24) + '…」');
   });
 }
 
@@ -654,10 +657,19 @@ T('★★日を押すと その日の結論が1行 出る（08:00〜17:03（実�
     const box = d3.getElementById('cal-day');
     const btns = [...box.querySelectorAll('[data-yk]')];
     ok(btns.length === 0, '★締めた月なのに 押せる★（' + btns.length + '個）');
-    /* ★理由は 締めの1か所（lib/tc-close.js）が作る文★＝ここで言い換えない */
-    ok(/確定しています/.test(box.textContent), '★理由が出ていない★: ' + box.textContent.slice(-100));
-    console.log('     実測: 押す物 0個／理由「'
-      + (/この月は[^]*?要ります/.exec(box.textContent) || [''])[0] + '」');
+    /* ★理由は 締めの1か所（lib/tc-close.js）が作る文★＝ここで言い換えない・繰り返さない。
+       ★2026-08-24 指示役②★ 締めた日に「まだ数えられません（入社日が入っていません）」という
+       ★別の理由★が並んでいた（締めているからではない文）＝読む人が迷うので 出さなくした。 */
+    const why2 = d3.getElementById('cwhy');
+    ok(why2 && /確定しています/.test(why2.textContent), '★理由が1か所にも出ていない★');
+    /* ★当て所は「残りの行そのもの」★＝人によって文が変わる（23日／まだ数えられません）ので
+       ★文字で探すと 種によって空振りする★。★行を出していない事★を数える。 */
+    ok(!/有給の残り/.test(box.textContent),
+      '★締めた月なのに 有給の残りの行が出ている★: ' + box.textContent.slice(-80));
+    ok(!/まだ数えられません|入社日が入っていません/.test(box.textContent),
+      '★締めた日に 別の理由が並んでいる★: ' + box.textContent.slice(-80));
+    console.log('     実測: 押す物 0個／別の理由 0件／理由は締めの1か所「'
+      + why2.textContent.trim().slice(0, 24) + '…」');
   });
 }
 

@@ -1741,15 +1741,22 @@
       return '<button class="tc-btn' + (danger ? ' danger' : '') + '" type="button" data-yk="'
         + kind + '">' + word + '</button>';
     };
+    var mark = (isY ? '<div class="day-l"><span class="k">この日</span><span class="v">有給です</span></div>' : '')
+      + (isA ? '<div class="day-l"><span class="k">この日</span><span class="v">欠勤です</span></div>' : '');
+    /* ★締めた月は 別の理由の「できません」を並べない★（2026-08-24 指示役②）
+       ＝締めている日に「まだ数えられません（入社日が入っていません）」が出ていた。
+         これは ★締めているから★ではなく ★入社日が無いから★の文＝★理由が2つ並んで 読む人が迷う★。
+       ★締めた月に この節で言う事は「この日は有給です／欠勤です」だけ★。
+       押せない理由は ★締めの1か所（画面の上の箱）★が言う＝ここでは繰り返さない。
+       ★その日が有給でも欠勤でもなければ 見出しごと出さない★（空の仲間を作らない）。 */
+    if (c.state === 'closed') {
+      return mark ? '<div class="day-g">有給・欠勤</div>' + mark : '';
+    }
     /* ★今の状態で押せる物だけ★（有給の日は「やめる」だけ／欠勤の日は「やめる」だけ） */
-    var btn = c.state === 'closed'
-      ? '<div class="tc-note">' + U.esc(c.why.requestFix) + '</div>'
-      : isY ? b('work', '有給をやめる', true)
-        : isA ? b('work', '欠勤をやめる', true)
-          : b('paid_leave', '有給にする') + b('absent', '欠勤にする');
-    return '<div class="day-g">有給・欠勤</div>'
-      + (isY ? '<div class="day-l"><span class="k">この日</span><span class="v">有給です</span></div>' : '')
-      + (isA ? '<div class="day-l"><span class="k">この日</span><span class="v">欠勤です</span></div>' : '')
+    var btn = isY ? b('work', '有給をやめる', true)
+      : isA ? b('work', '欠勤をやめる', true)
+        : b('paid_leave', '有給にする') + b('absent', '欠勤にする');
+    return '<div class="day-g">有給・欠勤</div>' + mark
       + '<div class="day-l"><span class="k">有給の残り</span><span class="v">' + U.esc(line) + '</span></div>'
       + btn;
   }
