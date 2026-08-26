@@ -351,6 +351,11 @@ table.tc td.warn { color: #B3261E; }
 .tc-daybox .day-l .k { color: #78705C; }
 .tc-daybox .day-l .v { font-family: 'DM Mono', ui-monospace, monospace; }
 /* ★社長も その日の打刻を直す（2026-08-22）★＝1行1打刻・押す物は右に寄せる */
+/* ★押す物を横に並べる箱★（2026-08-26 司さん「隙間つくれや 圧迫感すごい」）
+   ＝有給/欠勤の2つが くっついていた。★間は gap・上は margin で離す★。
+   ★狭い画面で 字が縦に割れない事を 実測して決めた★（375/390/412 で 1行のまま）。 */
+.tc-daybox .day-btns { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0 4px; }
+.tc-daybox .day-btns .tc-btn { flex: 0 0 auto; }
 .tc-daybox .pf-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0;
   border-bottom: 1px dotted #F0E0B8; }
 .tc-daybox .pf-row .pf-t { font-family: 'DM Mono', ui-monospace, monospace; color: #2B2418; }

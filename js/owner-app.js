@@ -1756,9 +1756,11 @@
     var btn = isY ? b('work', '有給をやめる', true)
       : isA ? b('work', '欠勤をやめる', true)
         : b('paid_leave', '有給にする') + b('absent', '欠勤にする');
+    /* ★押す物は 箱に入れて 隙間を作る★（2026-08-26 司さん「隙間つくれや 圧迫感すごい」）
+       ＝2つのボタンが くっついて出ていた。★横に並べる物は 箱と gap で離す★（余白を個別に付けない）。 */
     return '<div class="day-g">有給・欠勤</div>' + mark
       + '<div class="day-l"><span class="k">有給の残り</span><span class="v">' + U.esc(line) + '</span></div>'
-      + btn;
+      + '<div class="day-btns">' + btn + '</div>';
   }
 
   /** ★倉庫に残っている「昔の書き方」は 人に見せない★（2026-08-21 指示役）
