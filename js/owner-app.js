@@ -416,10 +416,14 @@
     var el = q('hire-result'), inp = hireInput(), btn = q('b-hire-save');
     if (!el || !inp) return;
     var v = inp.value;
-    /* ★入れた日を そのまま見せる★（DOMに在る≠読める。日付の欄は 中身が見えないと直せない） */
+    /* ★入れた日を そのまま見せる★（DOMに在る≠読める。日付の欄は 中身が見えないと直せない）
+       ★ただし 年月日の形（2026-05-01）では出さない★（2026-08-28 実配信で見つけた）
+       ＝08-21 に「入れた日を見せる」を足した時、★生の値をそのまま入れて★いた。
+       ★入社日は 年が要る★ので M/D にはせず、★従業員の箱と同じ hireText（2026年5月1日）★に揃える
+       ＝★同じ物の見せ方を 2通りにしない★。 */
     var show = inp.parentNode && inp.parentNode.querySelector('.tc-date-show');
     if (show) {
-      show.textContent = v || '日付を選ぶ';
+      show.textContent = v ? hireText(v) : '日付を選ぶ';
       show.className = 'tc-date-show' + (v ? '' : ' empty');
     }
     var g = hireCheck(v);
@@ -1124,8 +1128,11 @@
     if (c.state === 'closed') { U.toast(c.why.requestFix); return; }
     DB.saveDayBreak(st.user.id, p.employee_id, sel.value, minOrNull, st.user.id)
       .then(function () {
-        U.toast(minOrNull == null ? sel.value + ' を会社の既定にもどしました'
-          : sel.value + ' の休憩を ' + minOrNull + '分にしました');
+        /* ★出す日付は M/D（曜）★（2026-08-28 実配信で見つけた＝ここだけ年月日のままだった。
+           有給・欠勤の知らせを直した時と 同じ型。★知らせも「画面に出す字」★） */
+        var md2 = mdDow(sel.value);
+        U.toast(minOrNull == null ? md2 + ' を会社の既定にもどしました'
+          : md2 + ' の休憩を ' + minOrNull + '分にしました');
         drawShukei();
       })
       .catch(failed('直せませんでした'));

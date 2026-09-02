@@ -128,9 +128,22 @@ function paperHtmlOf(seed, back, btn) {
   const ctx = vm.createContext(w);
   for (const rel of locals) vm.runInContext(fs.readFileSync(path.join(ROOT, rel), 'utf8'), ctx, { filename: rel });
   for (const code of inline) vm.runInContext(code, ctx, { filename: file + '#inline' });
-  /* ★画面は今月から始まる★ので、狙いの月まで「前の月」を押してから刷る（実際の手順どおり） */
+  /* ★画面は今月から始まる★ので、狙いの月まで「前の月」を押してから刷る（実際の手順どおり）
+     ★2026-09-02 直した★＝前は ★押す回数(back)を直に書いて★いたので、
+     ★今日が変わった日に 全部1つズレて★ 紙の中身が空になり、6件が一斉に赤になった。
+     ⇒★回数ではなく「狙いの月のラベルになるまで」押す★（今日に寄りかからない）。 */
+  const wantYm = seed && seed.ym ? seed.ym.replace('-', '年') + '月' : null;
+  const labOf = () => ((w.document.getElementById('ymlabel') || {}).textContent || '').trim();
   return new Promise((res) => setTimeout(() => {
-    for (let i = 0; i < (back || 0); i++) w.document.getElementById('b-prev').click();
+    if (wantYm) {
+      for (let i = 0; i < 60 && labOf() !== wantYm; i++) {
+        const b = w.document.getElementById(labOf() > wantYm ? 'b-prev' : 'b-next');
+        if (!b) break;
+        b.click();
+      }
+    } else {
+      for (let i = 0; i < (back || 0); i++) w.document.getElementById('b-prev').click();
+    }
     setTimeout(() => {
       w.document.getElementById(btn || 'b-print').click();
       setTimeout(() => {

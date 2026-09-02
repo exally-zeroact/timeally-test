@@ -86,6 +86,28 @@ const PLAN = {
     ★バグを入れ直しても緑のまま★だった。 */
 const opened_pages = [];
 
+/** ★見たい月まで動かしてから 押す★（2026-09-02 実際に踏んだ）
+ *  ＝集計の画面は ★今日の締め★を開くので、種を 2026-08 で作っていても
+ *    ★今日が9月になった瞬間★ 画面は9月＝データが1件も無くなり、見張りが一斉に赤になった。
+ *  ★試験は 今日に寄りかからない★（lib に Date.now() を書かない、と同じ考え方）。 */
+async function goYm(p, want) {
+  const d = p.w.document;
+  /* ★jsdom は innerText を持たない★＝textContent で数える（ここで1回 空振りした） */
+  const now = () => ((d.getElementById('ymlabel') || {}).textContent || '').trim();
+  const btn = (t) => [...d.querySelectorAll('button')]
+    .find((b) => b.textContent.trim() === t && b.getBoundingClientRect);
+  for (let i = 0; i < 24 && now() !== want; i++) {
+    /* ★画面ごとに 言葉が違う★（集計＝前の締め／一覧＝前の月）＝両方 知っておく */
+    const back = now() > want;
+    const b = btn(back ? '前の締め' : '次の締め') || btn(back ? '前の月' : '次の月');
+    if (!b) break;
+    b.click();
+    await wait();
+  }
+  return now();
+}
+
+
 function openPage(file, search, seed) {
   const html = fs.readFileSync(path.join(ROOT, file), 'utf8');
   const locals = [...html.matchAll(/<script src="((?!https?:)[^"]+)"/g)].map((m) => m[1].split('?')[0]);
@@ -225,10 +247,17 @@ T('★集計の画面が 実際に数えて表を描いた（空振りしてい�
   console.log('     実測: 日ごと ' + rows.length + '行 / 月計あり');
 });
 
-/* ★その日の結論を1行★（2026-08-18 指示役③）… ★社長の画面だけ 長さも足す★ */
+/* ★その日の結論を1行★（2026-08-18 指示役③）… ★社長の画面だけ 長さも足す★
+   ★2026-09-02 直した★＝前は ★最初に開いた集計の画面（みんなで使い回す物）★を見ていた。
+   その画面は ★今日の締め★を開くので、9月になった日に データが0件になって赤くなった。
+   ★共有の画面を動かすと 他の見張りが道連れになる★（実際 2本 巻き込んだ）ので、
+   ★この検査だけの画面を開いて 8月へ動かす★。 */
+{
+  const p8 = openPage('shukei.html', '', { mix: true, ym: '2026-08' });
+  await wait(); await wait(); await wait();
+  await goYm(p8, '2026年08月');
+  const d2 = p8.w.document;
 T('★★日を押すと その日の結論が1行 出る（08:00〜17:03（実労働 8:03）の形）★★', () => {
-  const r = results.filter((x) => x.file === 'shukei.html')[0];
-  const d2 = r.page.w.document;
   const cell = [...d2.querySelectorAll('#cal [data-day]')].filter((b) => /\d+:\d\d/.test(b.textContent))[0];
   ok(cell, 'カレンダーに 数字の入った日が1つも無い');
   cell.click();
@@ -237,6 +266,7 @@ T('★★日を押すと その日の結論が1行 出る（08:00〜17:03（実�
     '★結論の1行が出ていない（または 空きが入っている）★: ' + line.slice(0, 80));
   console.log('     実測: ' + (/[^\n]*として数えます/.exec(line) || [''])[0].trim());
 });
+}
 
 /* ── ★「出勤を打ち間違えた」は その日の行まで連れて行く★（2026-08-21 指示役が実配信で見つけた） ──
    ＝前は 記録の いちばん上（月の頭）に着くだけ。今日の行は ずっと下に在って、
@@ -286,6 +316,7 @@ T('★★日を押すと その日の結論が1行 出る（08:00〜17:03（実�
 {
   const p = openPage('shukei.html', '', { mix: true, ym: '2026-08', pinInLog: true });
   await wait(); await wait(); await wait();
+  await goYm(p, '2026年08月');   /* ★今日に寄りかからない★ */
   T('★★締めの記録に 中の言葉（pin_set）が1つも出ない★★', () => {
     const t = p.w.document.getElementById('chist').textContent;
     ok(t.indexOf('pin_set') < 0, '★中の印が そのまま出ている★: ' + t.slice(0, 120));
@@ -300,6 +331,7 @@ T('★★日を押すと その日の結論が1行 出る（08:00〜17:03（実�
 {
   const p = openPage('shukei.html', '', { mix: true, ym: '2026-08' });
   await wait(); await wait(); await wait();
+  await goYm(p, '2026年08月');   /* ★今日に寄りかからない★ */
   const d2 = p.w.document;
   T('★★広い画面の表も 行を押したら その日の箱が開く（有給を付けられる）★★', () => {
     const rows = [...d2.querySelectorAll('#daily tbody tr[data-day]')];
@@ -343,8 +375,11 @@ T('★★日を押すと その日の結論が1行 出る（08:00〜17:03（実�
     inp.value = '2019-04-01';
     p.w.OwnerApp._hirePreview();
     const show = inp.parentNode.querySelector('.tc-date-show');
-    ok(show.textContent.indexOf('2019-04-01') >= 0 || show.textContent.indexOf('4/1') >= 0,
-      '★入れた日が 欄に出ていない★: 「' + show.textContent + '」');
+    /* ★2026-08-28 直した★＝入れた日は ★年つき（2019年4月1日）★で見せる。
+       前は 生の値（2019-04-01）でも通していたが、★年月日の形は画面に出さない★決まりに合わせた。 */
+    ok(/2019年4月1日/.test(show.textContent), '★入れた日が 年つきで出ていない★: 「' + show.textContent + '」');
+    ok(!/[0-9]{4}-[0-9]{2}-[0-9]{2}/.test(show.textContent),
+      '★年月日の形で出ている★: 「' + show.textContent + '」');
     ok(!d3.getElementById('b-hire-save').disabled, '★入れられる日なのに 押せない★');
     console.log('     実測: 欄に「' + show.textContent.trim() + '」');
   });
@@ -482,6 +517,7 @@ T('★★日を押すと その日の結論が1行 出る（08:00〜17:03（実�
 {
   const p = openPage('shukei.html', '', { mix: true, ym: '2026-08' });
   await wait(); await wait(); await wait();
+  await goYm(p, '2026年08月');   /* ★今日に寄りかからない★ */
   const d2 = p.w.document;
   /* ★押す物の一覧を先に出す★（押した数を後から数えない） */
   console.log('  [有給] 押す物: #cal の日 → 「有給にする」 → もう一度 開いて 「有給をやめる」');
@@ -569,12 +605,68 @@ T('★★日を押すと その日の結論が1行 出る（08:00〜17:03（実�
   });
 }
 
+/* ★入社日を聞く箱で 選んだ日の見せ方★（2026-08-28 実配信で見つけた）
+   ＝選ぶと ★2026-05-01（年月日の形）★で出ていた。08-21 に「入れた日を見せる」を足した時に
+     ★生の値をそのまま★入れていた。★入社日は年が要る★ので M/D にはせず、
+     ★従業員の箱と同じ「2026年5月1日」★に揃える（同じ物の見せ方を2通りにしない）。 */
+{
+  const p = openPage('index.html', '', { people: 4, hireMix: true, mix: true });
+  await wait(); await wait(); await wait();
+  const d2 = p.w.document;
+  const tab = d2.getElementById('tab-people');
+  if (tab) tab.click();
+  await wait(); await wait();
+  const box = d2.getElementById('hire-ask');
+  const inp = box && !box.hidden ? box.querySelector('.tc-date-input') : null;
+  if (inp) {
+    inp.value = '2026-05-01';
+    inp.dispatchEvent(new p.w.Event('change', { bubbles: true }));
+    if (p.w.OwnerApp && p.w.OwnerApp._hirePreview) p.w.OwnerApp._hirePreview();
+    await wait();
+  }
+  T('★★入社日を選んだら 年つきで見せる／年月日の形では出さない★★', () => {
+    ok(inp, '★入社日を聞く箱が出ていない（試験の種を見直す）★');
+    const show = box.querySelector('.tc-date-show');
+    const t = show ? show.textContent.trim() : '';
+    ok(!/[0-9]{4}-[0-9]{2}-[0-9]{2}/.test(t), '★年月日の形で出ている★: ' + t);
+    ok(/2026年5月1日/.test(t), '★年つきで出ていない★: ' + t);
+    console.log('     実測: 見せる字「' + t + '」');
+  });
+}
+
+/* ★休憩を直した時の知らせ★（2026-08-28 実配信で見つけた）
+   ＝ここだけ ★年月日（2026-08-17）★のまま出ていた。有給・欠勤の知らせを直した時と同じ型。
+   ★知らせも「画面に出す字」★＝M/D（曜）に揃える。 */
+{
+  const p = openPage('shukei.html', '', { days: 31, ym: '2026-08', closeDay: 31, mix: true });
+  await wait(); await wait(); await wait();
+  await goYm(p, '2026年08月');   /* ★今日に寄りかからない★（種は8月・今日は動く） */
+  const d2 = p.w.document;
+  const bsel = d2.getElementById('brk-day');
+  if (bsel && bsel.options.length) {
+    bsel.value = bsel.options[0].value;
+    bsel.dispatchEvent(new p.w.Event('change', { bubbles: true }));
+    await wait();
+    [...d2.querySelectorAll('[data-bm]')].find((b) => b.getAttribute('data-bm') === '30').click();
+    await wait(); await wait();
+  }
+  T('★★休憩を直した知らせは M/D（曜）／年月日を出さない★★', () => {
+    ok(bsel && bsel.options.length, '★直せる日が1日も無い（試験の種を見直す）★');
+    const t = (d2.querySelector('.tc-toast') || {}).textContent || '';
+    ok(/休憩を 30分にしました/.test(t), '★知らせが出ていない★: ' + t);
+    ok(!/[0-9]{4}-[0-9]{2}-[0-9]{2}/.test(t), '★知らせに 年月日が出ている★: ' + t);
+    ok(/[0-9]{1,2}[/][0-9]{1,2}（[日月火水木金土]）/.test(t), '★M/D（曜）で出ていない★: ' + t);
+    console.log('     実測: 知らせ「' + t + '」');
+  });
+}
+
 /* ★★社長も その日の打刻を 直す・消す・足す★★（2026-08-22 司さん
    「社長の画面からやけど ここからも個人の出勤や退勤など修正できるようにした方がいい」）
    ★決まりは増やさない★＝言葉は 直す・消す・足す の3つのまま／締めた月は 口ごと出さない。 */
 {
   const p = openPage('shukei.html', '', { days: 31, ym: '2026-08', closeDay: 31, mix: true });
   await wait(); await wait(); await wait();
+  await goYm(p, '2026年08月');   /* ★今日に寄りかからない★（種は8月・今日は動く） */
   const d2 = p.w.document;
   const cells = () => [...d2.querySelectorAll('#cal [data-day]')];
   const openWorked = () => {
@@ -692,7 +784,11 @@ T('★★実UIで「確定」を押したら 記録が1行 増えた（押した
   const rp = log.filter((x) => x.action === 'reopen')[0];
   ok((rp.reason || '').length >= 2, '★解除の理由が残っていない★');
   ok(log.every((x) => x.by_uid), '★誰がやったかが残っていない★');
-  ok(log.every((x) => x.ym === '2026-07'), '別の月に記録している: ' + JSON.stringify(log.map((x) => x.ym)));
+  /* ★2026-09-02 直した★＝前は '2026-07' と 月を直に書いていたので、
+     ★今日が変わった日に 赤★になった（押す物は「前の月へ1回」＝今日から数えた月）。
+     見たいのは ★全部が 同じ1つの月に記録されている事★＝月の名前ではない。 */
+  const ymSet = [...new Set(log.map((x) => x.ym))];
+  ok(ymSet.length === 1, '別の月に記録している: ' + JSON.stringify(log.map((x) => x.ym)));
   const snap = log.filter((x) => x.action === 'close')[0].snapshot;
   ok(snap && snap.rows && snap.rows.length >= 1, '★確定した時の数字を焼き付けていない★');
   console.log('     実測: 記録 ' + log.length + '行 = ' + kinds.join(' → ')
@@ -1680,6 +1776,17 @@ T('★★中身が空なのに 枠だけ出ている箱が無い（空の箱を�
   console.log('     実測: ' + opened_pages.length + '枚の 見えている箱を数えて 空は 0件');
 });
 
+const idxCols = await (async () => {
+  const pi = openPage('index.html', '', { people: 2, mix: true, ym: '2026-08' });
+  await wait(); await wait(); await wait();
+  await goYm(pi, '2026年08月');
+  const tab = pi.w.document.getElementById('tab-list');
+  if (tab) tab.click();
+  /* ★表は 倉庫を読んでから描く★＝待たずに数えると 0個になる（1回 踏んだ） */
+  await wait(); await wait(); await wait();
+  return pi.w.document.querySelectorAll('#people-summary thead th').length;
+})();
+
 T('★★画面に「気づき」が1文字も無い（2026-08-15 に丸ごと外した）★★', () => {
   /* ★書いた物ではなく 出た物を見る★。列も箱も設定も 全部 消えている事を数える。 */
   const bad = [];
@@ -1688,9 +1795,11 @@ T('★★画面に「気づき」が1文字も無い（2026-08-15 に丸ごと�
     if (t.indexOf('気づき') >= 0) bad.push(p.file);
   }
   ok(bad.length === 0, '★「気づき」が出ている画面: ' + [...new Set(bad)].join(', '));
-  /* ★一覧の列が1つ減っている★（氏名＋7列＝8列。前は「気づき」を入れて9列だった） */
-  const idx = results.filter((x) => x.file === 'index.html')[0];
-  const cols = idx.page.w.document.querySelectorAll('#people-summary thead th').length;
+  /* ★一覧の列が1つ減っている★（氏名＋7列＝8列。前は「気づき」を入れて9列だった）
+     ★2026-09-02 直した★＝みんなで使い回す画面は ★今日の月★を開くので、
+     9月になった日に データ0件＝表が描かれず ★列0個★で赤になった。
+     ★この検査だけの画面★を 種の月(8月)に合わせて開く（共有の画面は動かさない）。 */
+  const cols = idxCols;
   ok(cols === 8, '★一覧の列が ' + cols + '個（8個のはず＝気づきを外した後）★');
   console.log('     実測: ' + opened_pages.length + '枚を見て「気づき」0件／一覧の列 ' + cols + '個');
 });
