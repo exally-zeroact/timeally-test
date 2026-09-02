@@ -29,6 +29,9 @@ for (const f of files) {
 /* 門番と印も同じ列に並べる（走らせない見張りは無いのと同じ） */
 for (const cmd of [['scripts/sql-guard.mjs', '--self-test'], ['scripts/sql-guard.mjs', 'supabase/schema.sql'],
   ['scripts/stamp-build.mjs', '--check'],
+  /* ★ブラウザの探し方は 1か所★（2026-09-02）＝わざと 見つからない状態を作って 出方を数える。
+     ★ブラウザは要らない（作り物で測る）★ので 手元でもCIでも 毎回 走る。 */
+  ['scripts/_browser.mjs', '--self-test'],
   /* ★紙は「実際にPDFにして枚数を数える」まで完成にしない★（高さの計算で「収まった」と言わない）
      ※CI(ubuntu)には並べていない … ★刷るブラウザが要る★ため。★手元では毎回 走る★。 */
   ['scripts/print-check.mjs'],

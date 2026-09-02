@@ -13,6 +13,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { needBrowser } from './_browser.mjs';
 import vm from 'node:vm';
 import zlib from 'node:zlib';
 import { execFileSync } from 'node:child_process';
@@ -25,17 +26,6 @@ const require_ = createRequire(path.join(ROOT, 'package.json'));
 const { createFake } = require_(path.join(ROOT, 'tests/fake-supa.js'));
 
 /** ★紙を刷れるブラウザを探す★（無ければ ★止まる★。SKIPを緑と呼ばない） */
-function findChrome() {
-  const c = [
-    path.join(process.env['ProgramFiles'] || '', 'Google/Chrome/Application/chrome.exe'),
-    path.join(process.env['ProgramFiles(x86)'] || '', 'Google/Chrome/Application/chrome.exe'),
-    path.join(process.env['LOCALAPPDATA'] || '', 'Google/Chrome/Application/chrome.exe'),
-    path.join(process.env['ProgramFiles(x86)'] || '', 'Microsoft/Edge/Application/msedge.exe'),
-    path.join(process.env['ProgramFiles'] || '', 'Microsoft/Edge/Application/msedge.exe'),
-  ];
-  for (const p of c) if (p && fs.existsSync(p)) return p;
-  throw new Error('紙を刷れるブラウザが見つかりません（Chrome / Edge）');
-}
 
 /** 直前に動かした画面（中の値を見るために持っておく） */
 let lastWin = null;
@@ -245,7 +235,9 @@ function pageCount(buf) {
   return m ? m.length : 0;
 }
 
-const chrome = findChrome();
+/* ★ブラウザの探し方は 1か所★（2026-09-02 指示役の裁定B）＝scripts/_browser.mjs
+   ＝前は この4本に 同じ物を 4回 書いていて ★Windows の道しか 無かった★（ubuntu では 載らない）。 */
+const chrome = needBrowser('紙をPDFにして測る');
 const keep = process.argv.includes('--keep');
 const outDir = path.join(os.tmpdir(), 'timeally-print');
 fs.mkdirSync(outDir, { recursive: true });

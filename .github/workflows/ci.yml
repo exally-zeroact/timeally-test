@@ -151,6 +151,20 @@ jobs:
       - name: ★実UI (5画面のボタンを1つ残らず押す＋数える→紙→CSV→Excel を実際に通す)
         run: node tests/ui-sweep.mjs
 
+      # ── ブラウザの探し方（2026-09-02 指示役の裁定B・条件④） ────────
+      #   ★探し方は 1か所★（scripts/_browser.mjs）＝前は 4本に 同じ物を 4回 書いていた。
+      #   ここでは ★わざと 見つからない状態を 作って 出方（未測定0／必ず測る場所は赤1）を 数える★。
+      #   ★ブラウザは 要りません（作り物で 測るだけ）★
+      - name: ★ブラウザの探し方 (Windowsのみ/Linuxのみ/どちらも無し の3通り＋出し方2通り)
+        run: node scripts/_browser.mjs --self-test
+
+      # ── 死にコード（2026-09-02 指示役の裁定A） ─────────────────────
+      #   ★scripts/ の見張り5本のうち ブラウザが要らないのは これ1本だけ★（手元の実測 2秒）。
+      #   残り4本（screen-check／print-check／align-check／proto-daily）は
+      #   ★ブラウザの探し先が Windows だけ★なので、探し方を1か所に直すまで 載せない（＝赤のまま）。
+      - name: ★死にコードの棚卸し (誰からも呼ばれない関数・CSS・id を赤にする)
+        run: node scripts/dead-check.mjs
+
       # ── 並べ忘れの見張り（★最後★） ───────────────────────────────
       - name: ★CIに並んでいない検査が無いか (足したのに走っていない物を赤にする)
         run: node tests/ci-coverage.test.mjs

@@ -16,6 +16,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { needBrowser } from './_browser.mjs';
 import vm from 'node:vm';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -39,17 +40,9 @@ const WANT = {
   有給: 'right', 欠勤: 'right', 備考: 'left',
 };
 
-function findChrome() {
-  const c = [
-    path.join(process.env['ProgramFiles'] || '', 'Google/Chrome/Application/chrome.exe'),
-    path.join(process.env['ProgramFiles(x86)'] || '', 'Google/Chrome/Application/chrome.exe'),
-    path.join(process.env['LOCALAPPDATA'] || '', 'Google/Chrome/Application/chrome.exe'),
-    path.join(process.env['ProgramFiles(x86)'] || '', 'Microsoft/Edge/Application/msedge.exe'),
-  ];
-  for (const p of c) if (p && fs.existsSync(p)) return p;
-  throw new Error('紙を刷れるブラウザが見つかりません');
-}
-const chrome = findChrome();
+/* ★ブラウザの探し方は 1か所★（2026-09-02 指示役の裁定B）＝scripts/_browser.mjs
+   ＝前は この4本に 同じ物を 4回 書いていて ★Windows の道しか 無かった★（ubuntu では 載らない）。 */
+const chrome = needBrowser('紙の揃えを測る');
 const outDir = path.join(os.tmpdir(), 'timeally-align');
 fs.mkdirSync(outDir, { recursive: true });
 
