@@ -9,7 +9,8 @@
   "scripts": {
     "test": "node tests/run.js",
     "db:apply": "node scripts/apply-schema.mjs",
-    "check:deployed": "node scripts/check-deployed.mjs"
+    "check:deployed": "node scripts/check-deployed.mjs",
+    "clock:travel": "node scripts/clock-travel.mjs"
   },
   "devDependencies": {
     "jsdom": "^24.1.0"

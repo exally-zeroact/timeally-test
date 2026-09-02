@@ -28,6 +28,12 @@ import { JSDOM, VirtualConsole } from 'jsdom';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require_ = createRequire(path.join(ROOT, 'package.json'));
 const { createFake } = require_(path.join(ROOT, 'tests/fake-supa.js'));
+/* ★狙いの期間は 本物の関数から作る★（画面と同じ物＝手で書かない） */
+const TcCalc = require_(path.join(ROOT, 'lib/tc-calc.js'));
+const headOf = (seed) => {
+  const per = TcCalc.period(seed.ym, seed.closeDay || 31);
+  return per.from.slice(5).replace('-', '/');            // 例 '07/21'
+};
 const CSS = path.join(ROOT, 'css/timeally.css').replace(/\\/g, '/');
 
 function findChrome() {
@@ -43,6 +49,32 @@ function findChrome() {
 const chrome = findChrome();
 const outDir = path.join(os.tmpdir(), 'timeally-screen');
 fs.mkdirSync(outDir, { recursive: true });
+
+/* ★★「たまに赤」は まず記録係★★（2026-09-02／決まりは 2026-08-29）
+   ＝★同じ物が 赤→緑 で揺れました★（② 会社の設定で 枠から答えが返らなかった）。
+     ★赤の中身は 次の回で上書きされます★。⇒★推理を語る前に 中身を残して 何回に1回かを数える★。
+   ・残す物 … 赤の時に ★Chrome が返した物 まるごと★（時刻つきの別名＝上書きしない）
+   ・数える物 … ★走った回数★と ★赤の回数★（`*.log` は git に入りません）
+   ★止め方は変えていません＝赤は そのまま止まります（握りつぶさない）★ */
+const KIROKU = path.join(ROOT, 'screen-check-aka.log');
+const RUN_ID = new Date().toISOString().replace(/[:.]/g, '-');
+const kazoeru = () => {
+  try {
+    const t = fs.readFileSync(KIROKU, 'utf8').split('\n');
+    return { run: t.filter((l) => l.indexOf('\t走った\t') > 0).length,
+      aka: t.filter((l) => l.indexOf('\t★赤★\t') > 0).length };
+  } catch { return { run: 0, aka: 0 }; }
+};
+fs.appendFileSync(KIROKU, new Date().toISOString() + '\t走った\t' + RUN_ID + '\n', 'utf8');
+const nokosu = (name, width, riyuu, out) => {
+  const f = path.join(outDir, 'aka-' + RUN_ID + '-' + name + '-' + width + '.dump.html');
+  try { fs.writeFileSync(f, out === undefined || out === null ? '(出力なし)' : String(out), 'latin1'); }
+  catch { /* 控えが残せなくても 数えは残す */ }
+  fs.appendFileSync(KIROKU, [new Date().toISOString(), '★赤★', RUN_ID, name, String(width), riyuu,
+    '長さ=' + (out ? String(out).length : 0), '控え=' + f].join('\t') + '\n', 'utf8');
+  console.log('  ★赤の中身を残しました★ ' + f);
+  console.log('  ★数え★ ' + KIROKU);
+};
 
 /** アプリを本当に動かして、★描き終わった画面★を返す
  *  after(w) … 描き終わってから押す物（タブを開く など）。押した後の姿を測る。 */
@@ -103,12 +135,24 @@ function measure(name, html, width, fnBody) {
   /* ★--hide-scrollbars を必ず付ける★
      ＝パソコンの Chrome は 縦の滑り棒に 15px 取る。付けないと
      ★390を頼んで 375を測る★（本物のスマホの棒は 幅0。実際に踏んだ）。 */
-  const out = execFileSync(chrome, ['--headless', '--disable-gpu', '--hide-scrollbars',
-    '--window-size=1200,1000',
-    '--virtual-time-budget=4000', '--dump-dom', 'file:///' + host.replace(/\\/g, '/')],
-  { encoding: 'latin1', maxBuffer: 40 * 1024 * 1024, timeout: 60000 });
+  let out;
+  try {
+    out = execFileSync(chrome, ['--headless', '--disable-gpu', '--hide-scrollbars',
+      '--window-size=1200,1000',
+      '--virtual-time-budget=4000', '--dump-dom', 'file:///' + host.replace(/\\/g, '/')],
+    { encoding: 'latin1', maxBuffer: 40 * 1024 * 1024, timeout: 60000 });
+  } catch (e) {
+    /* ★ブラウザが返らなかった（時間切れ・落ちた）時も 中身を残して そのまま投げる★ */
+    nokosu(name, width, 'ブラウザが返りません: ' + String(e && e.message), (e && (e.stdout || e.stderr)) || '');
+    throw e;
+  }
   const m = /<title>([^<]*)<\/title>/.exec(out);
-  if (!m || !m[1]) throw new Error(name + ' … 枠の中から答えが返りません（測れていません）');
+  if (!m || !m[1]) {
+    /* ★2026-09-02 に実際に出た赤＝同じ物が 次の回は緑だった（揺れ）★
+       ⇒★推理を語る前に 中身を残す★（次の回で上書きされる前に）。★止め方は変えない★ */
+    nokosu(name, width, m ? 'titleが空＝枠の中から答えが返っていない' : 'titleタグが無い', out);
+    throw new Error(name + ' … 枠の中から答えが返りません（測れていません）');
+  }
   const j = JSON.parse(Buffer.from(m[1], 'latin1').toString('utf8').replace(/&quot;/g, '"').replace(/&amp;/g, '&'));
   if (j.error) throw new Error(name + ' を測れません: ' + j.error);
   /* ★測った幅が 頼んだ幅と違ったら 止める★（違う物を測って緑と言わない） */
@@ -131,7 +175,12 @@ const VISIBLE = `
 let ng = 0;
 const say = (ok, line) => { if (!ok) ng++; console.log('  ' + (ok ? '✓' : '✗') + ' ' + line); };
 
-console.log('\n★画面を 本物のブラウザで測ります★（描き終わった物だけ・ソースは読みません）\n');
+console.log('\n★画面を 本物のブラウザで測ります★（描き終わった物だけ・ソースは読みません）');
+{
+  /* ★緑だけ見ない＝これまで 何回に1回 赤くなったかを 毎回 出す★ */
+  const k = kazoeru();
+  console.log('（これまで … 走った ' + k.run + '回／★赤★ ' + k.aka + '回）\n');
+}
 
 /* ── ② 会社の「丸め方」 ─────────────────────────────────────── */
 console.log('② 会社の設定（丸め方）');
@@ -328,8 +377,13 @@ const openDay = (i) => (w) => {
  *  月を戻すたびに ★倉庫から読み直して 描き直す★ので、待たずに押すと
  *  ★押した後に 描き直されて 中身が消える★（実際に3回 赤が出た）。
  *  ⇒ ★狙いの期間が画面に出るまで見張ってから押す★（時間で当てない）。 */
+/* ★戻る回数を直に書かない★（2026-09-02 時計を10/1へ進めて見つけた）
+   ＝前は「6か月 戻る」と書いていたので、★今日が変わると 別の月を測っていた★
+     （10/1 に走らせたら 2月ではなく4月を開いて 4件 赤）。
+   ⇒★狙いの期間の字（want）が出るまで 押す★。回数は結果であって 指示ではない。 */
 const backMonths = (n, want, i) => (w) => {
-  for (let k = 0; k < n; k++) w.document.getElementById('b-prev').click();
+  const per = () => ((w.document.getElementById('period') || {}).textContent || '');
+  for (let k = 0; k < 60 && per().indexOf(want) < 0; k++) w.document.getElementById('b-prev').click();
   let tries = 0;
   const tick = () => {
     const d = w.document;
@@ -344,16 +398,38 @@ const backMonths = (n, want, i) => (w) => {
   };
   tick();
 };
+/* ★狙いの月まで動かしてから 開く★（2026-09-02）
+   ＝前は ★今日の月を そのまま開いていた★ケースが在り（openDay だけ）、
+     ★8月の種を入れて 9月を測っていたのに 緑★だった。
+   ★狙いは 期間の「頭」で言う★＝「02/28」のような 終わりの字で探すと
+   ★次の期間の頭にも当たる★（実際 2月のつもりで 3月を開いていた）。 */
 const CASES = [
-  ['末日締め・31日の月', { days: 31, ym: '2026-08', closeDay: 31, mix: true }, openDay(2), 0, true],
-  ['締め日20（7/21〜8/20）', { days: 31, ym: '2026-08', closeDay: 20, mix: true }, openDay(2), 2, true],
-  ['2月・締め日30（末日に寄る）', { days: 28, ym: '2026-02', closeDay: 30, mix: true }, backMonths(6, '02/28', 2), 2, true],
-  ['法定休日を決めていない会社', { days: 31, ym: '2026-08', closeDay: 31 }, openDay(2), 0, false],
+  ['末日締め・31日の月', { days: 31, ym: '2026-08', closeDay: 31, mix: true }, 0, true],
+  ['締め日20（7/21〜8/20）', { days: 31, ym: '2026-08', closeDay: 20, mix: true }, 2, true],
+  ['2月・締め日30（末日に寄る）', { days: 28, ym: '2026-02', closeDay: 30, mix: true }, 2, true],
+  ['法定休日を決めていない会社', { days: 31, ym: '2026-08', closeDay: 31 }, 0, false],
 ];
 let caseNo = 0;
-for (const [name, seed, after, wantMonth, wantHoliday] of CASES) {
+for (const [name, seed, wantMonth, wantHoliday] of CASES) {
+  const after = backMonths(0, headOf(seed), 2);
   caseNo++;
   const html = await render('shukei.html', seed, after);
+  {
+    /* ★★開いた後に「今 どこを見ているか」を 画面から読み返して 突き合わせる★★
+       （2026-09-02 ダイコメの形／私は「10月に走らせたら 4月を開いていたのに緑」を出した）
+       ★押す条件を直すだけでは足りない★＝★押し終わった後に 画面の期間を読んで 比べる★。
+       ★狙いの期間は 本物の period() から作る★（手で書くと また別の物を測る）。 */
+    const per = (/<div[^>]*id="period"[^>]*>([\s\S]*?)<\/div>/.exec(html) || ['', ''])[1]
+      .replace(/<[^>]*>/g, '').trim();
+    const want = headOf(seed);
+    say(per.indexOf(want) >= 0,
+      name + ' … ★画面の期間が 狙いと同じ★（狙い ' + want + ' はじまり／画面「' + per + '」）');
+  }
+
+  /* ★★開いた後に「今 どこを見ているか」を 画面から読み返して 突き合わせる★★
+     （2026-09-02 ダイコメの形／私は「10月に走らせたら 2月ではなく4月を開いていたのに緑」を出した）
+     ★押す条件を直すだけでは足りない★＝押し終わった後に ★画面の期間★を読んで 比べる。
+     ★これが在れば 何回押そうが 間違った月なら 赤★になる。 */
   for (const wpx of [375, 390, 412]) {
     const r = measure('cal' + caseNo, html, wpx, CAL_PROBE);
     if (wpx === 390) {

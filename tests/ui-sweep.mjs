@@ -104,9 +104,33 @@ async function goYm(p, want) {
     b.click();
     await wait();
   }
+  /* ★★押した後に 読み返して 突き合わせる★★（2026-09-02 ダイコメの形）
+     ＝★押す条件を直すだけでは足りない★。着けなかった時に 黙って進むと
+       ★別の月を測ったまま 緑★になる（私は「10月に走らせたら 4月を開いていたのに緑」を出した）。
+     ★着けなかったら その場で止める★＝次の検査に 嘘の前提を渡さない。 */
+  if (now() !== want) {
+    throw new Error('★狙いの月に着けていません★（狙い ' + want + '／画面 ' + (now() || '空') + '）');
+  }
   return now();
 }
 
+
+/** ★画面の中の「今」を差し替える★（2026-09-02 経営者③・ダイコメの形をJSで）
+ *  ＝★打刻は「日付が変わる瞬間」が そのまま 仕様の境目★（締めがまたぐ／60秒の取り消しが
+ *    日をまたぐ／集計の月が変わる）。★その瞬間で 実際に押す★ために要る。
+ *  ★画面が動き出す前に入れる★（後から替えても もう読み終わっている）。
+ *  ★進める道も付ける★（w.__advance(ms)）＝23:59:30 に押して 00:00:30 で見る、が出来る。 */
+function fakeClock(w, iso) {
+  let at = new Date(iso).getTime();
+  const Real = w.Date;
+  class Fake extends Real {
+    constructor(...a) { if (a.length === 0) { super(at); } else { super(...a); } }
+    static now() { return at; }
+  }
+  w.Date = Fake;
+  w.__advance = (ms) => { at += ms; return new Fake().toISOString(); };
+  w.__clockNow = () => new Fake().toISOString();
+}
 
 function openPage(file, search, seed) {
   const html = fs.readFileSync(path.join(ROOT, file), 'utf8');
@@ -149,6 +173,9 @@ function openPage(file, search, seed) {
     if (this.tagName === 'A' && this.download) { delivered.push(this.download); return; }
     return origClick.apply(this, arguments);
   };
+
+  /* ★scripts を動かす前に 時計を差し替える★（seed.now を渡した時だけ） */
+  if (seed && seed.now) fakeClock(w, seed.now);
 
   const ctx = vm.createContext(w);
   for (const rel of locals) {
@@ -631,6 +658,44 @@ T('★★日を押すと その日の結論が1行 出る（08:00〜17:03（実�
     ok(!/[0-9]{4}-[0-9]{2}-[0-9]{2}/.test(t), '★年月日の形で出ている★: ' + t);
     ok(/2026年5月1日/.test(t), '★年つきで出ていない★: ' + t);
     console.log('     実測: 見せる字「' + t + '」');
+  });
+}
+
+/* ★★日付が変わる瞬間に 実際に押す★★（2026-09-02 経営者③）
+   ＝打刻は ★日付の変わり目が そのまま 仕様の境目★。
+     ・月末23:59 に打って ★月初00:00 に取り消す★（60秒の取り消しが 日をまたぐ）
+     ・その時 ★同じ日の打刻として扱われるか★（打った時刻は 9/30 のまま動かない）
+   ★画面の中の時計を 動き出す前に 差し替えて、押してから 進める★（seed.now ＋ w.__advance）。 */
+{
+  const T_URL2 = '?t=11111111-1111-1111-1111-111111111111';
+  const p = openPage('punch.html', T_URL2, { punches: [], now: '2026-09-30T23:59:30+09:00' });
+  await wait(); await wait(); await wait();
+  const d2 = p.w.document;
+  const before = p.w.__clockNow();
+  d2.getElementById('b-in').click();          /* ★9/30 の 23:59:30 に 出勤★ */
+  await wait(); await wait();
+  const undoBox = d2.getElementById('undo');
+  const 打った時刻 = (p.fake._store.punchAdd[0] || {}).p_at || '';
+  p.w.__advance(60 * 1000);                   /* ★日付をまたぐ（10/1 の 00:00:30）★ */
+  const after = p.w.__clockNow();
+
+  T('★★月末23:59に打って 月初00:00で取り消せる（60秒が日をまたぐ）★★', () => {
+    /* ★またいだかは JST（壁時計）で見る★＝UTCの字で見ると
+       9/30 23:59 も 10/1 00:00 も「09-30」で ★またいでいない★に見える（1回 踏んだ） */
+    const jst = (iso) => new Date(new Date(iso).getTime() + 9 * 3600000).toISOString().slice(0, 10);
+    ok(jst(before) !== jst(after),
+      '★日をまたいでいない（この試験が空振り）★: ' + jst(before) + ' → ' + jst(after));
+    ok(!undoBox.hidden, '★取り消す箱が出ていない★');
+    d2.getElementById('b-undo').click();
+    ok(p.fake._store.undo.length === 1,
+      '★日をまたいだら 取り消せなくなっている★（' + p.fake._store.undo.length + '件）');
+    ok(p.fake._store.fixReq.length === 0, '★取り消しなのに お願いを出している★');
+    console.log('     実測: JST ' + jst(before) + ' 23:59 に打って ' + jst(after) + ' 00:00 で取り消し＝1件');
+  });
+
+  T('★★打った時刻は 日をまたいでも 動かない（9/30のまま）★★', () => {
+    ok(/2026-09-30/.test(打った時刻), '★打った時刻が ずれている★: ' + 打った時刻);
+    console.log('     実測: 倉庫へ渡した時刻 ' + 打った時刻);
   });
 }
 
