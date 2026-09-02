@@ -68,7 +68,12 @@ const kazoeru = () => {
 fs.appendFileSync(KIROKU, new Date().toISOString() + '\t走った\t' + RUN_ID + '\n', 'utf8');
 const nokosu = (name, width, riyuu, out) => {
   const f = path.join(outDir, 'aka-' + RUN_ID + '-' + name + '-' + width + '.dump.html');
-  try { fs.writeFileSync(f, out === undefined || out === null ? '(出力なし)' : String(out), 'latin1'); }
+  /* ★空の控えを作らない★＝ブラウザが1文字も返さない赤（時間切れ）では
+     ★空のファイルだけ残って 理由が読めない★。中身が無い時は 理由を書いておく。 */
+  const kara = out === undefined || out === null || String(out) === '';
+  /* ★字の並べ方を混ぜない★＝ブラウザが返した物は latin1（バイトのまま）／
+     私が書く日本語は utf8。混ぜると ★控えを開いた時に 理由が化けて読めません★（実際に化けた）。 */
+  try { fs.writeFileSync(f, kara ? '(出力なし) ' + riyuu : String(out), kara ? 'utf8' : 'latin1'); }
   catch { /* 控えが残せなくても 数えは残す */ }
   fs.appendFileSync(KIROKU, [new Date().toISOString(), '★赤★', RUN_ID, name, String(width), riyuu,
     '長さ=' + (out ? String(out).length : 0), '控え=' + f].join('\t') + '\n', 'utf8');
