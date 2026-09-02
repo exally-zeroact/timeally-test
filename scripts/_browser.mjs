@@ -12,7 +12,7 @@
  * ★見つからない時の出し方（条件③）★
  *   ・★生の例外で落とさない★＝人の言葉で「★未測定★ … ブラウザが 見つかりません」と言ってから 終わる
  *   ・★終わり値は 場所で 分ける★
- *       BROWSER_REQUIRED=1（★週1の専用の回★）… ★赤（1）★＝そこは 必ず 測る場所
+ *       MEASURE_REQUIRED=1（★週1の専用の回★）… ★赤（1）★＝そこは 必ず 測る場所
  *       それ以外（手元・毎回のCI）        … ★未測定（0）★＝ただし ★声は 必ず 出す★
  *     ※★「緑」ではなく「未測定」と 言う★。数える人が 緑と 読み違えない為。
  *
@@ -55,12 +55,12 @@ export function findBrowser({ env = process.env, exists = fs.existsSync } = {}) 
 export function needBrowser(nanno, { env = process.env, exists = fs.existsSync, quit = process.exit } = {}) {
   const found = findBrowser({ env, exists });
   if (found) return found;
-  const kanarazu = env.BROWSER_REQUIRED === '1';
+  const kanarazu = env.MEASURE_REQUIRED === '1';
   console.log('\n★未測定★ … ' + nanno + ' には ブラウザが 要りますが 見つかりません');
   console.log('  探した先 … ' + candidates(env).length + 'か所（Windows の chrome/edge ＋ Linux の chrome/chromium）');
   console.log('  入れるか、道を教えてください … ★CHROME_PATH=/…/chrome★');
   if (kanarazu) {
-    console.log('  ★ここは 必ず 測る場所です（BROWSER_REQUIRED=1）＝★赤★にします');
+    console.log('  ★ここは 必ず 測る場所です（MEASURE_REQUIRED=1）＝★赤★にします');
     return quit(1);
   }
   console.log('  ★ここは 未測定のまま 進みます（赤にはしません）★＝★緑ではなく「未測定」です★');
@@ -89,9 +89,9 @@ if (process.argv[1] && process.argv[1].replace(/\\/g, '/').endsWith('scripts/_br
   T('③ どちらも 無い … null（★投げない★）', () => {
     ok(findBrowser({ env: {}, exists: () => false }) === null, 'null ではない');
   });
-  T('④ どちらも無い＋★必ず測る場所★（BROWSER_REQUIRED=1）… ★赤(1)★', () => {
+  T('④ どちらも無い＋★必ず測る場所★（MEASURE_REQUIRED=1）… ★赤(1)★', () => {
     let code = null;
-    needBrowser('試し', { env: { BROWSER_REQUIRED: '1' }, exists: () => false, quit: (c) => { code = c; } });
+    needBrowser('試し', { env: { MEASURE_REQUIRED: '1' }, exists: () => false, quit: (c) => { code = c; } });
     ok(code === 1, '終わり値が 1 ではない: ' + code);
   });
   T('⑤ どちらも無い＋それ以外の場所 … ★未測定(0)・ただし 声は 出す★', () => {
@@ -102,6 +102,14 @@ if (process.argv[1] && process.argv[1].replace(/\\/g, '/').endsWith('scripts/_br
     ok(code === 0, '終わり値が 0 ではない: ' + code);
     ok(koe.some((l) => l.indexOf('未測定') >= 0), '「未測定」と 言っていない');
     ok(!koe.some((l) => /★緑★/.test(l)), '緑と 言ってしまっている');
+  });
+  /* ★名前は 1つだけ（2026-09-02 指示役の裁定）★
+     ＝Rakunally が `MEASURE_REQUIRED` を使っており、★同じ考えに 名前が2つ 残ると
+       片方だけ 直して 気づかない事故になる★。★古い名前は わざと 効かないままにする★。 */
+  T('⑦ ★古い名前（BROWSER_REQUIRED）は 効かない★＝名前は MEASURE_REQUIRED の1つだけ', () => {
+    let code = null;
+    needBrowser('試し', { env: { BROWSER_REQUIRED: '1' }, exists: () => false, quit: (c) => { code = c; } });
+    ok(code === 0, '古い名前が まだ 効いている（2つの名前が 残っている）: ' + code);
   });
   T('⑥ 探し先に Windows と Linux が 両方 在る（★片方を 消していない★）', () => {
     const c = candidates({ ProgramFiles: 'C:/Program Files' });
