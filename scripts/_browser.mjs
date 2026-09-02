@@ -67,6 +67,18 @@ export function needBrowser(nanno, { env = process.env, exists = fs.existsSync, 
   return quit(0);
 }
 
+/* ───────── ★どの道を 選んだかを 1行で 言う★（2026-09-02 指示役の求め） ─────────
+   ＝★Linux の道を 足した所が CI（ubuntu）で 本当に 効いたか★は、
+     ★作り物の自己確認では 分かりません★（そこは わざと 作った状態を 測っています）。
+   ⇒★本物の機械の上で「今 何を 選んだか」を 見る★。★数えず・止めず・1行 言うだけ★（終わり値は 0）。 */
+if (process.argv[1] && process.argv[1].replace(/\\/g, '/').endsWith('scripts/_browser.mjs')
+  && process.argv.includes('--where')) {
+  const got = findBrowser();
+  console.log('この機械が 選んだ道 … ' + (got || '★未測定（見つかりません）★')
+    + '（' + process.platform + '／探した先 ' + candidates().length + 'か所）');
+  process.exit(0);
+}
+
 /* ───────── わざと 見つからない状態を 作って 出方を数える（条件④） ───────── */
 if (process.argv[1] && process.argv[1].replace(/\\/g, '/').endsWith('scripts/_browser.mjs')
   && process.argv.includes('--self-test')) {
