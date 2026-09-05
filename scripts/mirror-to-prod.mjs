@@ -8,10 +8,20 @@
  * ★写さない物★
  *   js/supa-config.js … ★環境の分かれ目そのもの★。ここだけは本番repo側の物を残す
  *   .git / node_modules … repoの中身ではない
+ *   ★*.log … 手元の記録（見張りが走った記録・赤の控え）＝repoの中身ではない★
+ *
+ * ★★この門が 守る物・守らない物（2026-09-06 指示役）★★
+ *   ★この門は「★見た★」を 強制しません★。
+ *   ★`--check` を 走らせただけで、中身を 1行も 読まなくても 通ります★。
+ *   ★この門が 作るのは 2つだけ★
+ *     ① ★見る 機会★（差分と 余り物が 目の前に 出る）
+ *     ② ★見た後で 変わっていない事★（指紋が 合う／30分 以内）
+ *   ⇒★「門が 在るから 大丈夫」では ありません★。★読むのは 人の 仕事★です。
+ *   （★守る範囲を 書かない機械は、置いた人も 読む人も「全部 守られた」と 思います★）
  *
  * 使い方:
- *   node scripts/mirror-to-prod.mjs --to ../timeally            … 写す
- *   node scripts/mirror-to-prod.mjs --to ../timeally --check    … ★差分を数えるだけ★
+ *   node scripts/mirror-to-prod.mjs --to ../timeally --check    … ★差分を数えるだけ（先にこれ）★
+ *   node scripts/mirror-to-prod.mjs --to ../timeally            … 写す（★--check を通らないと 写しません★）
  *
  * ★写した後は 本番repo側で node tests/run.js を必ず1回走らせる★
  *   （env が prod になるので、帯の検査は「出ない」側を見る作りにしてある）
