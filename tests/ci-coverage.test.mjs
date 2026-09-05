@@ -55,14 +55,30 @@ export const EXCLUDED = {
    ★どちらも ubuntu に ブラウザが 在るかを 先に 測る★（ci.yml の `_browser.mjs --where` の1行） */
 export const HORYU = {
   /* ★proto-daily と align-check は 2026-09-06 に 毎回のCIへ 載せました（保留から 外れた）★
-     ＝載せてよいと 分かったのは ★CIの上で --where が /usr/bin/google-chrome と答えた★から。 */
-  'scripts/print-check.mjs':
-    'ブラウザが要る重い見張り（32秒）。戻す条件＝紙や画面を触ったPRで走る形（paths）を作った時に そこへ載せる（MEASURE_REQUIRED=1）。',
-  'scripts/screen-check.mjs':
-    'ブラウザが要る重い見張り（63秒）。戻す条件＝紙や画面を触ったPRで走る形（paths）を作った時に そこへ載せる（MEASURE_REQUIRED=1）。',
+     ★print-check と screen-check は 下の「別の段の中で走る」へ 移しました（★保留 0本が 正しい姿★）★ */
 };
-/* 数える時は 2つを 合わせて見る（★理由と戻す条件の 見張りも 両方に 効かせる★） */
-export const HAZUSHITA = { ...EXCLUDED, ...HORYU };
+
+/* ★★3つ目の状態＝「★別の段の 中で 毎回 走っている★」★★（2026-09-06 指示役の裁定）
+   ＝直に 並んではいないが、`clock-travel --next-month` が ★通し53本を 丸ごと★ 走らせるので
+     ★毎回 走っています★。⇒★「保留（まだ走っていない）」は もう 嘘★。
+   ★危ない所★ … ★覆いが「別の段の おまけ」で 出来ている★
+     ⇒ 誰かが `--next-month` を CI から外したら ★print/screen が 黙って 走らなくなる★のに
+       ★保留だから 無くて当然★と この見張りが ★緑を出す★（＝「いつも緑」の 新しい顔）
+   ⇒★頼っている段の名前を 書く★＋★その段が CIに在るかを 機械が見る（下の検査）★ */
+export const NAKA_DE = {
+  'scripts/print-check.mjs':
+    'clock-travel(--next-month) の中で 通し53本として 毎回 走る。戻す条件＝--next-month を CIから外す時は 直に 並べる。',
+  'scripts/screen-check.mjs':
+    'clock-travel(--next-month) の中で 通し53本として 毎回 走る。戻す条件＝--next-month を CIから外す時は 直に 並べる。',
+};
+/* ★頼っている段は 名前で1か所に持つ★（理由の文を 読み解かない＝文を直すと 黙る形にしない） */
+export const TAYORU = {
+  'scripts/print-check.mjs': 'scripts/clock-travel.mjs',
+  'scripts/screen-check.mjs': 'scripts/clock-travel.mjs',
+};
+
+/* 数える時は 合わせて見る（★理由と戻す条件の 見張りも 全部に 効かせる★） */
+export const HAZUSHITA = { ...EXCLUDED, ...HORYU, ...NAKA_DE };
 
 export function testFiles() {
   return fs.readdirSync(path.join(ROOT, 'tests'))
@@ -121,6 +137,17 @@ if (process.argv.includes('--self-test')) {
     };
     ok(kazu(kizu) === kazu(honmono) + 1, '抜いても 本数が増えない＝この見張りは 空振り');
   });
+  /* ★覆いが 消えた時に 本当に 赤になるか★（2026-09-06・作り物で 確かめる） */
+  S('⑥ 頼っている段を 抜いた作り物は 「別の段の中で走る」を 赤にする', () => {
+    const kizu = fs.readFileSync(CI, 'utf8').replace(/node scripts\/clock-travel\.mjs/g, 'node scripts/nothing.mjs');
+    const r = ranInCi(kizu);
+    const kieta = Object.keys(NAKA_DE).filter((f) => !r.some((x) => x.indexOf('node ' + (TAYORU[f] || '')) === 0));
+    ok(kieta.length === Object.keys(NAKA_DE).length,
+      '段を抜いても 気づかない＝この検査は 空振り: ' + kieta.length);
+    const honmono = ranInCi(fs.readFileSync(CI, 'utf8'));
+    ok(Object.keys(NAKA_DE).every((f) => honmono.some((x) => x.indexOf('node ' + TAYORU[f]) === 0)),
+      '★本物のCIに 頼っている段が 無い★');
+  });
   S('⑤ 理由つきで外した物は 数に入れない（EXCLUDED が効いている）', () => {
     const f = Object.keys(HAZUSHITA).find((k) => k.indexOf('scripts/') === 0);
     ok(f && !scriptFiles().filter((x) => !HAZUSHITA[x]).includes(f), '外した組が効いていない: ' + f);
@@ -156,16 +183,34 @@ T('★scripts/ の見張りも CI に並んでいる（外すなら 理由を書
   const all = scriptFiles();
   const nokoshi = all.filter((f) => !HAZUSHITA[f] && !inCi(f));
   console.log('     実測: scripts/ ' + all.length + '本 … CI在り ' + all.filter(inCi).length
-    + '本／道具として外した ' + all.filter((f) => EXCLUDED[f]).length
+    + '本／★別の段の中で ' + all.filter((f) => NAKA_DE[f]).length
+    + '本★／道具として外した ' + all.filter((f) => EXCLUDED[f]).length
     + '本／★保留（いつか載せる）★ ' + all.filter((f) => HORYU[f]).length
     + '本／★書いていない（赤）★ ' + nokoshi.length + '本');
-  /* ★保留は 黙って消さない★＝毎回 名前と 戻す条件を 出す（数だけだと 忘れられる） */
+  /* ★保留も 別の段の中の物も 黙って消さない★＝毎回 名前と 戻す条件を 出す */
+  for (const f of all.filter((f) => NAKA_DE[f])) console.log('       ★別の段の中★ ' + f + ' … ' + NAKA_DE[f]);
   for (const f of all.filter((f) => HORYU[f])) console.log('       ★保留★ ' + f + ' … ' + HORYU[f]);
   for (const f of nokoshi) console.log('       ★CIで走っていない（書いていない）★ ' + f);
   /* ★黙って外すのは 駄目・赤を住まわせるのも 駄目★（2026-09-06 指示役）
      ★直し方は3つ★ … ①CIに並べる ②道具なら EXCLUDED ③いつか載せる物なら HORYU（戻す条件つき） */
   ok(nokoshi.length === 0,
     '★理由も戻す条件も書いていない★ ' + nokoshi.length + '本: ' + nokoshi.join(', '));
+});
+
+/* ★覆いが「別の段の おまけ」で 出来ている所を 機械で 止める★（2026-09-06）
+   ＝`--next-month` を CI から外したら ★print/screen が 黙って 走らなくなる★。
+     ★理由の文を 読み解かず★、頼っている段の ★名前★（TAYORU）で 見る。
+   ★新しい見張りは 作っていません★＝この検査の中の 1つです。 */
+T('★「別の段の中で走る」物は その段が CI に在る（覆いが消えたら 赤）', () => {
+  const inCi = (f) => ran.some((r) => r.indexOf('node ' + f) === 0);
+  const kieta = Object.keys(NAKA_DE).filter((f) => !inCi(TAYORU[f] || ''));
+  ok(kieta.length === 0, '頼っている段が CI に無い: '
+    + kieta.map((f) => f + ' → ' + (TAYORU[f] || '（どの段か 書いていない）')).join(', '));
+  const kaite = Object.keys(NAKA_DE).filter((f) => !TAYORU[f]);
+  ok(kaite.length === 0, 'どの段に頼っているか 書いていない: ' + kaite.join(', '));
+  if (Object.keys(NAKA_DE).length) {
+    console.log('     実測: 頼っている段 ' + [...new Set(Object.values(TAYORU))].join('／') + ' … CI に在る');
+  }
 });
 
 T('★門番(scripts/)も CI に並んでいる', () => {
