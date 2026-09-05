@@ -43,6 +43,27 @@ export const EXCLUDED = {
     'clock-travel が読み込む部品＝単体では走らない。戻す条件＝単体で走る形にした時。',
 };
 
+/* ★★「まだ 載せていない」見張り＝★保留★（道具とは 別に 数える）★★
+   （2026-09-06 指示役の裁定＝★「正しい赤」でも 赤を 住まわせるな★
+     ＝次に 誰かが 壊しても ★もう赤だから 気づかない★ から）
+   ★道具（上の EXCLUDED）と 混ぜません★＝★いつか 載せる物★なので 別の組にして 毎回 数を出す。
+   ★載せる順番は 決まっています（指示役の裁定C）★
+     毎回のCI … proto-daily(17秒) ＋ align-check(20秒)  ← ★B が CIで 動いた事を 見てから★
+     週1の回  … print-check(32秒) ＋ screen-check(63秒)  ← ★job に MEASURE_REQUIRED=1 を 1回だけ★
+   ★どちらも ubuntu に ブラウザが 在るかを 先に 測る★（ci.yml の `_browser.mjs --where` の1行） */
+export const HORYU = {
+  'scripts/proto-daily.mjs':
+    'ブラウザが要る見張り（17秒）。戻す条件＝--where で ubuntu にブラウザが在ると分かった次の回に 毎回のCIへ載せる。',
+  'scripts/align-check.mjs':
+    'ブラウザが要る見張り（20秒）。戻す条件＝--where で ubuntu にブラウザが在ると分かった次の回に 毎回のCIへ載せる。',
+  'scripts/print-check.mjs':
+    'ブラウザが要る重い見張り（32秒）。戻す条件＝週1の回を作った時に そこへ載せる（MEASURE_REQUIRED=1）。',
+  'scripts/screen-check.mjs':
+    'ブラウザが要る重い見張り（63秒）。戻す条件＝週1の回を作った時に そこへ載せる（MEASURE_REQUIRED=1）。',
+};
+/* 数える時は 2つを 合わせて見る（★理由と戻す条件の 見張りも 両方に 効かせる★） */
+export const HAZUSHITA = { ...EXCLUDED, ...HORYU };
+
 export function testFiles() {
   return fs.readdirSync(path.join(ROOT, 'tests'))
     .filter((f) => /\.test\.mjs$/.test(f) || f === 'ui-sweep.mjs')
@@ -96,13 +117,13 @@ if (process.argv.includes('--self-test')) {
     const kizu = honmono.replace(/node scripts\/sql-guard\.mjs/g, 'node scripts/nothing.mjs');
     const kazu = (yml) => {
       const r = ranInCi(yml);
-      return scriptFiles().filter((f) => !EXCLUDED[f] && !r.some((x) => x.indexOf('node ' + f) === 0)).length;
+      return scriptFiles().filter((f) => !HAZUSHITA[f] && !r.some((x) => x.indexOf('node ' + f) === 0)).length;
     };
     ok(kazu(kizu) === kazu(honmono) + 1, '抜いても 本数が増えない＝この見張りは 空振り');
   });
   S('⑤ 理由つきで外した物は 数に入れない（EXCLUDED が効いている）', () => {
-    const f = Object.keys(EXCLUDED).find((k) => k.indexOf('scripts/') === 0);
-    ok(f && !scriptFiles().filter((x) => !EXCLUDED[x]).includes(f), 'EXCLUDED が効いていない: ' + f);
+    const f = Object.keys(HAZUSHITA).find((k) => k.indexOf('scripts/') === 0);
+    ok(f && !scriptFiles().filter((x) => !HAZUSHITA[x]).includes(f), '外した組が効いていない: ' + f);
   });
   console.log('\n[self-test] ' + sp + ' passed, ' + sf + ' failed');
   if (sf) process.exit(1);
@@ -118,13 +139,13 @@ const yml = fs.readFileSync(CI, 'utf8');
 const ran = ranInCi(yml);
 
 T('★tests/ の検査が すべて CI に並んでいる', () => {
-  const miss = testFiles().filter((f) => !EXCLUDED[f] && !ran.includes('node ' + f));
+  const miss = testFiles().filter((f) => !HAZUSHITA[f] && !ran.includes('node ' + f));
   ok(miss.length === 0, 'CIに並んでいない: ' + miss.join(', '));
   console.log('     実測: 検査 ' + testFiles().length + '本すべてが CI に在る');
 });
 
 T('★--self-test を持つ検査は --self-test も CI に並んでいる（空振りを見張る）', () => {
-  const need = testFiles().filter((f) => !EXCLUDED[f] && hasSelfTest(f));
+  const need = testFiles().filter((f) => !HAZUSHITA[f] && hasSelfTest(f));
   const miss = need.filter((f) => !ran.includes('node ' + f + ' --self-test'));
   ok(miss.length === 0, '自己確認がCIに無い: ' + miss.join(', '));
   console.log('     実測: 自己確認つき ' + need.length + '本すべてが CI に在る');
@@ -133,15 +154,18 @@ T('★--self-test を持つ検査は --self-test も CI に並んでいる（空
 T('★scripts/ の見張りも CI に並んでいる（外すなら 理由を書く）', () => {
   const inCi = (f) => ran.some((r) => r.indexOf('node ' + f) === 0);
   const all = scriptFiles();
-  const nokoshi = all.filter((f) => !EXCLUDED[f] && !inCi(f));
+  const nokoshi = all.filter((f) => !HAZUSHITA[f] && !inCi(f));
   console.log('     実測: scripts/ ' + all.length + '本 … CI在り ' + all.filter(inCi).length
-    + '本／理由つきで外した ' + all.filter((f) => EXCLUDED[f]).length
-    + '本／★まだ直していない（赤で正しい）★ ' + nokoshi.length + '本');
-  for (const f of nokoshi) console.log('       ★CIで走っていない★ ' + f);
-  /* ★線を緩めて緑にしない★＝直すまで 赤のまま（08-28「テスト先行の赤は 正しい赤」と同じ扱い）。
-     ★直し方は2つだけ★ … ①CIに並べる ②CIで走らせてはいけない道具なら EXCLUDED に理由を書く */
+    + '本／道具として外した ' + all.filter((f) => EXCLUDED[f]).length
+    + '本／★保留（いつか載せる）★ ' + all.filter((f) => HORYU[f]).length
+    + '本／★書いていない（赤）★ ' + nokoshi.length + '本');
+  /* ★保留は 黙って消さない★＝毎回 名前と 戻す条件を 出す（数だけだと 忘れられる） */
+  for (const f of all.filter((f) => HORYU[f])) console.log('       ★保留★ ' + f + ' … ' + HORYU[f]);
+  for (const f of nokoshi) console.log('       ★CIで走っていない（書いていない）★ ' + f);
+  /* ★黙って外すのは 駄目・赤を住まわせるのも 駄目★（2026-09-06 指示役）
+     ★直し方は3つ★ … ①CIに並べる ②道具なら EXCLUDED ③いつか載せる物なら HORYU（戻す条件つき） */
   ok(nokoshi.length === 0,
-    '★まだ直していない（赤で正しい）★ ' + nokoshi.length + '本: ' + nokoshi.join(', '));
+    '★理由も戻す条件も書いていない★ ' + nokoshi.length + '本: ' + nokoshi.join(', '));
 });
 
 T('★門番(scripts/)も CI に並んでいる', () => {
@@ -150,7 +174,7 @@ T('★門番(scripts/)も CI に並んでいる', () => {
 });
 
 T('★除外するなら 理由と戻す条件が書いてある（黙って外さない）', () => {
-  for (const [f, why] of Object.entries(EXCLUDED)) {
+  for (const [f, why] of Object.entries(HAZUSHITA)) {
     ok(why && why.length >= 20, f + ': 理由が短すぎる');
     ok(/戻す条件|戻す/.test(why), f + ': 戻す条件が書いていない');
   }
