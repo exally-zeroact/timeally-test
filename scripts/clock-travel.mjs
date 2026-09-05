@@ -12,6 +12,7 @@
  * ★この道具は 読むだけ★（倉庫も配信も触らない）。Date だけを差し替えて 試験を走らせる。
  */
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,13 +23,43 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PRELOAD = path.resolve(ROOT, 'scripts', 'fake-clock.cjs')
   .split(String.fromCharCode(92)).join('/');
 
+/* ★★--next-month ＝「次の月の1日」1つだけ★★（2026-09-06 指示役の裁定・毎回のCIに載せる分）
+   ★守りたい事故は これ1つ★＝★月が替わった瞬間に 一斉に赤★
+     （09-01〜02 ダイコメ／Timeally／Castally ＝★1週間で 3件★）
+   ★日付を 書かない★＝★今日から 数える★（書いたら それ自体が「今日が何月か」を書く事になる）
+   ★確かめた★ … 事故の前の状態（8a87cd0）で 8/31＝緑851本／★9/1＝赤（843本・2/52）★
+                ＝★この1つで 実際に 捕まりました★ */
+function nextMonthFirst() {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 5, 0);
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T00:05:00';
+}
+
 /* ★節目だけ選ぶ★（月替わり・年替わり・うるう年＝落ちるならここ） */
-const DAYS = process.argv[2] ? [process.argv[2]] : [
+const DAYS = process.argv[2] === '--next-month' ? [nextMonthFirst()]
+  : process.argv[2] ? [process.argv[2]] : [
   '2026-10-01T00:05:00',   // 月替わり
   '2026-11-01T00:05:00',   // 月替わり
   '2027-01-01T00:05:00',   // 年替わり
   '2028-02-29T00:05:00',   // ★うるう年の2月29日★
 ];
+
+/* ★最後に 走らせた日を 残す★（2026-09-06 指示役）
+   ＝手で押す分（年またぎ・うるう日の3日付・458秒）は ★飛ばした事に 気づけない★。
+   ★新しい見張りは 作りません★＝★1行 出して 1行 足すだけ★（`*.log` は git に入らない）。 */
+const ATO = path.join(ROOT, 'clock-travel.log');
+function maeni() {
+  try {
+    const t = fs.readFileSync(ATO, 'utf8').trim().split('\n');
+    return t[t.length - 1] || '（記録なし）';
+  } catch { return '（記録なし＝まだ 1回も 走らせていません）'; }
+}
+function nokosu(iso, ok) {
+  try {
+    fs.appendFileSync(ATO, new Date().toISOString() + '\t' + iso + '\t' + (ok ? '緑' : '★赤★') + '\n', 'utf8');
+  } catch { /* 残せなくても 止めない */ }
+}
 
 function run(iso) {
   const r = spawnSync(process.execPath, ['tests/run.js'], {
@@ -95,4 +126,7 @@ if (shrank.length) {
 }
 const ng = rows.filter((r) => !r.ok).length + shrank.length;
 console.log(ng ? `\n★${ng}件 赤★` : '\n★どの日でも 緑・本数も減っていません★');
+/* ★最後に 走らせた日を 残す／前の回を 出す★（手で押す分を 飛ばしたまま 忘れない為） */
+console.log('★前に 走らせたのは★ … ' + maeni());
+rows.forEach((r) => nokosu(r.iso, r.ok));
 process.exit(ng ? 1 : 0);
