@@ -52,14 +52,12 @@ export const EXCLUDED = {
      週1の回  … print-check(32秒) ＋ screen-check(63秒)  ← ★job に MEASURE_REQUIRED=1 を 1回だけ★
    ★どちらも ubuntu に ブラウザが 在るかを 先に 測る★（ci.yml の `_browser.mjs --where` の1行） */
 export const HORYU = {
-  'scripts/proto-daily.mjs':
-    'ブラウザが要る見張り（17秒）。戻す条件＝--where で ubuntu にブラウザが在ると分かった次の回に 毎回のCIへ載せる。',
-  'scripts/align-check.mjs':
-    'ブラウザが要る見張り（20秒）。戻す条件＝--where で ubuntu にブラウザが在ると分かった次の回に 毎回のCIへ載せる。',
+  /* ★proto-daily と align-check は 2026-09-06 に 毎回のCIへ 載せました（保留から 外れた）★
+     ＝載せてよいと 分かったのは ★CIの上で --where が /usr/bin/google-chrome と答えた★から。 */
   'scripts/print-check.mjs':
-    'ブラウザが要る重い見張り（32秒）。戻す条件＝週1の回を作った時に そこへ載せる（MEASURE_REQUIRED=1）。',
+    'ブラウザが要る重い見張り（32秒）。戻す条件＝紙や画面を触ったPRで走る形（paths）を作った時に そこへ載せる（MEASURE_REQUIRED=1）。',
   'scripts/screen-check.mjs':
-    'ブラウザが要る重い見張り（63秒）。戻す条件＝週1の回を作った時に そこへ載せる（MEASURE_REQUIRED=1）。',
+    'ブラウザが要る重い見張り（63秒）。戻す条件＝紙や画面を触ったPRで走る形（paths）を作った時に そこへ載せる（MEASURE_REQUIRED=1）。',
 };
 /* 数える時は 2つを 合わせて見る（★理由と戻す条件の 見張りも 両方に 効かせる★） */
 export const HAZUSHITA = { ...EXCLUDED, ...HORYU };

@@ -18,6 +18,13 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # ★ここは「必ず 測る場所」です（2026-09-06 指示役の裁定）★
+    #   ＝ブラウザが 見つからなかったら ★未測定で 通さず 赤にする★。
+    #   ★理由★ … Chrome が 在るのは ★GitHub の機械の都合★で、向こうの都合で 変わります。
+    #   その時 ★黙って「未測定・緑」になるのが 一番 悪い★（赤なら 1行 足すだけで 直せる）。
+    #   ★job に 1回だけ 立てる★（step ごとに 書かない＝写し忘れを 作らない）
+    env:
+      MEASURE_REQUIRED: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -168,6 +175,16 @@ jobs:
       #   ★ブラウザの探し先が Windows だけ★なので、探し方を1か所に直すまで 載せない（＝赤のまま）。
       - name: ★死にコードの棚卸し (誰からも呼ばれない関数・CSS・id を赤にする)
         run: node scripts/dead-check.mjs
+
+      # ── ブラウザが要る 軽い2本（2026-09-06 指示役の裁定C・①） ──────
+      #   ★載せてよいと 分かったのは 実測してから★
+      #   ＝CI の上で `--where` が `/usr/bin/google-chrome（linux）` と 答えた（作り物では 出ない答え）。
+      #   ★重い2本（print-check 32秒／screen-check 63秒）は ここには 載せない★
+      #   ＝「触った時に 走る」形（paths）で 別に 作る。
+      - name: ★日ごとの見本を 描いて測る (17秒)
+        run: node scripts/proto-daily.mjs
+      - name: ★紙と画面の 揃えを測る (20秒・A4横と 375/390/412)
+        run: node scripts/align-check.mjs
 
       # ── 並べ忘れの見張り（★最後★） ───────────────────────────────
       - name: ★CIに並んでいない検査が無いか (足したのに走っていない物を赤にする)
