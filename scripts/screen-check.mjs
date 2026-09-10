@@ -696,5 +696,34 @@ for (const [name, file, seed, after, search] of [
   }
 }
 
+/* ── ⑩ ★知らせの箱（トースト）を 描いた物で 測る★（2026-09-10 司さん「絶対これがええ」） ──
+   ＝CSSの字を読むだけでは ★本当に 白地で 出ているか★は 分かりません。
+     ★描き終わった物を Chrome に渡して 計算後の色を 数えます★。 */
+console.log('\n⑩ 知らせの箱（描いた物で測る）');
+const TOAST_PROBE = VISIBLE + `
+  var t = document.querySelector(".tc-toast");
+  if(!t) return { w: document.documentElement.clientWidth, nai: true };
+  var cs = getComputedStyle(t), r = t.getBoundingClientRect();
+  var num = function(s){ return (String(s).match(/[\\d.]+/g)||[]).map(Number); };
+  var akaru = function(s){ var p=num(s); return Math.round(0.299*p[0]+0.587*p[1]+0.114*p[2]); };
+  return { w: document.documentElement.clientWidth, mieru: vis(t),
+    ji: akaru(cs.color), ji_a: cs.color,
+    ji_bg: akaru(cs.backgroundColor), bg_a: cs.backgroundColor,
+    obi: parseFloat(cs.borderLeftWidth), obi_iro: akaru(cs.borderLeftColor),
+    yose: cs.textAlign, haba: Math.round(r.width), takasa: Math.round(r.height) };
+`;
+{
+  const html = await render('index.html', {}, (w) => { if (w.TcUi) w.TcUi.toast('保存しました'); });
+  const t = measure('shirase', html, 390, TOAST_PROBE);
+  console.log('    実測: 地の明るさ ' + t.ji_bg + '（' + t.bg_a + '）／字 ' + t.ji
+    + '／帯 ' + t.obi + 'px（明るさ ' + t.obi_iro + '）／寄せ ' + t.yose
+    + '／大きさ ' + t.haba + '×' + t.takasa + 'px');
+  say(!t.nai && t.mieru, '知らせの箱が ★実際に 出る★（出ないなら この検査は空振り）');
+  say(t.ji_bg >= 200, '★地は 白い★（明るさ ' + t.ji_bg + '／★濃いベタ塗りではない★）');
+  say(t.ji <= 120, '★字は 白地で 読める濃さ★（明るさ ' + t.ji + '）');
+  say(t.obi >= 3 && t.obi_iro < 235, '★左に アプリの色の帯★（' + t.obi + 'px・明るさ ' + t.obi_iro + '）');
+  say(t.yose === 'left', '★左寄せ★（実測 ' + t.yose + '）');
+}
+
 console.log('\n' + (ng ? '★' + ng + '件 直っていません★' : '★全部 決まりどおり★') + '\n');
 process.exit(ng ? 1 : 0);

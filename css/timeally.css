@@ -383,12 +383,21 @@ table.tc td.warn { color: #B3261E; }
 .tc-overlay .tc-panel { max-width: 420px; margin: 8vh auto 0; }
 
 /* ── トースト ───────────────────────────────────────────────── */
+/* ★知らせの箱を 濃い色で ベタ塗りしない★（司さん 2026-09-10「絶対これがええ」）
+   ＝前は `background:#2B2418`（明るさ 37）で ★画面に 濃い塊が 浮いていた★。
+   ★白地＋左に アプリの色の帯★にする。★色の話ではなく「塗る広さ」の話★。
+   手本＝Exally book.html #toast（白地／左に5pxの帯／左寄せ／丸み12px）。
+   ★うちの色は 承認済みの物だけ使う★（手本の濃い灰は 持っていないので 黄の上の文字 #2B2418）。 */
 .tc-toast {
   position: fixed; left: 50%; transform: translateX(-50%);
   bottom: calc(20px + env(safe-area-inset-bottom));
   z-index: 70;
-  background: #2B2418; color: #FFFFFF;
-  font-size: 13px; padding: 10px 16px; border-radius: 999px;
+  background: #FFFFFF; color: #2B2418;
+  border: 1px solid #F0E0B8;              /* 淡境界 */
+  border-left: 5px solid #FFC72C;         /* ★アプリの色（主＝面）★ */
+  text-align: left;
+  box-shadow: 0 8px 28px rgba(43, 36, 24, .22);
+  font-size: 13px; padding: 10px 16px; border-radius: 12px;
   max-width: 90vw;
   white-space: normal; word-break: normal; overflow-wrap: break-word;
 }

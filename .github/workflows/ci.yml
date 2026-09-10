@@ -148,6 +148,14 @@ jobs:
       - name: ★HTMLの中のJS (わざとエスケープを落として赤になるかの自己確認)
         run: node tests/html-script-syntax.test.mjs --self-test
 
+      # ── 見た目（2026-09-10 司さん「絶対これがええ」＝知らせを濃くベタ塗りしない） ──
+      #   ★字で探すと 漏れます★（Exally は `#toast`/`.toast` で探して うちの `.tc-toast` を
+      #   見つけられませんでした）⇒★色は 値に直して 明るさで 見る★
+      - name: ★かぶせる物を 濃くベタ塗りしていないか (値に直して 明るさで見る)
+        run: node tests/nuri-check.test.mjs
+      - name: ★その自己確認 (4通りの書き方・薄い覆いは赤にしない・免除に逃げていない)
+        run: node tests/nuri-check.test.mjs --self-test
+
       # ── 借り物 ────────────────────────────────────────────────────
       - name: ★借りてきた物 (出どころと1バイトも違わない・VENDOR.md と一致)
         run: node tests/vendor-integrity.test.mjs
