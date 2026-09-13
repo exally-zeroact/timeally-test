@@ -23,6 +23,8 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 /* ★向き先を持ってよいファイル（理由つき）★
    ★後から慌てて足す逃げ道にしない★。理由が書けない物は、直す側が正しい。 */
 export const ALLOWED = {
+  'tests/supa-config-matches-repo.test.mjs':
+    '★この線が 向くべき 倉庫を 突き合わせる 見張り★。本番と試験の 両方の ref を「正解」として 持たないと、向き先が 入れ替わった事を 何とも 比べられない（rakually の scripts/check-warehouse-pointers.mjs と 同じ理由）。2026-09-12 の事故＝名札も倉庫も 丸ごと 入れ替わったのに 他の検査は 全部 緑だった',
   'js/supa-config.js':
     '★環境の分かれ目そのもの★。本番repo(timeally)=本番倉庫 / テストrepo(timeally-test)=DB-test。向き先を持つのはここだけ',
 };

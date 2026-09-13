@@ -119,6 +119,10 @@ jobs:
         run: node tests/no-hardcoded-supa.test.mjs
       - name: ★倉庫の向き先 (直書き/裸の文字列/鍵の中に隠しても赤になるかの自己確認)
         run: node tests/no-hardcoded-supa.test.mjs --self-test
+      - name: ★repoの素性と向き先 (originの名前で決める・名札と倉庫と鍵が この線の物か)
+        run: node tests/supa-config-matches-repo.test.mjs
+      - name: ★repoの素性と向き先 (09-12の事故の形・片方だけ入替・tarで運んでから赤になるかの自己確認)
+        run: node tests/supa-config-matches-repo.test.mjs --self-test
 
       # ── 見た目・端末 ──────────────────────────────────────────────
       - name: ★テスト環境の帯 (本番には絶対 出さない・全画面に入っている・頭を隠さない・縦に割れない)
