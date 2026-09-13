@@ -99,11 +99,23 @@ export function au(name, src, refs = REFS) {
       (url === hoshii.hoka ? 'もう片方の線' : '知らない倉庫') + '★: ' + url);
   }
   if (key && url && key !== url) riyuu.push('★URL と 鍵の中の ref が 食い違う★: URL=' + url + ' 鍵=' + key);
-  /* ★コメントも含めて 生のまま 見る★＝説明文に 片方の ref が 残っているのも 混入の跡 */
-  if (hoshii.hoka && String(src).indexOf(hoshii.hoka) >= 0) {
-    riyuu.push('★もう片方の線の ref が 混じっている★: ' + hoshii.hoka);
+  /* ★★数え方（2026-09-14 指示役1 の 注意）★★
+     ★「反対側の ref の 字が 在る＝悪い」では ない★。説明文（コメント）に 反対側の 字は 普通に 出る。
+     ★悪いのは 既定＝実際に 使う 値が 反対側★＝だから ★コメントを 落とした コードだけ★を 数える。
+     （この 数え方を 間違えて 指示役1 が 09-14 に 誤報を 1件 流している。手本＝
+       Daikou-app/tests/unit/dougu-no-mukisaki.test.js「悪いのは 既定が 反対側 だけ」）
+     コメントに 出てくる分は ★赤に しない・声だけ 出す★（狼少年に しない）。 */
+  const koe = [];
+  if (hoshii.hoka) {
+    const code = stripJs(src);
+    let kazu = code.split(hoshii.hoka).length - 1;
+    if (url === hoshii.hoka) kazu -= 1;           /* url の分は すぐ上で もう 言っている（二重に 言わない） */
+    if (kazu > 0) riyuu.push('★もう片方の線の ref が コードに 生きている（url 以外の 所に ' + kazu + '件）★: ' + hoshii.hoka);
+    else if (String(src).indexOf(hoshii.hoka) >= 0) {
+      koe.push('説明文（コメント）に もう片方の ref が 出てくる … ★赤には しない★（既定が 反対側かだけを 数える）');
+    }
   }
-  return { ok: riyuu.length === 0, riyuu, gawa, hoshii, env, url, key };
+  return { ok: riyuu.length === 0, riyuu, koe, gawa, hoshii, env, url, key };
 }
 
 /* ══════════ 自己確認（★わざと 食い違わせたら 赤に なるか★） ══════════ */
@@ -138,8 +150,12 @@ if (process.argv.includes('--self-test')) {
   iu('名札が 空 … 赤', !au('timeally', cfg('', F.prod), F).ok);
   iu('倉庫の URL が 無い … 赤', !au('timeally', 'window.SUPA = { env: ' + Q + 'prod' + Q + ' };', F).ok);
   iu('origin が 読めない … 赤（★未測定を 緑に しない★）', !au('', cfg('prod', F.prod), F).ok);
-  iu('★説明文に もう片方の ref が 残っている … 赤（コメントも 見る）',
-    !au('timeally', '/* ' + F.test + ' を 見ていた頃の 名残 */' + NL + cfg('prod', F.prod), F).ok);
+  /* ★★「字が 在る＝悪い」では ない★★＝説明文の分は 赤に しない・声だけ 出す（09-14 指示役1 の 注意） */
+  const setsumei = au('timeally', '/* ' + F.test + ' を 見ていた頃の 名残（説明） */' + NL + cfg('prod', F.prod), F);
+  iu('★説明文だけに もう片方の ref … 緑（狼少年に しない）', setsumei.ok);
+  iu('★その時 声は 出す（黙って 通さない）', (setsumei.koe || []).length === 1);
+  iu('★コードに もう片方の ref が 生きている（url 以外・前の値の 置き忘れ）… 赤',
+    !au('timeally', cfg('prod', F.prod) + 'const OLD_REF = ' + Q + F.test + Q + ';' + NL, F).ok);
   iu('本番 × 本番 … 緑（★狼少年に しない★）', au('timeally', cfg('prod', F.prod), F).ok);
   iu('テスト線 × テスト線 … 緑', au('timeally-test', cfg('test', F.test), F).ok);
   iu('★publishable の 鍵（ref を 持たない形）でも 本筋が 合っていれば 緑',
@@ -185,6 +201,7 @@ console.log('  この線 … ' + (r.gawa === 'test' ? 'テスト線' : '本番')
 console.log('  ' + CFG + ' の 名札 env … ' + (r.env || '（読めない）'));
 console.log('  ' + CFG + ' の 倉庫 url … ' + (r.url || '（読めない）'));
 console.log('  鍵の形 … ' + keyShape(src) + (r.key ? '／中の ref … ' + r.key : ''));
+for (const k of (r.koe || [])) console.log('  ・声 … ' + k);
 if (r.ok) { console.log('  ✓ 合っている'); process.exit(0); }
 for (const x of r.riyuu) console.log('  ✗ ' + x);
 console.log('    ★直し方★ この repo の ' + CFG + ' を この線の 値に 戻す（もう片方から 写すな）。');
