@@ -19,6 +19,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -53,6 +54,75 @@ export function usedColumns(js) {
 }
 
 let pass = 0, fail = 0;
+/* ═══ 番号の 門（2026-10-20 番号が null でも 通った 穴の 直し） ═══════════════════════════════
+ * ★黒名簿（穴の 形を 1つずつ 探す）を やめて 白名簿（見直した 中身を 指紋で 固める）にした★
+ *   taiketsu が 2回で 黙って 緑の 書き換えを 4通り → 6通り 作った（or→and・return を 消す・飾りの if・
+ *   not(= crypt) 等）＝悪い 書き方は 何通りでも 書ける。良い 中身は 1つ。
+ * ⇒ 番号を 照らす 3関数（tc_verify・tc_pin_set・tc_ok）は ★コメントと 空白を 揃えた 中身の 指紋★ を 持つ。
+ *   1字でも 変われば 赤＝★目で 見直して（taiketsu を 通して）から★ 指紋を 付け替える。
+ *   付け替える 時は 下の PW_PIN の 横に「いつ・何を・誰が 見たか」を 書く。 */
+/** コメント（-- と /* *\/）を 落とし、空白を 1つに 揃える（説明文の 直しや 字下げでは 赤に しない） */
+export const norm = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\n]*/g, ' ').replace(/\s+/g, ' ').trim();
+const fnHead = (schema, name) => new RegExp('create\\s+(?:or\\s+replace\\s+)?function\\s+' + schema + '\\.' + name + '\\s*\\(', 'gi');
+/** 同じ 名前の 関数が 何本 在るか（or replace 無し・括弧の 前の 空白も 数える） */
+export function fnCount(sql, name, schema = 'public') { return (norm(sql).match(fnHead(schema, name)) || []).length; }
+/** ある 位置から 関数1本（create から 閉じの $$ の 後の ; まで）。t は norm 済みの 文 */
+const cutFn = (t, at) => {
+  const a = t.indexOf('$$', at), b = a < 0 ? -1 : t.indexOf('$$', a + 2), e = b < 0 ? -1 : t.indexOf(';', b);
+  return e < 0 ? null : t.slice(at, e + 1);
+};
+/** 関数1本 まるごと（頭の definer / search_path も 含む）。★コメントを 落とした 文の 上で 切る★
+ *  （生の 文で 探すと /* 正しい 写し *\/ を コメントに 置かれた 時に 写しの 方を 読む＝taiketsu 2026-10-20 D1） */
+export function fnFull(sql, name, schema = 'public') {
+  const t = norm(sql), m = fnHead(schema, name).exec(t);
+  return m ? cutFn(t, m.index) : null;
+}
+/** ★crypt( を 使う 関数の 名前 全部 と、関数の 外に 在る crypt( の 数★（中身で 選ぶ＝名前で 選ばない） */
+/* crypt の 呼び方は 空白（crypt (）・引用符（"crypt"(）・スキーマ名つきでも 同じ 呼び出し＝全部 数える（taiketsu 4回目 S1〜S4） */
+const CRYPT_CALL = () => /"?\bcrypt"?\s*\(/gi;
+export function cryptUsers(sql) {
+  const t = norm(sql), names = [];
+  let inside = 0;
+  for (const m of t.matchAll(/create\s+(?:or\s+replace\s+)?function\s+(\w+)\.(\w+)\s*\(/gi)) {
+    const f = cutFn(t, m.index) || '';
+    const k = (f.match(CRYPT_CALL()) || []).length;
+    if (k) { names.push(m[1] + '.' + m[2]); inside += k; }
+  }
+  return { names: names.sort(), outside: (t.match(CRYPT_CALL()) || []).length - inside };
+}
+const sha16 = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
+export const PW_FNS = [['public', 'tc_verify'], ['public', 'tc_pin_set'], ['timeally', 'tc_ok']];
+/* ★見直した 中身の 指紋★（norm した fnFull の sha256 頭16字）
+ *   2026-10-20 Timeally 席：tc_verify と tc_pin_set に null・空の 断りを 入れた 形。taiketsu 2回（指摘は 試験の 側だけ）。
+ *   tc_ok は 中身を 変えていない（976251c の 形）＝★番号の 総当たりに ロックが 効かない 件は 別の 1件★ */
+export const PW_PIN = {
+  'public.tc_verify': '58f214fe1201635c',
+  'public.tc_pin_set': '17eeb840467bc43f',
+  'timeally.tc_ok': '840d23ae9c7d8dc3',
+};
+/** ★番号の 門の 赤の 理由（空なら 良い）★ */
+export function pwGateDiff(sql) {
+  const bad = [];
+  for (const [s, n] of PW_FNS) {
+    const k = fnCount(sql, n, s);
+    if (k !== 1) { bad.push(s + '.' + n + ' が ' + k + ' 本（1本 でない）'); continue; }
+    const got = sha16(norm(fnFull(sql, n, s)));
+    if (got !== PW_PIN[s + '.' + n]) bad.push(s + '.' + n + ' の 中身が 見直した 形と 違う（今 ' + got + '）＝目で 見直して 指紋を 付け替える');
+  }
+  /* ★番号を 照らす（crypt を 使う）関数は この 3本だけ★＝4本目を 足した 日に 何も 見ていない、を 作らない。
+     比べの 書き方を 黒名簿で 探すのは やめた（左右の 入れ替え・coalesce 等 何通りでも 書ける＝taiketsu D3・D4） */
+  const want = PW_FNS.map(([s, n]) => s + '.' + n).sort().join(',');
+  const cu = cryptUsers(sql);
+  if (cu.names.join(',') !== want) bad.push('crypt を 使う 関数が 見直した 3本と 違う（今 ' + cu.names.join(',') + '）');
+  if (cu.outside !== 0) bad.push('関数の 外に crypt( が ' + cu.outside + ' 個');
+  return bad;
+}
+/** 当てる 1本は ★begin; ＋ 2関数（設計図と 同じ）＋ commit; だけ★（alter・grant・commit 抜けを 入れさせない） */
+export function applyShapeDiff(apply, sql) {
+  const want = 'begin; ' + norm(fnFull(sql, 'tc_pin_set')) + ' ' + norm(fnFull(sql, 'tc_verify')) + ' commit;';
+  return norm(apply) === want ? [] : ['当てる 1本が「begin; ＋ 設計図の tc_pin_set ＋ tc_verify ＋ commit;」と 違う'];
+}
+
 const T = (n, fn) => { try { fn(); pass++; console.log('  ✓ ' + n); } catch (e) { fail++; console.log('  ✗ ' + n + ' — ' + (e && e.message)); } };
 const ok = (v, m) => { if (!v) throw new Error(m || 'false'); };
 const eq = (a, b, m) => { if (a !== b) throw new Error((m ? m + ': ' : '') + 'expected ' + JSON.stringify(b) + ' got ' + JSON.stringify(a)); };
@@ -81,6 +151,62 @@ if (process.argv.includes('--self-test')) {
     ok(/create policy [a-z_]+ on timeally\.tc_close for (all|update|delete)/.test(more), '作り物が壊れていない');
     ok(!/create policy [a-z_]+ on timeally\.tc_close for (all|update|delete)/.test(SQL),
       '★本物の帳面に 直す/消す の決まりがある★');
+  });
+  /* ★番号の 門（白名簿）★＝taiketsu（2026-10-20・2回）が 手で 作って 緑に なった 形を 全部 赤に できるか */
+  const APPLY0 = fs.readFileSync(path.join(ROOT, 'supabase/apply-2026-10-20-pw-null.sql'), 'utf8');
+  const NEW_IF = /if p_pw is null or p_pw = '' or v_pub\.pw_hash is null\s+or v_pub\.pw_hash is distinct from crypt\(p_pw, v_pub\.pw_hash\) then/;
+  const mk = (base, from, to) => { const s = base.replace(from, to); ok(s !== base, '作り物が 作れていない＝空振り: ' + String(from).slice(0, 50)); return s; };
+  const red = (s, re, m) => { const b = pwGateDiff(s); ok(b.length > 0 && (!re || b.some((x) => re.test(x))), (m || '緑のまま') + ' ' + b.join(' / ')); };
+  S('⑤ 本物は 緑（番号の 門・当てる 1本の 形）', () => {
+    eq(pwGateDiff(SQL).join(' / '), '', '★本物が 赤★');
+    eq(applyShapeDiff(APPLY0, SQL).join(' / '), '', '★本物の 当てる 1本が 赤★');
+  });
+  S('⑥ 2026-10-20 前の 形（<> crypt・桁の if に null の 断り無し）は 赤', () => {
+    red(mk(SQL, NEW_IF, 'if v_pub.pw_hash is null or v_pub.pw_hash <> crypt(p_pw, v_pub.pw_hash) then'), /tc_verify/);
+    red(mk(SQL, "if p_pin is null or p_pin !~ '^[0-9]{4,6}$'", "if p_pin !~ '^[0-9]{4,6}$'"), /tc_pin_set/);
+  });
+  S('⑦ taiketsu 1回目の 4通り（return しない 断り＋!=・<> extensions.crypt・引数違い・tc_ok を not(!=)）は 赤', () => {
+    const pre = "if p_pw is null or p_pw = '' then v_dev := null; end if;\n  ";
+    red(mk(SQL, NEW_IF, pre + 'if v_pub.pw_hash is null or v_pub.pw_hash != crypt(p_pw, v_pub.pw_hash) then'));
+    red(mk(SQL, NEW_IF, pre + 'if v_pub.pw_hash is null or v_pub.pw_hash <> extensions.crypt(p_pw, v_pub.pw_hash) then'));
+    red(SQL + '\ncreate or replace function public.tc_verify(p_token uuid, p_pw text, p_x int)\nreturns jsonb language plpgsql as $$ begin return null; end $$;\n', /2 本/);
+    red(mk(SQL, /or \(p_pw is not null and v_pub\.pw_hash is not null and v_pub\.pw_hash = crypt\(p_pw, v_pub\.pw_hash\)\)/,
+      'or not (v_pub.pw_hash != crypt(p_pw, v_pub.pw_hash))'), /tc_ok/);
+  });
+  S('⑧ taiketsu 2回目の 6通り（return を 消す・or→and・飾りの if＋not(= crypt)・tc_ok を 逆さ・端末を or・create function で 引数違い）は 赤', () => {
+    red(mk(SQL, "    return jsonb_build_object('ok',false,'remaining',5 - v_pub.fail_count);\n", ''), /tc_verify/);
+    red(mk(SQL, "if p_pw is null or p_pw = '' or v_pub.pw_hash is null\n     or v_pub.pw_hash is distinct from",
+      "if (p_pw is null or p_pw = '') and v_pub.pw_hash is distinct from"), /tc_verify/);
+    red(mk(SQL, NEW_IF, "if p_pw is null or p_pw = '' or v_pub.pw_hash is distinct from crypt(p_pw, v_pub.pw_hash) then null; end if;\n  if not (v_pub.pw_hash = crypt(p_pw, v_pub.pw_hash)) then"));
+    red(mk(SQL, 'v_pub.pw_hash = crypt(p_pw, v_pub.pw_hash))', 'v_pub.pw_hash is distinct from crypt(p_pw, v_pub.pw_hash))'), /tc_ok/);
+    /* ★tc_auth（449行）にも 同じ 字が 在る＝tc_ok の 行（select から）を 名指しして 壊す★ */
+    red(mk(SQL, 'select (p_device is not null and p_device = any(v_pub.device_tokens))', 'select (p_device is not null or p_device = any(v_pub.device_tokens))'), /tc_ok/);
+    red(SQL + '\ncreate function public.tc_verify (p_token uuid, p_pw text, p_x int)\nreturns jsonb language plpgsql as $$ begin return null; end $$;\n', /2 本/);
+  });
+  S('⑪ taiketsu 3回目：コメントに 正しい 写しを 置き 本物の return を 消す（D1）・4本目に crypt の 照合（D3・D4）は 赤', () => {
+    const real = fnFull(SQL, 'tc_verify');
+    const body = SQL.slice(SQL.indexOf('create or replace function public.tc_verify('));
+    const rawVerify = body.slice(0, body.indexOf('end $$;') + 'end $$;'.length);
+    const broken = rawVerify.replace("    return jsonb_build_object('ok',false,'remaining',5 - v_pub.fail_count);\n", '');
+    ok(broken !== rawVerify, '作り物が 作れていない＝空振り');
+    red(SQL.split(rawVerify).join('/* ' + real + ' */\n' + broken), /tc_verify/);
+    red(SQL + "\ncreate or replace function public.tc_x(p_pw text) returns boolean language plpgsql as $$ begin if crypt(p_pw,'x') <> 'y' then return false; end if; return true; end $$;\n", /3本と 違う/);
+    red(SQL + "\ncreate or replace function public.tc_y(p_pw text) returns boolean language plpgsql as $$ begin if not coalesce(false, 'a' = crypt(p_pw,'a')) then return false; end if; return true; end $$;\n", /3本と 違う/);
+    red(SQL + "\nselect crypt('a','b');\n", /関数の 外/);
+    /* 4回目 S1〜S4：空白・引用符・スキーマ名つきの crypt も 4本目として 赤 */
+    for (const call of ["crypt (p_pw,'x')", "extensions.crypt (p_pw,'x')", "\"crypt\"(p_pw,'x')", "extensions.\"crypt\"(p_pw,'x')"])
+      red(SQL + "\ncreate or replace function public.tc_z(p_pw text) returns int language plpgsql as $$ begin if " + call + " <> 'y' then return 0; end if; return 1; end $$;\n", /3本と 違う/);
+  });
+  S('⑨ 正しい 書き換え（説明文・字下げ・/* */ の 区切り・改行）では 赤に しない', () => {
+    const s = mk(SQL, NEW_IF, "-- 説明を 足した\n  /* 古い形: pw_hash <> crypt(x) */\n  if p_pw is null   or p_pw = ''\n\tor v_pub.pw_hash is null or v_pub.pw_hash is distinct from crypt(p_pw, v_pub.pw_hash) then");
+    eq(pwGateDiff(s).join(' / '), '', '正しい 書き換えで 赤');
+  });
+  S('⑩ 当てる 1本：頭を invoker・関数の 外に alter / grant・commit 抜け は 赤', () => {
+    const r = (s) => ok(applyShapeDiff(s, SQL).length === 1, '緑のまま');
+    r(mk(APPLY0, /(create or replace function public\.tc_verify[\s\S]*?)security definer set search_path=public, extensions, timeally/, '$1security invoker'));
+    r(mk(APPLY0, /\ncommit;/, '\nalter function public.tc_verify(uuid,text) security invoker;\ncommit;'));
+    r(mk(APPLY0, /\ncommit;/, '\ngrant execute on function public.tc_verify(uuid,text) to public;\ncommit;'));
+    r(mk(APPLY0, /\ncommit;\n?$/, '\n'));
   });
   console.log('\n[self-test] ' + sp + ' passed, ' + sf + ' failed');
   if (sf) process.exit(1);
@@ -282,6 +408,19 @@ T('★暗証番号は平文で持たない・数字4〜6桁・5回で15分ロッ
   ok(/drop function if exists public\.tc_set_password\(uuid,text,text\)/.test(SQL),
     '★古い tc_set_password を落としていない（初回コードの口が生き続ける）★');
   ok(!/p_init/.test(SQL), '★まだ初回コードを受け取る所がある★');
+});
+
+/* ★2026-10-20 番号が null でも 通った★（tc_verify・tc_pin_set）＝リンクを 持てば 番号なしで 端末の鍵が 出た
+   ⇒ 番号を 照らす 3関数は 見直した 中身の 指紋（PW_PIN）で 固める（白名簿）。変われば 赤＝見直してから 付け替える */
+T('★★番号を 照らす 3関数が 見直した 中身の まま（1本ずつ・<> crypt 無し）★★', () => {
+  const bad = pwGateDiff(SQL);
+  ok(bad.length === 0, bad.join(' / '));
+});
+/* 倉庫に 当てる 1本（supabase/apply-2026-10-20-pw-null.sql）＝begin; ＋ 設計図の 2関数（頭を 含めて）＋ commit; だけ */
+T('★当てる 1本が「begin; ＋ 設計図の 2関数 ＋ commit;」だけ', () => {
+  const APPLY = fs.readFileSync(path.join(ROOT, 'supabase/apply-2026-10-20-pw-null.sql'), 'utf8');
+  const bad = applyShapeDiff(APPLY, SQL);
+  ok(bad.length === 0, bad.join(' / '));
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

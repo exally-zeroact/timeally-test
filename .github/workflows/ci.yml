@@ -42,6 +42,8 @@ jobs:
         run: node scripts/stamp-build.mjs --check
       - name: ★倉庫に当てる前の門番 (消す系・他の部屋・security_invoker抜けを止める)
         run: node scripts/sql-guard.mjs supabase/schema.sql
+      - name: ★同じ門番を 当てる1本にも (番号 null の穴の直し・2026-10-20)
+        run: node scripts/sql-guard.mjs supabase/apply-2026-10-20-pw-null.sql
       - name: ★門番の自己確認 (わざと危ない物を食わせて止まるか・11通り)
         run: node scripts/sql-guard.mjs --self-test
       # ── 指示役から配られた見張り（正本＝rakually-test・1文字も書き直さない） ──────

@@ -472,7 +472,9 @@ begin
     return jsonb_build_object('ok',false,'locked',true,'retry_at',v_pub.locked_until); end if;
   -- ★2回目からは決められない★（作り直すのは社長の側）
   if v_pub.pw_hash is not null then return jsonb_build_object('ok',false,'already_set',true); end if;
-  if p_pin !~ '^[0-9]{4,6}$' then return jsonb_build_object('ok',false,'bad_pin',true); end if;
+  -- ★null を 先に 断る★（2026-10-20）null だと `!~` の答えが null＝真でも偽でもなく この行を 素通りし、
+  --   pw_hash に crypt(null)=null が入って「決めた」と帳面に残り 端末の鍵まで出た（何回でも）
+  if p_pin is null or p_pin !~ '^[0-9]{4,6}$' then return jsonb_build_object('ok',false,'bad_pin',true); end if;
   update timeally.tc_pub set pw_hash=crypt(p_pin, gen_salt('bf')), init_code=null,
                              fail_count=0, locked_until=null
     where token=p_token;
@@ -497,7 +499,11 @@ begin
   if v_pub.token is null or not v_pub.active then return jsonb_build_object('ok',false); end if;
   if v_pub.locked_until is not null and v_pub.locked_until > now() then
     return jsonb_build_object('ok',false,'locked',true,'retry_at',v_pub.locked_until); end if;
-  if v_pub.pw_hash is null or v_pub.pw_hash <> crypt(p_pw, v_pub.pw_hash) then
+  -- ★番号が 無い・空 も「まちがい」の道へ（回数にも 数える）★（2026-10-20）
+  --   前は `pw_hash <> crypt(p_pw, …)` だけ＝p_pw が null だと 答えが null で この if に入らず、
+  --   ★番号なしで ok と 端末の鍵が 出た★（リンクを 持てば 誰でも）。比べは null でも 必ず 真偽が出る is distinct from
+  if p_pw is null or p_pw = '' or v_pub.pw_hash is null
+     or v_pub.pw_hash is distinct from crypt(p_pw, v_pub.pw_hash) then
     update timeally.tc_pub set fail_count=fail_count+1,
       locked_until = case when fail_count+1 >= 5 then now()+interval '15 minutes' else locked_until end
       where token=p_token returning fail_count, locked_until into v_pub.fail_count, v_pub.locked_until;
