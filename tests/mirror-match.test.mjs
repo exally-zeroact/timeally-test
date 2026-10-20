@@ -27,8 +27,11 @@
  * ★守らない物（書いておく）★
  *   ・遅れ OKURE_HI 日 未満の 違いは 赤に しない（＝「変わらない」は「7日 以内に 揃う」の 意味）。
  *   ・Vercel の 画面での 巻き戻し・昇格（build しない）と `vercel deploy --prebuilt` は ② を 通らない。
- *   ・★本番を CLI（vercel deploy）で 配ると 必ず 赤★（配る commit が 分からない＝vercel.json を git から 読めない）。
- *     GitHub→Vercel の 合図が 死んだ 日の 非常口は 使えない＝合図を 直すか、Vercel の 画面で git の 配りを やり直す。
+ *   ・本番を CLI（vercel deploy）で 配ると：配る commit（VERCEL_GIT_COMMIT_SHA）が 付かなければ 赤。
+ *     付いた 時、送った 物は ★印（mirror-from.txt）の テスト線の commit★と 比べる（vercel.json だけは 配る commit の
+ *     中身と JSON として 全く 同じ 時だけ 通す）。＝配る SHA を 新しく 名乗り 中身は 前に 写した 古い 印の 物、は 緑
+ *     （テスト線で CI が 緑だった 中身＝巻き戻しと 同じ 重さ）。
+ *     CLI で SHA が 付くかは 未測定＝合図が 死んだ 日は まず Vercel の 画面で git の 配りを やり直す。
  *   ・Vercel から GitHub の 読み口は 鍵なし（1時間 60回・IP ごと）。当たると 配りが 止まる 側（残り回数を 出す）。
  *   ・公開 repo の 毎日の 回は 60日 動きが 無いと GitHub が 止める。
  *   ・本番 main への 直の push その物は 止めない（GitHub の 枝の 守りは 掛けていない）。
@@ -91,6 +94,12 @@ export function readWorkTree(root) {
     for (const line of git(root, ['ls-files', '-s']).split('\n')) {
       const m = /^(\d{6}) [0-9a-f]{40} \d\t(.+)$/.exec(line);
       if (m && out.has(m[2])) out.get(m[2]).mode = m[1];
+      /* ★飛ばす 場所（.vercel・node_modules 等）でも git に 入っている 物は 数える★
+         （本番 main に .vercel/output を 無理に 入れられると 名前で 飛ばして 緑に なった＝taiketsu 10-20） */
+      else if (m && !out.has(m[2]) && m[2].split('/').some((x) => SKIP_DIR.has(x)) && fs.existsSync(path.join(root, m[2]))) {
+        const buf = fs.readFileSync(path.join(root, m[2]));
+        out.set(m[2], { id: blobId(m[2], buf), mode: m[1], text: () => buf.toString('utf8') });
+      }
     }
   }
   return out;
@@ -188,22 +197,34 @@ export function cfgSei(src, gawa) {
 }
 const htmlShape = (src) => restamp(String(src).replace(/\r\n/g, '\n'), '00000000');
 
-/** ★Vercel の build の 場★：作業木の vercel.json を ★配る commit の git の 中身★に 置き換えた 木を 返す（許す 物は 増やさない）。
- *  10-20 テスト線の 配りで 実測＝Vercel が build の 前に vercel.json を 書き換え、87本 同じ・違い この1本で 配りが 止まった。
+/** ★Vercel の build の 場★：作業木の vercel.json が 配る commit の git の 中身と ★JSON として 全く 同じ 時だけ★ git の 中身に 置き換える。
+ *  10-20 テスト線の 配りで 実測＝Vercel は build の 前に vercel.json を 書き直す（536字→442字・変わった 鍵 0＝字の 並びだけ）。
+ *  鍵・値が 1つでも 違えば 置き換えない＝比べで 赤（CLI で 手元の 書きかけを 送っても 通らない＝taiketsu 10-20）。
  *  何が 変わったかは 鍵ごとに 出す（数で 残す）。git に vercel.json が 無ければ 置き換えない（比べで 赤） */
+/** git の 木で、作業木の 歩きが 飛ばす 場所（.vercel・node_modules・.git）に 在る 物＝Vercel の 場（.git 無し）では 見えないので 名前で 赤に する */
+export const kakureMichi = (ki) => [...ki.keys()].filter((p) => p.split('/').some((x) => SKIP_DIR.has(x)));
+export function jsonKata(x) {
+  if (Array.isArray(x)) return '[' + x.map(jsonKata).join(',') + ']';
+  if (x && typeof x === 'object') return '{' + Object.keys(x).sort().map((k) => JSON.stringify(k) + ':' + jsonKata(x[k])).join(',') + '}';
+  return JSON.stringify(x);
+}
 export function vercelJsonGitDe(work, gitKi) {
   const w = work.get('vercel.json'), g = gitKi.get('vercel.json');
-  if (!g) return work;
-  if (w && w.id !== g.id) {
-    let sa = '';
-    try {
-      const a = JSON.parse(w.text()), b = JSON.parse(g.text());
-      const k = [...new Set([...Object.keys(a), ...Object.keys(b)])];
-      sa = '変わった 鍵: ' + (k.filter((x) => JSON.stringify(a[x]) !== JSON.stringify(b[x]))
-        .map((x) => x + (Object.prototype.hasOwnProperty.call(b, x) ? (Object.prototype.hasOwnProperty.call(a, x) ? '(値)' : '(消えた)') : '(足された)')).join(', ') || '無し（字の 並びだけ）');
-    } catch (e) { sa = 'JSON として 読めない'; }
-    console.log('  （Vercel が build で vercel.json を 書き換えた … 作業木 ' + w.text().length + '字 ／ git ' + g.text().length + '字 ／ ' + sa + '）＝git の 中身で 比べる');
+  if (!g || !w || w.id === g.id) return work;
+  let a, b;
+  try { a = JSON.parse(w.text()); b = JSON.parse(g.text()); } catch (e) {
+    console.log('  ✗ Vercel の build の vercel.json が JSON として 読めない＝置き換えない');
+    return work;
   }
+  const obj = (x) => x && typeof x === 'object' && !Array.isArray(x);
+  if (!obj(a) || !obj(b)) { console.log('  ✗ Vercel の build の vercel.json が { … } で ない＝置き換えない'); return work; }
+  const k = [...new Set([...Object.keys(a || {}), ...Object.keys(b || {})])];
+  const chigau = k.filter((x) => jsonKata(a[x]) !== jsonKata(b[x]))
+    .map((x) => x + (Object.prototype.hasOwnProperty.call(b, x) ? (Object.prototype.hasOwnProperty.call(a, x) ? '(値)' : '(消えた)') : '(足された)'));
+  const onaji = jsonKata(a) === jsonKata(b);
+  console.log('  （Vercel の build の vercel.json … 作業木 ' + w.text().length + '字 ／ git ' + g.text().length + '字 ／ 変わった 鍵: '
+    + (chigau.join(', ') || '無し') + (onaji ? '＝字の 並びだけ＝git の 中身で 比べる' : '＝★中身が 違う＝置き換えない（赤）★') + '）');
+  if (!onaji) return work;
   const m = new Map(work);
   m.set('vercel.json', { ...g });
   return m;
@@ -431,15 +452,31 @@ if (process.argv.includes('--self-test')) {
     const vj = moto.get('vercel.json');
     const o = JSON.parse(vj.text());
     const kaki = (x) => { const t = JSON.stringify(x); return { id: blobId('vercel.json', Buffer.from(t)), text: () => t }; };
-    const work = kopi().set('vercel.json', kaki({ ...o, vercelGaTasu: 1 }));   /* Vercel が 書き換えた 作業木 */
-    iu('Vercel が 作業木の vercel.json を 書き換え・git は repo の まま … 緑',
-      compare(vercelJsonGitDe(work, new Map([['vercel.json', vj]])), moto).aka.length === 0);
-    iu('作業木の 書き換えを そのまま 比べると … 赤（置き換えが 無いと 配りが 止まる 形＝10-20 実測）', compare(work, moto).aka.length > 0);
-    for (const [nm, x] of [['routes を 足す', { ...o, routes: [{ src: '/(.*)', dest: 'https://x.example/$1' }] }],
-      ['rewrites を 足す', { ...o, rewrites: [{ source: '/(.*)', destination: 'https://x.example/' }] }],
-      ['buildCommand を 消す', (() => { const y = { ...o }; delete y.buildCommand; return y; })()]]) {
-      iu('★本番の commit の vercel.json で ' + nm + ' … Vercel の 場でも 赤★', compare(vercelJsonGitDe(work, new Map([['vercel.json', kaki(x)]])), moto).aka.length > 0);
+    /* Vercel が 書き直した 作業木＝10-20 実測の 形（鍵は 同じ・字の 並びだけ＝1行に 詰めて 鍵の 順も 逆） */
+    const narabi = kopi().set('vercel.json', kaki(Object.fromEntries(Object.entries(o).reverse())));
+    iu('Vercel が 字の 並びだけ 書き直し・git は repo の まま … 緑',
+      narabi.get('vercel.json').id !== vj.id && compare(vercelJsonGitDe(narabi, new Map([['vercel.json', vj]])), moto).aka.length === 0);
+    iu('字の 並びの 書き直しを そのまま 比べると … 赤（置き換えが 無いと 配りが 止まる 形＝10-20 実測）', compare(narabi, moto).aka.length > 0);
+    const R = { routes: [{ src: '/(.*)', dest: 'https://x.example/$1' }] }, W = { rewrites: [{ source: '/(.*)', destination: 'https://x.example/' }] };
+    const nashi = (() => { const y = { ...o }; delete y.buildCommand; return y; })();
+    for (const [nm, x] of [['routes を 足す', { ...o, ...R }], ['rewrites を 足す', { ...o, ...W }], ['buildCommand を 消す', nashi]]) {
+      iu('★本番の commit の vercel.json で ' + nm + ' … Vercel の 場でも 赤★', compare(vercelJsonGitDe(kopi().set('vercel.json', kaki(x)), new Map([['vercel.json', kaki(x)]])), moto).aka.length > 0);
+      iu('★作業木だけに ' + nm + '（CLI で 手元の 書きかけを 送る 形）・git は repo の まま … 赤★', compare(vercelJsonGitDe(kopi().set('vercel.json', kaki(x)), new Map([['vercel.json', vj]])), moto).aka.length > 0);
     }
+    {
+      /* 本番の --vercel の 1段目（配る commit が 無い）を 本物の 道で 走らせる（網に 出る 前に 止まる 段） */
+      let code = 0, out = '';
+      try { out = execFileSync(process.execPath, [fileURLToPath(import.meta.url), '--vercel'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, VERCEL_GIT_REPO_SLUG: SEN.prod.name, VERCEL_GIT_REPO_OWNER: 'exally-zeroact', VERCEL_GIT_COMMIT_SHA: '', VERCEL_ENV: 'production' } }); }
+      catch (e) { code = e.status; out = String(e.stdout || ''); }
+      iu('本番の --vercel で 配る commit が 無い（CLI の 形）… 赤（実際に 走らせて）', code === 1 && out.includes('配る commit が 分からない'));
+    }
+    iu('配る commit の git に .vercel/output・node_modules の 物 … 名前で 拾う ／ 今の repo の 木は 0本',
+      kakureMichi(new Map([['.vercel/output/config.json', {}], ['a/node_modules/x.js', {}], ['js/a.js', {}]])).length === 2 && kakureMichi(moto).length === 0);
+    iu('作業木の vercel.json が null・配列 … 置き換えない（赤）・落ちない',
+      compare(vercelJsonGitDe(kopi().set('vercel.json', kaki(null)), new Map([['vercel.json', vj]])), moto).aka.length > 0
+      && compare(vercelJsonGitDe(kopi().set('vercel.json', kaki([1])), new Map([['vercel.json', vj]])), moto).aka.length > 0);
+    iu('jsonKata：鍵の 順だけ 違う＝同じ ／ 入れ子の 値が 違う＝違う', jsonKata({ a: 1, b: { c: [1, 2] } }) === jsonKata({ b: { c: [1, 2] }, a: 1 }) && jsonKata({ a: { c: [1, 2] } }) !== jsonKata({ a: { c: [2, 1] } }));
   }
   iu('設定の 値を " で 囲む … 赤', aka(kae(kopi(), CFG, (s) => s.replace(/^(\s*)env:\s*'([^']*)'/m, '$1env: "$2"'))));
   iu('印が 無い・印の 形が 違う … 網に 出る 前に 赤', (await hanjiru(kopi(), null, 'x')).length === 1 && (await hanjiru(kopi(), '67c67e7\n', 'x')).length === 1);
@@ -537,6 +574,7 @@ if (gawa === 'test') {
       owari(aka, OK_T);
     }
     const kiT = readGitTree(d, sha);
+    if (kakureMichi(kiT).length) aka.push('★配る commit の git に 飛ばす 場所の 物が 入っている★（' + kakureMichi(kiT).slice(0, 5).join(', ') + '）');
     const r = compare(vercelJsonGitDe(readWorkTree(ROOT), kiT), kiT);
     console.log('  build の 作業木 と ' + sha.slice(0, 12) + ' の 木 … 中身が 同じ ' + r.kazu.onaji + '本・違い ' + r.aka.length + '件');
     aka.push(...r.aka);
@@ -553,7 +591,10 @@ if (MODE === 'vercel') {
   let ph;
   try { ph = fetchMain(d2, SEN.prod.url); } catch (e) { owari(['★本番 repo を 取れない★（' + String(e.message).split('\n')[0] + '）＝未測定＝赤']); }
   try { git(d2, ['merge-base', '--is-ancestor', sha, ph]); } catch (e) { owari(['★配る commit ' + sha.slice(0, 12) + ' が 本番 main に 無い★']); }
-  honban = vercelJsonGitDe(honban, readGitTree(d2, sha));
+  const kiP = readGitTree(d2, sha);
+  const kakure = kakureMichi(kiP);
+  if (kakure.length) owari(['★配る commit の git に 飛ばす 場所の 物が 入っている★（' + kakure.slice(0, 5).join(', ') + '）＝作業木の 比べで 見えない']);
+  honban = vercelJsonGitDe(honban, kiP);
 }
 const r = await hanjiru(honban, fs.existsSync(sp) ? fs.readFileSync(sp, 'utf8') : null, '作業木');
 owari(Array.isArray(r) ? r : r.aka);
