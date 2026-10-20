@@ -420,11 +420,17 @@ if (process.argv.includes('--self-test')) {
   }
   {
     /* ★値 その物の 縛り（cfgSei）★＝10-20 taiketsu 3回目の 5形 ＋ 足した 物。ref は 借りた REFS から 組む（ここに 字で 書かない） */
-    const cfg = moto.get(CFG).text();
     const SB = '.' + 'supabase' + '.co';
+    /* ★作り物の テスト線の 設定を 元に 組む★（本物の 設定を 元に すると 本番では 元から 赤で「壊したら 赤」が 空振りし、
+       「テスト線の 物で 緑」は 本番で 必ず ✗ に なった＝taiketsu 10-20 本番前）。説明文の env:'prod' も 置く（行の 頭で 縛る 試し） */
+    const cfg = "/* 作り物 … 本番は env:'prod' */\nwindow.SUPA = {\n  url: 'https://" + REFS.test + SB + "',\n  key: 'sb_publishable_tsukurimono',\n  env: 'test'\n};\n";
     const urlWo = (u) => cfg.replace(/^(\s*)url:\s*'[^']*'/m, "$1url: '" + u + "'");
-    iu('テスト線の 本物の 設定 … 値は テスト線の 物（緑）', cfgSei(cfg, 'test').ok);
-    iu('同じ 設定を 本番の 物と 言う … 赤（倉庫・名札が 違う）', !cfgSei(cfg, 'prod').ok);
+    iu('作り物の テスト線の 設定 … テスト線では 緑 ／ 本番と 言うと 赤', cfgSei(cfg, 'test').ok && !cfgSei(cfg, 'prod').ok);
+    {
+      /* ★この repo の 本物の 設定は この repo の 線（origin の 名前）で 緑・反対の 線で 赤★ */
+      const g = sokusei(originName(ROOT)), real = moto.get(CFG).text();
+      iu('この repo の 本物の 設定 … 自分の 線（' + g + '）で 緑・反対の 線で 赤', !!g && cfgSei(real, g).ok && !cfgSei(real, g === 'test' ? 'prod' : 'test').ok);
+    }
     for (const [nm, u] of [
       ['? の 後ろに 本物の 倉庫', 'https://x.example/x?https://' + REFS.test + SB],
       ['本物の 倉庫の 名前の 後ろに 別の 名前', 'https://' + REFS.test + SB + '.x.example'],
