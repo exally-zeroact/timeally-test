@@ -31,6 +31,17 @@ jobs:
         with:
           node-version: '20'
 
+      # ★本番の 中身は テスト線で 押されて CI 緑だった 1つの commit と 同じか（2026-10-20）★
+      #   テスト線では「写した印が 無いか」だけ。本番では 印の SHA が main の 祖先か・CI 緑か・木が 同じか
+      #   （GitHub の 返事を 読むので 鍵を 渡す＝読むだけ。無いと 数が 限られる）
+      #   ★依存を 入れる 前に 置く★＝npm install が package-lock.json を 書き換えても 木の 比べに 混ぜない
+      - name: ★本番とテスト線のコードが同じか (写した印の commit と 木を 比べる)
+        run: node tests/mirror-match.test.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: ★本番とテスト線のコードが同じか (余り・足りない・1字・設定に1行・刻印 以外の 違いで 赤になるかの自己確認)
+        run: node tests/mirror-match.test.mjs --self-test
+
       # ★依存は「使う前」に入れる★
       #   CIは毎回まっさらなので、node_modules が無いと jsdom を使う検査が SKIP になる。
       #   うちは ★SKIPを緑と呼ばない★ 作りなので、そのまま赤になる（その振る舞いが正しい）。

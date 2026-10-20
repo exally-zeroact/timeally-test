@@ -118,8 +118,17 @@ export function au(name, src, refs = REFS) {
   return { ok: riyuu.length === 0, riyuu, koe, gawa, hoshii, env, url, key };
 }
 
+/* ★読み込まれた だけでは 走らない★（2026-10-20）＝tests/mirror-match.test.mjs が REFS と 物差しを 借りる 為。
+   import した 先で 自己確認や 判定が 走って exit すると、借りた 側の 見張りが 黙って 止まる */
+const RUN_DIRECT = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+/* 直に 走らせたのに 道の 突き合わせが 外れたら（ドライブの 字・junction 等）黙って 0 で 終わらず 赤 */
+if (!RUN_DIRECT && /supa-config-matches-repo\.test\.mjs$/.test(process.argv[1] || '')) {
+  console.log('★赤★ 直に 走らせたのに RUN_DIRECT が 偽＝判定が 1行も 走らない（道の 突き合わせが 外れた）');
+  process.exit(1);
+}
+
 /* ══════════ 自己確認（★わざと 食い違わせたら 赤に なるか★） ══════════ */
-if (process.argv.includes('--self-test')) {
+if (RUN_DIRECT && process.argv.includes('--self-test')) {
   console.log('\n[supa-config-matches-repo --self-test] わざと 食い違わせたら 赤に なるか');
   let ng = 0;
   const iu = (nm, good) => { if (!good) ng++; console.log('  ' + (good ? '✓' : '✗') + ' ' + nm + (good ? '' : '  ★思っていたのと 違う★')); };
@@ -190,6 +199,7 @@ if (process.argv.includes('--self-test')) {
 }
 
 /* ══════════ 本番の判定 ══════════ */
+if (RUN_DIRECT) {
 const name = originName(ROOT);
 const src = fs.readFileSync(path.join(ROOT, CFG), 'utf8');
 const r = au(name, src);
@@ -207,3 +217,4 @@ for (const x of r.riyuu) console.log('  ✗ ' + x);
 console.log('    ★直し方★ この repo の ' + CFG + ' を この線の 値に 戻す（もう片方から 写すな）。');
 console.log('    ★運ぶ時は scripts/mirror-to-prod.mjs を 通す★（' + CFG + ' を 運ばない 守りが 入っている）。');
 process.exit(1);
+}
